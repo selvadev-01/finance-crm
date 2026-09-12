@@ -1,0 +1,154 @@
+# M05 — Accounts
+
+**Purpose:** the loan. Creation, derivation, schedule, lifecycle, completion.
+
+**Source:** PDF §8, §9, §13, §27. Rules: BR-01, BR-01a, BR-03…BR-07.
+
+> "Account" means **a loan**. The database entity is `account_loan` because `account` belongs to Better Auth. See the [glossary](../../00-overview/glossary.md#money).
+
+---
+
+## Scope
+
+**In:** account creation and validation, profit derivation, schedule generation and regeneration, status lifecycle, completion detection, target-date recomputation.
+
+**Out:** collection entry (M07), ledger postings (M09), working-day arithmetic (M06 — consumed, not owned).
+
+---
+
+## Owned entities
+
+`account_loan` · `account_schedule`
+
+---
+
+## Creation
+
+Admin enters `A` (account amount), `I` (invested), `D` (daily), `N` (term days, default 100), and a disbursement date. **`P = A − I` is derived and never editable** (BR-01).
+
+Validation — all enforced as database check constraints, not only in the form:
+
+| Constraint | Message |
+| --- | --- |
+| `I < A` | Profit cannot be zero or negative |
+| `D ≤ A` | A single day cannot exceed the account |
+| `D × N ≥ A` | The term cannot clear the account |
+| `A, I, D, N > 0` | |
+
+**Multiple concurrent accounts per customer are permitted** (BR-01a). No constraint restricts this.
+
+### The form derives live
+
+Profit, first collection date, target completion date and a full schedule preview update as the Admin types. Mistakes surface before saving, not after — and after disbursement the amounts are immutable, so there is no second chance.
+
+### Mid-term account creation
+
+A **past disbursement date is a supported, expected case.** There is no data import, so every customer entered at launch is already partway through their term.
+
+When the disbursement date precedes today, creation additionally takes a **collected-to-date** amount. The account is created, the schedule is generated from the original disbursement date, slots up to the collected amount are marked collected, and the ledger receives an opening disbursement plus a catch-up posting so it balances from the first day.
+
+> **The collected figure is taken from the customer's paper collection note, never inferred as `days × dailyAmount`.** Any customer who has ever underpaid will not match that formula, and an account seeded with an inflated collected total completes early and leaves money uncollected — silently, and permanently.
+
+An account created this way must behave **identically** to one created from day zero: same target-date computation (BR-06), same expected-amount capping (BR-07), same completion rule (BR-05). This is PRD release gate 6, and it is a gate because getting it wrong makes every customer wrong from the first morning.
+
+---
+
+## Schedule
+
+`N` slots on consecutive working days from the first collection day (BR-03, BR-04). Each slot expects `D`, except the last, which expects `A − D × (N − 1)` so the schedule sums exactly to `A`.
+
+> **Uneven example:** `A = 10,000`, `D = 150`, `N = 67`. Slots 1–66 expect ₹150 (₹9,900); slot 67 expects ₹100. The customer pays ₹100 on the final day, not ₹150.
+
+### The schedule is a plan, and its tail is regenerable
+
+After every collection, `PENDING` slots are regenerated from the current outstanding (BR-06). `COLLECTED` slots are immutable and never touched.
+
+```
+remainingDays = ceil(outstanding / D)
+targetCompletionDate = the remainingDays-th working day from the next collection day
+```
+
+> Regenerating rather than projecting separately means there is exactly one representation of "what is expected and when". A separate projection would be a second source of truth that could disagree with the schedule the Junior actually sees.
+
+---
+
+## Expected amount is capped
+
+```
+expected = min(D, outstanding)
+```
+
+(BR-07.) A customer with ₹80 left is shown ₹80, not ₹100. This is what prevents over-collection and a refund obligation, and it needs no special case for the final day.
+
+---
+
+## Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: created
+    PENDING --> ACTIVE: disbursed
+    ACTIVE --> COMPLETED: outstanding <= 0
+    ACTIVE --> DEFAULTED: Super Admin
+    ACTIVE --> WRITTEN_OFF: Super Admin
+    COMPLETED --> [*]
+```
+
+`isOverdue` is a **flag on `ACTIVE`**, not a status (BR-05) — an overdue account is still active and still collecting. Set the day after `targetCompletionDate` passes with outstanding remaining, with no grace period (open question 3).
+
+| Status | Collection | Set by |
+| --- | --- | --- |
+| `PENDING` | No | Creation |
+| `ACTIVE` | Yes | Disbursement |
+| `COMPLETED` | No | Automatic on `outstanding ≤ 0` |
+| `DEFAULTED` | No | Super Admin, reason mandatory |
+| `WRITTEN_OFF` | No | Super Admin, reason mandatory |
+
+> Write-off is Super Admin only because it destroys receivable value. It must not be an action an Admin can take to tidy up a difficult account.
+
+---
+
+## Completion
+
+On `outstanding ≤ 0`, within one transaction: status → `COMPLETED`, `actualCompletionDate` set to that business date, remaining slots → `CANCELLED`, and `account.completed` emitted for M10 (§12).
+
+Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
+
+---
+
+## Denormalised balances
+
+`collectedAmount` and `outstandingAmount` are caches, updated in the same transaction as each collection and **verified nightly against the ledger** (M14, US-095).
+
+> The ledger is the source of truth. These exist because the Junior's route screen and every dashboard need outstanding on every read, and recomputing from full history does not scale to 1,500 accounts. The nightly reconciliation is what makes a cache acceptable rather than a liability — without it, drift is silent and compounds.
+
+---
+
+## Operations
+
+| Operation | Actor |
+| --- | --- |
+| Create | Admin+ |
+| Update terms | Admin+, **pre-disbursement only** |
+| Disburse | Admin+ |
+| Mark defaulted / written off | Super Admin |
+| View, view schedule | Admin+, Senior (own line), Junior (assigned) |
+
+---
+
+## Events
+
+**Emitted:** `account.created`, `account.disbursed` (→ M09 ledger), `account.completed` (→ M10), `account.overdue` (→ M10), `account.written_off` (→ M09).
+
+**Consumed:** `collection.confirmed` (M07) → recompute balances, regenerate tail, check completion. `holiday.declared` (M06) → shift affected pending slots.
+
+---
+
+## Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Cached balance drifts from the ledger | Same-transaction updates plus nightly reconciliation with alerting |
+| Schedule regeneration touches collected slots | Regeneration filters to `PENDING` only; covered by tests |
+| Amounts edited after disbursement | Blocked at the service layer and by the permission matrix |
+| Multi-account customers confuse balance reporting | Outstanding is always per account; customer-level is an explicit labelled sum |
