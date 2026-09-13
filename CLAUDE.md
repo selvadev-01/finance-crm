@@ -6,17 +6,17 @@ The repo directory is `finance-crm`; the product and the root package are `rasi`
 
 ## State: Phase 0 complete, Phase 1 in progress
 
-The `docs/` set fully specifies the system (16 modules, 11 ADRs, 97 stories). **Phase 0 foundations are done; Phase 1 is in progress — M01, M02, M03, M13 and M16 are partly built on the API side, the rest are not.** What exists:
+The `docs/` set fully specifies the system (16 modules, 11 ADRs, 97 stories). **Phase 0 foundations are done; Phase 1 is in progress — M01, M02, M03, M13 and M16 are partly built on the API side, and Phase 2 has begun with M04 customer onboarding; the rest are not.** What exists:
 
-- `apps/web` — Next.js 16, Tailwind v4, a design-system preview at `/`, runs on :3000 and proxies `/api` to the API in development
+- `apps/web` — Next.js 16, Tailwind v4, runs on :3000 and proxies `/api` to the API in development; `/sign-in`, `/change-password`, the admin console shell with `/customers` (list, onboarding form, profile), `/sectors`, `/lines` and `/team` (list + detail, assign, password reset), placeholder `/dashboard` and `/route` landings, and the design-system preview at `/design-system`. Console pages read data in the browser with `useApiQuery` / `apiWrite` over the contract client
 - `apps/api` — NestJS 12 with Better Auth at `/api/auth/*`, the M16 platform in `src/platform/` (validated config, pino logging, error filter, `Database` transaction helper, `/health/*`; no tracing or queue check), M02 access control in `src/access/` (`PolicyGuard`, permissions, sector/line/customer/collection scope), M13's `AuditWriter` in `src/audit/`, and the M03 sector, line and assignment endpoints in `src/organisation/`
-- `packages/db` — Prisma 7, the full 28-table schema, ten applied migrations; every data-dictionary invariant is a database constraint (CHECKs, triggers, partial uniques)
+- `packages/db` — Prisma 7, the full 28-table schema, eleven applied migrations; every data-dictionary invariant is a database constraint (CHECKs, triggers, partial uniques)
 - `packages/domain` — boundary-enforced; holds the pure money maths: M06 working calendar (`CalendarDate`, working-day arithmetic, `toBusinessDate`), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment on the running total (BR-18) and `toMoney`. Nothing consumes it yet
 - `packages/contracts` — boundary-enforced; the in-house API contract (`route()`, `createApiClient`, shared schemas) and the M03 routes. **Not ts-rest** — [ADR-0011](docs/02-architecture/adr/0011-in-house-api-contract.md) supersedes that part of ADR-0002
 - `packages/ui` — Tailwind v4 tokens and a small component base
 - PostgreSQL 17 — one database `rasi_dev`, one schema `public`, shared by development and tests
 
-No web screens beyond the design-system preview, and no customers, accounts, collections or ledger endpoints yet. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
+The web screens are sign-in, forced password change, sector, line and team management, and customer onboarding (`apps/api/src/customers/`); no accounts, collections or ledger endpoints yet. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
 
 ## Commands
 

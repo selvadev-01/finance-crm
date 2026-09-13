@@ -172,9 +172,17 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /health/ready': 'public',
   'GET /health/info': 'public',
   // M01 Identity
+  'GET /api/me': 'profile.viewOwn',
   'POST /api/staff/:staffProfileId/password-reset': 'staff.resetPassword',
   // M03 Organisation
   'GET /api/sectors': 'organisation.view',
+  'GET /api/sectors/:sectorId': 'organisation.view',
+  'GET /api/customers': 'customer.view',
+  'GET /api/customers/:customerId': 'customer.view',
+  'POST /api/customers': 'customer.create',
+  'GET /api/staff': 'staff.list',
+  'GET /api/staff/:staffProfileId': 'staff.list',
+  'GET /api/lines/:lineId': 'organisation.view',
   'POST /api/sectors': 'sector.manage',
   'PATCH /api/sectors/:sectorId': 'sector.manage',
   'POST /api/sectors/:sectorId/deactivation': 'sector.manage',
@@ -184,4 +192,6 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'POST /api/lines/:lineId/deactivation': 'line.manage',
   'POST /api/lines/:lineId/senior-assignment': 'assignment.assignSenior',
   'POST /api/lines/:lineId/junior-assignment': 'assignment.moveJunior',
+  'GET /api/staffing': 'staff.list',
+  'GET /api/lines/:lineId/assignments': 'assignment.viewHistory',
 };

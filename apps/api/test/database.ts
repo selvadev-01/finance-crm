@@ -74,7 +74,17 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.lineAssignment.deleteMany({
     where: { staffProfile: { user: { email: taggedEmail } } },
   });
-  await prisma.customer.deleteMany({ where: { customerCode: taggedCode } });
+  // Customers inserted directly by a test carry a tagged code; customers
+  // created over HTTP get an API-issued `CUS-…` code (US-020) and are matched
+  // by their tagged organization instead.
+  await prisma.customer.deleteMany({
+    where: {
+      OR: [
+        { customerCode: taggedCode },
+        { organization: { name: taggedCode } },
+      ],
+    },
+  });
   await prisma.user.deleteMany({ where: { email: taggedEmail } });
   await prisma.line.deleteMany({ where: { code: taggedCode } });
   await prisma.sector.deleteMany({ where: { code: taggedCode } });

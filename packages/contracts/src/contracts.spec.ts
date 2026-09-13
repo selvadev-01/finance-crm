@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { buildPath, createApiClient } from "./client.js";
+import { customerContract, mobileSchema } from "./customer.contract.js";
 import { organisationContract } from "./organisation.contract.js";
 import { route, successStatus } from "./route.js";
 import { calendarDateSchema, codeSchema, pageQuerySchema } from "./shared.js";
@@ -64,6 +65,53 @@ describe("shared schemas", () => {
     expect(pageQuerySchema.parse({}).limit).toBe(50);
     expect(pageQuerySchema.parse({ limit: "200" }).limit).toBe(200);
     expect(pageQuerySchema.safeParse({ limit: "201" }).success).toBe(false);
+  });
+});
+
+describe("customer schemas (US-020)", () => {
+  it.each([
+    ["9876543210", "+919876543210"],
+    ["98765 43210", "+919876543210"],
+    ["098765-43210", "+919876543210"],
+    ["+91 98765 43210", "+919876543210"],
+    ["919876543210", "+919876543210"],
+  ])("normalises the mobile %j to E.164", (typed, stored) => {
+    expect(mobileSchema.parse(typed)).toBe(stored);
+  });
+
+  it.each(["12345", "5876543210", "+44 7700 900123", "98765432101", ""])(
+    "rejects %j as a mobile number",
+    (typed) => {
+      expect(mobileSchema.safeParse(typed).success).toBe(false);
+    },
+  );
+
+  const valid = {
+    name: "Lakshmi",
+    mobile: "9876543210",
+    address: "12 Market Road",
+    lineId: "line-1",
+    references: [{ name: "Ravi", mobile: "9123456780" }],
+  };
+
+  it("requires at least one reference person, naming the field", () => {
+    const result = customerContract.createCustomer.body!.safeParse({
+      ...valid,
+      references: [],
+    });
+    expect(result.success).toBe(false);
+    expect(result.error!.issues[0]!.path).toEqual(["references"]);
+  });
+
+  it("defaults the duplicate-mobile confirmation to false and drops blank optional text", () => {
+    const parsed = customerContract.createCustomer.body!.parse({
+      ...valid,
+      notes: "  ",
+      references: [{ ...valid.references[0], relation: "" }],
+    });
+    expect(parsed.confirmDuplicateMobile).toBe(false);
+    expect(parsed.notes).toBeUndefined();
+    expect(parsed.references[0]!.relation).toBeUndefined();
   });
 });
 

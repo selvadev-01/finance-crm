@@ -64,7 +64,8 @@ export class RequestContextResolver {
             effectiveFrom: { lte: onToday },
             OR: [{ effectiveTo: null }, { effectiveTo: { gte: onToday } }],
           },
-          orderBy: { effectiveFrom: 'desc' },
+          // `id` breaks a same-day tie, matching StaffDirectoryService.
+          orderBy: [{ effectiveFrom: 'desc' }, { id: 'desc' }],
           select: { lineId: true },
           take: 1,
         },

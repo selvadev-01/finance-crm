@@ -106,6 +106,33 @@ By name, mobile or customer code, scoped by role. Postgres trigram index on name
 
 ---
 
+## As built
+
+In `apps/api/src/customers/`, served through `packages/contracts/src/customer.contract.ts` ([ADR-0011](../../02-architecture/adr/0011-in-house-api-contract.md)). Status is in the [backlog](../../06-delivery/backlog.md).
+
+| Endpoint                         | Permission        | Refusals                                                                         |
+| -------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
+| `GET /api/customers`             | `customer.view`   | — (scoped by `customerScope`; `?lineId=`, `?mobile=`, `?status=`)                |
+| `GET /api/customers/:customerId` | `customer.view`   | `404` (out of scope identical to missing). Includes references                   |
+| `POST /api/customers`            | `customer.create` | `400` (no reference, bad mobile), `404` line, `422 LINE_INACTIVE`, `409 DUPLICATE_MOBILE` |
+
+**Decided 2026-09-13:**
+- **Customer codes are issued by the API** (`CUS-00001`, …) from the Postgres sequence `customer_code_seq`. A create that rolls back leaves a gap, which is harmless.
+- **The duplicate-mobile warning is enforced by the server.** A create whose mobile is already on a non-deleted customer in the organization answers `409 DUPLICATE_MOBILE` until it is resent with `confirmDuplicateMobile: true`. The form then lists who has the number (`GET /api/customers?mobile=`). The confirmation is recorded on the audit entry.
+
+**Mobile numbers** are accepted as typed (`98765 43210`, `098765-43210`, `+91 98765 43210`) and stored as E.164 (`+919876543210`). Only Indian mobiles (starting 6–9) are accepted.
+
+**The sector is never sent.** It is copied from the chosen line, which must be one the caller can see and must be active. 1–5 references are accepted at onboarding.
+
+**Screens:**
+- `/customers`: the list, with a line filter for Admins.
+- `/customers/new` (S-10): keyboard-first, validated with the contract's own schema, "Save and add another" keeps the line.
+- `/customers/:id`: the profile and references. Accounts and collections are stated as not yet available.
+
+**Not built:** edit (US-021), Customer 360's accounts and collections (US-022), line transfer (US-023), search by name (US-024, trigram index), soft delete, the `customer.created` notification, and assigning a customer to a particular Junior (no model for it; a Junior sees their whole line, decided 2026-09-13).
+
+---
+
 ## Risks
 
 | Risk                                                  | Mitigation                                                                       |

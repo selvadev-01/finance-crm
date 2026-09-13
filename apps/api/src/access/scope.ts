@@ -1,4 +1,5 @@
 import type { Prisma } from '@repo/db';
+import { type CalendarDate, toUtcMidnight } from '@repo/domain';
 
 import { NotFoundError } from '../platform/errors/errors.js';
 import type { RequestContext } from '../platform/context/request-context.js';
@@ -49,6 +50,59 @@ export function lineScope(context: RequestContext): Prisma.LineWhereInput {
     return { organizationId: context.organizationId };
   if (context.currentLineId === null) return NO_ROWS;
   return { id: context.currentLineId };
+}
+
+/**
+ * Line assignments in effect on `date` — the date-aware "current" (M02, M03):
+ * `effectiveFrom ≤ date ≤ effectiveTo`, a null `effectiveTo` open-ended.
+ */
+export function assignmentInEffectOn(
+  date: CalendarDate,
+): Prisma.LineAssignmentWhereInput {
+  const day = toUtcMidnight(date);
+  return {
+    effectiveFrom: { lte: day },
+    OR: [{ effectiveTo: null }, { effectiveTo: { gte: day } }],
+  };
+}
+
+/**
+ * Staff in the organization, or — for a Senior — the staff working their
+ * current line on `today` ("List staff: own line"). Soft-deleted staff are
+ * never rows. A Junior has no `staff.list`, but would match only their line.
+ */
+export function staffScope(
+  context: RequestContext,
+  today: CalendarDate,
+): Prisma.StaffProfileWhereInput {
+  if (seesEverything(context)) {
+    return { organizationId: context.organizationId, deletedAt: null };
+  }
+  if (context.currentLineId === null) return NO_ROWS;
+  return {
+    organizationId: context.organizationId,
+    deletedAt: null,
+    assignments: {
+      some: {
+        lineId: context.currentLineId,
+        ...assignmentInEffectOn(today),
+      },
+    },
+  };
+}
+
+/**
+ * Assignment rows the caller may see: all of their organization's for Admins,
+ * only their own line's for a Senior ("View assignment history: own line").
+ */
+export function assignmentScope(
+  context: RequestContext,
+): Prisma.LineAssignmentWhereInput {
+  if (seesEverything(context)) {
+    return { line: { organizationId: context.organizationId } };
+  }
+  if (context.currentLineId === null) return NO_ROWS;
+  return { lineId: context.currentLineId };
 }
 
 /** Customers on the caller's current line, or all in the organization for Admins. */

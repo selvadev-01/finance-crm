@@ -32,6 +32,9 @@ Two modes, set with a `data-density` attribute on a layout element. Components r
 | `--control-padding-x` | `1rem`                  | `0.75rem`        |
 | `--row-padding-y`     | `0.875rem`              | `0.5rem`         |
 | `--stack-gap`         | `1rem`                  | `0.625rem`       |
+| `--control-font-size` | `1rem`                  | `0.875rem`, `1rem` below 768px |
+
+`--control-font-size` sets the text size in controls: `Button`, `Input` and `Select`. The console's controls match its 14px body text. Below 768px they go back to 16px, because a Senior uses the console on a phone and iOS zooms the page when an input under 16px gets focus. Write it as `text-[length:var(--control-font-size)]`: without the `length:` hint, Tailwind reads a bare variable as a colour.
 
 The root layout sets `compact` because the console is the larger surface. The Junior's route segment sets `comfortable` on its own layout, and every control inside widens with no component change.
 
@@ -92,6 +95,15 @@ What exists today. The inventory grows with the screens, not ahead of them.
 | `Button`                                    | `tone`: `primary` · `secondary` · `ghost` · `danger`. Defaults to `type="button"` |
 | `Badge`                                     | `tone`: `neutral` · `positive` · `warning` · `critical` · `info`                  |
 | `NothingYet` / `NoMatches` / `NotPermitted` | Three empty states, three components                                              |
+| `Input`                                     | Native input at the density control height; `aria-invalid` turns the border critical |
+| `Field`                                     | Label, hint and error around one control; wires `id`, `aria-describedby`, `aria-invalid`. An error replaces the hint |
+| `FormMessage`                               | `tone`: `critical` (`role="alert"`) · `info` (`role="status"`) — form-level messages, not field errors |
+| `Select`                                    | Native `<select>` on the control scale, styled to match `Input` |
+| `Textarea`                                  | Multi-line text on `Input`'s frame, at least two control heights tall |
+| `Dialog` / `DialogActions`                  | Native `<dialog>` with `showModal()`: focus trap, Escape and inert background come from the platform. Controlled; every dismissal goes through `onClose`, so a pending request can refuse it |
+| `DataTable` / `DataTableSkeleton`           | A table from 768px, cards below. The first column heads each card. No built-in empty state, because the screen must choose which of the three it is in |
+| `PageHeader`                                | Title, optional eyebrow (the level above in the rollup chain), description and actions |
+| `buttonClass(tone)`                         | The button look for a `Link`, so a button never wraps an anchor |
 | `formatCurrency`                            | Decimal string in, `₹1,23,456.00` out                                             |
 | `formatBusinessDate`                        | `YYYY-MM-DD` in, `13 Sep 2026` out                                                |
 | `cn`                                        | Class merge where later Tailwind utilities win                                    |
@@ -140,6 +152,6 @@ Run `ecc:design-system` in audit and slop-check mode before marking a UI story `
 
 ## Preview
 
-`/` in `apps/web` renders the token set and component base. It is not a product screen; replace it when M01 lands.
+`/design-system` in `apps/web` renders the token set and component base. It is not a product screen; `/` now redirects to `/home`, the signed-in entry point.
 
 It earns its place for now as a canary: if the `@source` directive in `theme.css` ever stops reaching `@repo/ui`, every class is purged from the production build and this page renders unstyled — obvious immediately, rather than in whichever feature screen ships next.

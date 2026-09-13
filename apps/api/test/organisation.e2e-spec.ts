@@ -216,6 +216,47 @@ describe('organisation (M03, e2e)', () => {
     });
   });
 
+  describe('detail reads (S-12, S-13)', () => {
+    it('every role reads its own sector and line, including after deactivation', async () => {
+      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
+        const sector = await as(role).get(`/api/sectors/${sectorId}`).expect(200);
+        expect(sector.body).toMatchObject({ id: sectorId, isActive: true });
+        const line = await as(role).get(`/api/lines/${lineId}`).expect(200);
+        expect(line.body).toMatchObject({ id: lineId, sectorId });
+      }
+
+      const created = await as('ADMIN')
+        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Closed' })
+        .expect(201);
+      await as('ADMIN')
+        .post(`/api/lines/${created.body.id}/deactivation`)
+        .expect(200);
+      const inactive = await as('ADMIN')
+        .get(`/api/lines/${created.body.id}`)
+        .expect(200);
+      expect(inactive.body.isActive).toBe(false);
+    });
+
+    it('another organization’s sector or line is 404, identical to a missing one; a Senior cannot read a line that is not theirs', async () => {
+      const elsewhere = await createTestOrganization(prisma, ['Far']);
+      for (const [path, missing] of [
+        [`/api/sectors/${elsewhere.sector.id}`, '/api/sectors/does-not-exist'],
+        [`/api/lines/${elsewhere.lines[0]!.id}`, '/api/lines/does-not-exist'],
+      ] as const) {
+        const other = await as('ADMIN').get(path).expect(404);
+        const absent = await as('ADMIN').get(missing).expect(404);
+        expect(other.body.code).toBe(absent.body.code);
+        expect(other.body.message).toBe(absent.body.message);
+      }
+
+      const sibling = await as('ADMIN')
+        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Sibling' })
+        .expect(201);
+      await as('SENIOR').get(`/api/lines/${sibling.body.id}`).expect(404);
+      await as('JUNIOR').get(`/api/lines/${sibling.body.id}`).expect(404);
+    });
+  });
+
   describe('lines (US-011)', () => {
     it('creates a line, then deactivates it, and inactive lines are hidden unless asked for', async () => {
       const created = await as('ADMIN')
@@ -398,6 +439,77 @@ describe('organisation (M03, e2e)', () => {
         })
         .expect(422);
       expect(mismatch.body.code).toBe('STAFF_ROLE_MISMATCH');
+    });
+  });
+
+  describe('staffing views (US-014, US-015)', () => {
+    it('an Admin sees each line with today’s Senior, Junior count and customer count', async () => {
+      await prisma.customer.create({
+        data: {
+          organizationId,
+          sectorId,
+          lineId,
+          customerCode: testCode('CUS'),
+          name: 'Staffing customer',
+          mobile: '+919800000001',
+          address: 'Address',
+        },
+      });
+      const response = await as('ADMIN')
+        .get('/api/staffing?limit=200')
+        .expect(200);
+      const lineA = response.body.data.find(
+        (l: { lineId: string }) => l.lineId === lineId,
+      );
+      expect(lineA).toMatchObject({
+        senior: {
+          staffProfileId: staff.SENIOR.staffProfileId,
+          name: 'Test Staff',
+        },
+        juniorCount: 1,
+        customerCount: 1,
+      });
+    });
+
+    it('a Senior sees only their own line; a Junior is refused', async () => {
+      const senior = await as('SENIOR').get('/api/staffing').expect(200);
+      expect(senior.body.data.map((l: { lineId: string }) => l.lineId)).toEqual(
+        [lineId],
+      );
+      await as('JUNIOR').get('/api/staffing').expect(403);
+    });
+
+    it('lists a line’s assignment history, and who was responsible on a given date', async () => {
+      const history = `/api/lines/${lineId}/assignments`;
+      const all = await as('ADMIN').get(`${history}?limit=200`).expect(200);
+      expect(all.body.data.length).toBeGreaterThanOrEqual(2);
+      expect(all.body.data[0]).toHaveProperty('staffName');
+
+      const before = await as('ADMIN')
+        .get(`${history}?on=2025-12-31`)
+        .expect(200);
+      expect(before.body.data).toEqual([]);
+
+      const onDay = await as('ADMIN')
+        .get(`${history}?on=2026-03-14`)
+        .expect(200);
+      expect(
+        onDay.body.data.map(
+          (a: { staffProfileId: string }) => a.staffProfileId,
+        ),
+      ).toEqual(
+        expect.arrayContaining([
+          staff.SENIOR.staffProfileId,
+          staff.JUNIOR.staffProfileId,
+        ]),
+      );
+    });
+
+    it('a Senior asking for another line’s history gets 404', async () => {
+      const elsewhere = await createTestOrganization(prisma, ['Other line']);
+      await as('SENIOR')
+        .get(`/api/lines/${elsewhere.lines[0]!.id}/assignments`)
+        .expect(404);
     });
   });
 });

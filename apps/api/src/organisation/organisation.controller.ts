@@ -14,6 +14,7 @@ import {
 import { AssignmentService } from './assignment.service.js';
 import { LineService } from './line.service.js';
 import { SectorService } from './sector.service.js';
+import { StaffingService } from './staffing.service.js';
 
 type In<Route extends keyof typeof api> = RouteInput<(typeof api)[Route]>;
 type Out<Route extends keyof typeof api> = Promise<
@@ -30,6 +31,7 @@ export class OrganisationController {
     private readonly sectors: SectorService,
     private readonly lines: LineService,
     private readonly assignments: AssignmentService,
+    private readonly staffing: StaffingService,
   ) {}
 
   @RequirePermission('organisation.view')
@@ -39,6 +41,15 @@ export class OrganisationController {
     @ContractInput() { query }: In<'listSectors'>,
   ): Out<'listSectors'> {
     return this.sectors.list(context, query);
+  }
+
+  @RequirePermission('organisation.view')
+  @ContractRoute(api.getSector)
+  getSector(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: In<'getSector'>,
+  ): Out<'getSector'> {
+    return this.sectors.get(context, params.sectorId);
   }
 
   @RequirePermission('sector.manage')
@@ -77,6 +88,15 @@ export class OrganisationController {
     return this.lines.list(context, query);
   }
 
+  @RequirePermission('organisation.view')
+  @ContractRoute(api.getLine)
+  getLine(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: In<'getLine'>,
+  ): Out<'getLine'> {
+    return this.lines.get(context, params.lineId);
+  }
+
   @RequirePermission('line.manage')
   @ContractRoute(api.createLine)
   createLine(
@@ -102,6 +122,24 @@ export class OrganisationController {
     @ContractInput() { params }: In<'deactivateLine'>,
   ): Out<'deactivateLine'> {
     return this.lines.deactivate(context, params.lineId);
+  }
+
+  @RequirePermission('staff.list')
+  @ContractRoute(api.listLineStaffing)
+  listLineStaffing(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { query }: In<'listLineStaffing'>,
+  ): Out<'listLineStaffing'> {
+    return this.staffing.lineStaffing(context, query);
+  }
+
+  @RequirePermission('assignment.viewHistory')
+  @ContractRoute(api.listAssignmentHistory)
+  listAssignmentHistory(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, query }: In<'listAssignmentHistory'>,
+  ): Out<'listAssignmentHistory'> {
+    return this.staffing.assignmentHistory(context, params.lineId, query);
   }
 
   @RequirePermission('assignment.assignSenior')

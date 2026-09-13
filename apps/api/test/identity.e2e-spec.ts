@@ -119,6 +119,36 @@ describe('admin password reset (US-003, e2e)', () => {
     );
   });
 
+  it('GET /api/me describes the signed-in staff member, and reports a pending forced change', async () => {
+    const junior = await createTestStaff(prisma, {
+      organizationId,
+      role: 'JUNIOR',
+    });
+    const cookie = await signIn(app, junior);
+    const me = await http().get('/api/me').set('Cookie', cookie).expect(200);
+    expect(me.body).toEqual({
+      userId: junior.userId,
+      staffProfileId: junior.staffProfileId,
+      name: 'Test Staff',
+      email: junior.email,
+      role: 'JUNIOR',
+      currentLineId: null,
+    });
+
+    const { temporaryPassword } = (
+      await reset(junior.staffProfileId).expect(201)
+    ).body as { temporaryPassword: string };
+    const afterReset = await signIn(app, {
+      email: junior.email,
+      password: temporaryPassword,
+    });
+    const blocked = await http()
+      .get('/api/me')
+      .set('Cookie', afterReset)
+      .expect(403);
+    expect(blocked.body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+  });
+
   it('an Admin cannot reset a Super Admin', async () => {
     const owner = await createTestStaff(prisma, {
       organizationId,

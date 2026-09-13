@@ -44,6 +44,11 @@ export class SectorService {
     return toPage(rows, page, (row) => row);
   }
 
+  /** One sector in scope, active or not; out of scope is `404` (M02). */
+  get(context: RequestContext, sectorId: string): Promise<Sector> {
+    return this.getInScope(context, sectorId);
+  }
+
   create(
     context: RequestContext,
     input: { code: string; name: string },

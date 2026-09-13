@@ -39,6 +39,21 @@ export const assignmentSchema = z.object({
   effectiveTo: calendarDateSchema.nullable(),
 });
 
+export const lineStaffingSchema = z.object({
+  lineId: idSchema,
+  code: z.string(),
+  name: z.string(),
+  sectorId: idSchema,
+  /** The Senior in effect today, if any. */
+  senior: z.object({ staffProfileId: idSchema, name: z.string() }).nullable(),
+  juniorCount: z.number().int().min(0),
+  customerCount: z.number().int().min(0),
+});
+
+export const assignmentHistoryEntrySchema = assignmentSchema.extend({
+  staffName: z.string(),
+});
+
 const sectorParams = z.object({ sectorId: idSchema });
 const lineParams = z.object({ lineId: idSchema });
 
@@ -80,6 +95,14 @@ export const organisationContract = {
     responses: { 200: pageSchema(sectorSchema), ...errors },
   }),
 
+  getSector: route({
+    method: "GET",
+    path: "/api/sectors/:sectorId",
+    summary: "One sector the caller can see, active or not (S-13)",
+    pathParams: sectorParams,
+    responses: { 200: sectorSchema, ...errors },
+  }),
+
   createSector: route({
     method: "POST",
     path: "/api/sectors",
@@ -117,6 +140,14 @@ export const organisationContract = {
         .transform((value) => value === "true"),
     }),
     responses: { 200: pageSchema(lineSchema), ...errors },
+  }),
+
+  getLine: route({
+    method: "GET",
+    path: "/api/lines/:lineId",
+    summary: "One line the caller can see, active or not (S-12)",
+    pathParams: lineParams,
+    responses: { 200: lineSchema, ...errors },
   }),
 
   createLine: route({
@@ -163,6 +194,27 @@ export const organisationContract = {
     },
   }),
 
+  listLineStaffing: route({
+    method: "GET",
+    path: "/api/staffing",
+    summary: "Who is on which line today: Senior, Juniors, customers (US-014)",
+    query: pageQuerySchema,
+    responses: { 200: pageSchema(lineStaffingSchema), ...errors },
+  }),
+
+  listAssignmentHistory: route({
+    method: "GET",
+    path: "/api/lines/:lineId/assignments",
+    summary:
+      "A line's assignment history, or who was responsible on a date (US-015)",
+    pathParams: lineParams,
+    query: pageQuerySchema.extend({
+      /** Only the assignments in effect on this date. */
+      on: calendarDateSchema.optional(),
+    }),
+    responses: { 200: pageSchema(assignmentHistoryEntrySchema), ...errors },
+  }),
+
   assignJunior: route({
     method: "POST",
     path: "/api/lines/:lineId/junior-assignment",
@@ -181,3 +233,7 @@ export const organisationContract = {
 export type Sector = z.infer<typeof sectorSchema>;
 export type Line = z.infer<typeof lineSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;
+export type LineStaffing = z.infer<typeof lineStaffingSchema>;
+export type AssignmentHistoryEntry = z.infer<
+  typeof assignmentHistoryEntrySchema
+>;

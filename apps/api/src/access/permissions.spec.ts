@@ -70,6 +70,7 @@ const ROW_PERMISSIONS: Record<string, Permission | null> = {
   'Administration (M01, M13, M15) › View audit log': 'audit.view',
   'Administration (M01, M13, M15) › Change settings': 'settings.change',
   'Administration (M01, M13, M15) › Declare holiday': 'holiday.declare',
+  'Administration (M01, M13, M15) › View own profile': 'profile.viewOwn',
 };
 
 interface MatrixRow {

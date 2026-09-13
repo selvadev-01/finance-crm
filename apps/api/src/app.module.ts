@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AccessModule } from './access/access.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { RasiAuthModule } from './auth/auth.module.js';
+import { CustomersModule } from './customers/customers.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { OrganisationModule } from './organisation/organisation.module.js';
 import { PlatformModule } from './platform/platform.module.js';
@@ -22,6 +23,7 @@ import { PlatformModule } from './platform/platform.module.js';
     AccessModule,
     IdentityModule,
     OrganisationModule,
+    CustomersModule,
   ],
 })
 export class AppModule {}

@@ -145,6 +145,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | **View audit log**       |      ✓      |   ✓   |    —     |   —    |
 | **Change settings**      |      ✓      |   —   |    —     |   —    |
 | Declare holiday          |      ✓      |   ✓   |    —     |   —    |
+| View own profile         |      ✓      |   ✓   |    ✓     |   ✓    |
 
 > Role change is Super Admin only — otherwise an Admin could promote themselves. Settings likewise: they alter business rules, and changing one is not an operational act.
 

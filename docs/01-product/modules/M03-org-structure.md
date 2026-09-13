@@ -105,10 +105,12 @@ In `apps/api/src/organisation/`, served through the contract in `packages/contra
 | Endpoint                                    | Permission                | Refusals                                                                       |
 | ------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
 | `GET /api/sectors`                          | `organisation.view`       | — (scoped: Admins their organization, Seniors and Juniors their line's sector) |
+| `GET /api/sectors/:sectorId`                | `organisation.view`       | `404` (out of scope identical to missing; inactive sectors are returned)       |
 | `POST /api/sectors`                         | `sector.manage`           | `409 SECTOR_CODE_TAKEN`                                                        |
 | `PATCH /api/sectors/:sectorId`              | `sector.manage`           | `404` (rename only)                                                            |
 | `POST /api/sectors/:sectorId/deactivation`  | `sector.manage`           | `422 SECTOR_HAS_ACTIVE_LINES`                                                  |
 | `GET /api/lines`                            | `organisation.view`       | — (scoped; `?sectorId=`, `?includeInactive=true`)                              |
+| `GET /api/lines/:lineId`                    | `organisation.view`       | `404` (scoped by line: a Senior or Junior reads only their own)                |
 | `POST /api/lines`                           | `line.manage`             | `404` sector, `422 SECTOR_INACTIVE`, `409 LINE_CODE_TAKEN`                     |
 | `PATCH /api/lines/:lineId`                  | `line.manage`             | `404` (rename only)                                                            |
 | `POST /api/lines/:lineId/deactivation`      | `line.manage`             | `422 LINE_HAS_ACTIVE_ACCOUNTS`                                                 |
@@ -134,7 +136,16 @@ Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit ent
 
 **"Current" is date-aware** (M02): a row opened "effective tomorrow" does not change anyone's scope until tomorrow.
 
-**Not built:** notifications to the staff and Seniors involved (M10), `assignment.changed` and the other events (no event bus yet), current-staffing and history views (US-014, US-015), reactivation, and the backdating-past-a-closed-day rule (day close is M08). Deactivating a line does not close its open assignments.
+**Staffing views:** `GET /api/staffing` (US-014, `staff.list`) and `GET /api/lines/:lineId/assignments?on=` (US-015, `assignment.viewHistory`), both scoped by line.
+
+**Screens:**
+- `/sectors` and `/sectors/:id` (S-13) are for Admin and Super Admin only.
+- `/lines` and `/lines/:id` (S-12) are also open to a Senior, who sees their own line read-only. The line detail shows today's staffing and the assignment history.
+- The §14 figures are stated as unavailable until M05, M07 and M09 exist; the page never shows zeros in their place.
+- `/team` and `/team/:id` (S-14) show each person's line today and their history.
+- The S-15 assign dialog opens from a line or from a person. It has no default effective date; "Use today" is an explicit button. After saving, it says which assignments were closed and names any line left without a Senior.
+
+**Not built:** notifications to the staff and Seniors involved (M10), `assignment.changed` and the other events (no event bus yet), reactivation, and the backdating-past-a-closed-day rule (day close is M08). Deactivating a line does not close its open assignments.
 
 ---
 

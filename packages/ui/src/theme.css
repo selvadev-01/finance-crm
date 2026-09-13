@@ -114,6 +114,8 @@
 [data-density="comfortable"] {
   --control-height: var(--spacing-touch);
   --control-padding-x: 1rem;
+  /* 16px in the field app — below that, iOS zooms the page on focus. */
+  --control-font-size: 1rem;
   --row-padding-y: 0.875rem;
   --stack-gap: 1rem;
 }
@@ -121,8 +123,18 @@
 [data-density="compact"] {
   --control-height: 2.25rem;
   --control-padding-x: 0.75rem;
+  /* Matches the console's 14px body text, so controls don't shout. */
+  --control-font-size: 0.875rem;
   --row-padding-y: 0.5rem;
   --stack-gap: 0.625rem;
+}
+
+/* Seniors open the console on a phone too; keep 16px there so focusing an
+ * input does not zoom the page. */
+@media (width < 48rem) {
+  [data-density="compact"] {
+    --control-font-size: 1rem;
+  }
 }
 
 /* Focus is always visible. Never remove it without replacing it. */

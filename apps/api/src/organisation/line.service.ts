@@ -53,6 +53,11 @@ export class LineService {
     return toPage(rows, page, (row) => row);
   }
 
+  /** One line in scope, active or not; out of scope is `404` (M02). */
+  get(context: RequestContext, lineId: string): Promise<Line> {
+    return this.getInScope(context, lineId);
+  }
+
   /** US-011: a line belongs to an active sector the caller can see. */
   create(
     context: RequestContext,

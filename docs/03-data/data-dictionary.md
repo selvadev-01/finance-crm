@@ -102,7 +102,7 @@ The partial uniques are declared in `schema.prisma` (`partialIndexes` preview), 
 
 | Column            | Type             | Null | Notes                                                                                  |
 | ----------------- | ---------------- | ---- | -------------------------------------------------------------------------------------- |
-| `customerCode`    | `String`         | No   | Unique (`CUS-00417`)                                                                   |
+| `customerCode`    | `String`         | No   | Unique (`CUS-00417`). Issued by the API from sequence `customer_code_seq`; never typed |
 | `name`            | `String`         | No   |                                                                                        |
 | `mobile`          | `String`         | No   | E.164. Indexed, **not** unique — family members share numbers                          |
 | `alternateMobile` | `String`         | Yes  |                                                                                        |

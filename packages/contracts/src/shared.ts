@@ -18,8 +18,7 @@ export const calendarDateSchema = z
     const [year, month, day] = value.split("-").map(Number);
     const date = new Date(Date.UTC(year ?? 0, (month ?? 0) - 1, day ?? 0));
     return (
-      !Number.isNaN(date.getTime()) &&
-      date.toISOString().slice(0, 10) === value
+      !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
     );
   }, "is not a real calendar date");
 

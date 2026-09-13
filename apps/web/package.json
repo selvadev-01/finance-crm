@@ -11,6 +11,9 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "@repo/contracts": "workspace:*",
+    "@repo/domain": "workspace:*",
     "@repo/ui": "workspace:*",
     "@tailwindcss/postcss": "4.3.3",
     "better-auth": "1.7.4",

@@ -81,6 +81,7 @@ export const PERMISSIONS = {
   'audit.view': ADMINS,
   'settings.change': SUPER_ADMIN,
   'holiday.declare': ADMINS,
+  'profile.viewOwn': ALL,
 } as const satisfies Record<string, readonly StaffRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

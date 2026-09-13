@@ -108,6 +108,17 @@ While `mustChangePassword` is set, the temporary password signs in but **every R
 | `CANNOT_RESET_OWN_PASSWORD` | `422`  | Use change-password instead                 |
 | `NO_PASSWORD_CREDENTIAL`    | `422`  | The user has no password to replace         |
 
+**Who am I — `GET /api/me`** (`profile.viewOwn`, every role) returns `userId`, `staffProfileId`, `name`, `email`, `role` and `currentLineId`. The web client calls it on every signed-in page. `401` sends the user to `/sign-in`, and `403 PASSWORD_CHANGE_REQUIRED` sends them to `/change-password`. Otherwise the client forwards to the role's landing: `/dashboard` in the console for Super Admin, Admin and Senior, and `/route` for Junior. The client only follows the API's answer and decides nothing itself.
+
+**Team read model — `GET /api/staff`** (`?role=`, `?status=`) **and `GET /api/staff/:staffProfileId`** (both `staff.list`):
+- Each person comes with the line they work today.
+- The detail adds their assignment history, newest first, with `upcoming` set on rows that start after today.
+- Scope is `staffScope`: Admins see their organization; a Senior sees staff whose assignment in effect today is on their line, and only that line's history rows (`assignmentScope`).
+- Soft-deleted staff are never returned. Anything out of scope is `404 STAFF_NOT_FOUND`, identical to a missing id.
+- Creating, updating and suspending staff (US-092) is not built.
+
+Better Auth checks the `Origin` header on its POST endpoints (`trustedOrigins` is the web origin). A request without it gets `403 MISSING_OR_NULL_ORIGIN`, so test sign-in or change-password with curl by sending `Origin` explicitly.
+
 **Sign-out (US-002)** is Better Auth's `POST /api/auth/sign-out`, unchanged: it deletes that device's session row, so a retained cookie is refused afterwards, and leaves the staff member's other sessions alone. The rule that sign-out is blocked while unsynced collections are queued belongs to the client and arrives with the offline outbox (Phase 3).
 
 ---

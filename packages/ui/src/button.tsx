@@ -20,6 +20,7 @@ const button = cva(
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
     "rounded-[var(--radius-control)] font-medium",
     "h-[var(--control-height)] px-[var(--control-padding-x)]",
+    "text-[length:var(--control-font-size)]",
     "transition-colors",
     "disabled:pointer-events-none disabled:opacity-50",
     // Tactile press. Cheap, and it tells a gloved thumb the tap registered.
@@ -41,6 +42,18 @@ const button = cva(
 
 export type ButtonProps = ComponentProps<"button"> &
   VariantProps<typeof button>;
+
+/**
+ * The button look for something that navigates — a Next `Link` styled as a
+ * button, rather than a `<button>` wrapping an `<a>`, which nests two
+ * interactive elements and confuses keyboard and screen-reader users.
+ */
+export function buttonClass(
+  tone: VariantProps<typeof button>["tone"],
+  className?: string,
+): string {
+  return cn(button({ tone }), className);
+}
 
 export function Button({ tone, className, type, ...props }: ButtonProps) {
   return (
