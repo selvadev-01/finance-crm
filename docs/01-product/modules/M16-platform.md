@@ -32,12 +32,12 @@ Structured JSON via pino. Every log line carries a request id, and a user id whe
 
 > A denylist is a list of the leaks you thought of. An allowlist is a list of what is safe, and the default for anything new is redacted.
 
-| Level | Used for |
-| --- | --- |
-| `error` | Unexpected failures requiring attention |
-| `warn` | Handled problems: discrepancies, retries, validation failures |
-| `info` | State changes: collections, day closes, assignments |
-| `debug` | Development only |
+| Level   | Used for                                                      |
+| ------- | ------------------------------------------------------------- |
+| `error` | Unexpected failures requiring attention                       |
+| `warn`  | Handled problems: discrepancies, retries, validation failures |
+| `info`  | State changes: collections, day closes, assignments           |
+| `debug` | Development only                                              |
 
 Money amounts are logged as strings, never numbers — consistent with BR-11 and so a log line can never introduce float drift into an investigation.
 
@@ -47,15 +47,15 @@ Money amounts are logged as strings, never numbers — consistent with BR-11 and
 
 Four categories, mapped to HTTP:
 
-| Category | Status | Meaning |
-| --- | --- | --- |
-| `ValidationError` | `400` | Malformed or invalid input |
-| `AuthenticationError` | `401` | No valid session |
-| `AuthorizationError` | `403` | Valid session, denied action |
-| `NotFoundError` | `404` | Absent **or out of scope** (M02) |
-| `ConflictError` | `409` | State conflict — not used for idempotent replays |
-| `DomainError` | `422` | Business rule violation |
-| `InternalError` | `500` | Everything else |
+| Category              | Status | Meaning                                          |
+| --------------------- | ------ | ------------------------------------------------ |
+| `ValidationError`     | `400`  | Malformed or invalid input                       |
+| `AuthenticationError` | `401`  | No valid session                                 |
+| `AuthorizationError`  | `403`  | Valid session, denied action                     |
+| `NotFoundError`       | `404`  | Absent **or out of scope** (M02)                 |
+| `ConflictError`       | `409`  | State conflict — not used for idempotent replays |
+| `DomainError`         | `422`  | Business rule violation                          |
+| `InternalError`       | `500`  | Everything else                                  |
 
 Every response carries a stable machine-readable `code`, a human message, and field-level detail where applicable.
 
@@ -85,11 +85,11 @@ This is what M02's repository-level scoping consumes.
 
 ## Health checks
 
-| Endpoint | Checks |
-| --- | --- |
-| `/health/live` | Process is up |
+| Endpoint        | Checks                                                  |
+| --------------- | ------------------------------------------------------- |
+| `/health/live`  | Process is up                                           |
 | `/health/ready` | Database reachable, migrations current, queue reachable |
-| `/health/info` | Version, build identifier, server time and timezone |
+| `/health/info`  | Version, build identifier, server time and timezone     |
 
 `/health/info` reports server time and timezone deliberately — clock or timezone drift on a host is a real cause of misfiled business dates (BR-12), and it should be visible without shell access.
 
@@ -111,10 +111,10 @@ One client instance, exported from `packages/db`, injected as a Nest provider. `
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Config error discovered at runtime | Startup validation, all failures reported together |
-| Secrets leak into logs | Allowlist redaction, reviewed in code review |
-| Transaction timeout under load | Explicit timeouts, money transactions kept short |
-| Connection pool exhaustion | Pool sized per process; worker and API sized separately |
-| Trace volume costs | Sampling, with error traces always kept |
+| Risk                               | Mitigation                                              |
+| ---------------------------------- | ------------------------------------------------------- |
+| Config error discovered at runtime | Startup validation, all failures reported together      |
+| Secrets leak into logs             | Allowlist redaction, reviewed in code review            |
+| Transaction timeout under load     | Explicit timeouts, money transactions kept short        |
+| Connection pool exhaustion         | Pool sized per process; worker and API sized separately |
+| Trace volume costs                 | Sampling, with error traces always kept                 |

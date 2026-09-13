@@ -18,11 +18,11 @@ Better Auth is instantiated in `apps/api` and mounted via `@thallesp/nestjs-bett
 
 ## Files
 
-| Path | Contents |
-| --- | --- |
-| `apps/api/src/auth/auth.config.ts` | The `betterAuth()` instance |
-| `apps/api/src/auth/auth.module.ts` | `AuthModule.forRoot({ auth })` |
-| `apps/web/src/lib/auth-client.ts` | `createAuthClient` from `better-auth/react` |
+| Path                               | Contents                                    |
+| ---------------------------------- | ------------------------------------------- |
+| `apps/api/src/auth/auth.config.ts` | The `betterAuth()` instance                 |
+| `apps/api/src/auth/auth.module.ts` | `AuthModule.forRoot({ auth })`              |
+| `apps/web/src/lib/auth-client.ts`  | `createAuthClient` from `better-auth/react` |
 
 ### `auth.config.ts`
 
@@ -35,8 +35,8 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: { enabled: true },
   session: {
-    expiresIn: 60 * 60 * 24 * 30,   // 30 days — see below
-    updateAge: 60 * 60 * 24,         // rolling renewal
+    expiresIn: 60 * 60 * 24 * 30, // 30 days — see below
+    updateAge: 60 * 60 * 24, // rolling renewal
   },
   trustedOrigins: [process.env.WEB_ORIGIN!],
   // Social providers are configured only when OAuth credentials exist in env.
@@ -55,25 +55,26 @@ const app = await NestFactory.create(AppModule, { bodyParser: false });
 
 ```ts
 // app.module.ts
-AuthModule.forRoot({ auth })
+AuthModule.forRoot({ auth });
 ```
 
 Two details that fail quietly if missed:
 
 - **`bodyParser: false` is mandatory.** Better Auth needs the raw request body; leaving Nest's parser enabled breaks every auth route with no obvious cause.
+- **It is global, so every other endpoint loses JSON parsing too.** The API design assumes parsed JSON bodies everywhere else, so `main.ts` re-adds `express.json()` for all paths that do _not_ start with `/api/auth`. Removing that middleware breaks every non-auth `POST` instead.
 - **`forRoot({ auth })` takes an object** in v2.x. The older `forRoot(auth)` signature is wrong and will not work.
 
 ### Guards and decorators
 
 `AuthGuard` registers globally. Available decorators:
 
-| Decorator | Purpose |
-| --- | --- |
-| `@AllowAnonymous()` | Public route |
-| `@OptionalAuth()` | Session provided if present, not required |
-| `@Session()` | Inject the session into a handler |
+| Decorator           | Purpose                                   |
+| ------------------- | ----------------------------------------- |
+| `@AllowAnonymous()` | Public route                              |
+| `@OptionalAuth()`   | Session provided if present, not required |
+| `@Session()`        | Inject the session into a handler         |
 
-**Rasi's `PolicyGuard` (M02) runs after `AuthGuard`** and performs role and line-scope enforcement. Better Auth answers *who you are*; it never answers *what you may do*.
+**Rasi's `PolicyGuard` (M02) runs after `AuthGuard`** and performs role and line-scope enforcement. Better Auth answers _who you are_; it never answers _what you may do_.
 
 ---
 
@@ -102,7 +103,11 @@ pnpm --filter @repo/db exec prisma migrate dev --name add-better-auth
 pnpm --filter @repo/db exec prisma generate
 ```
 
-**The generated models must not be hand-edited** — step 1 has to stay re-runnable across Better Auth upgrades. All Rasi staff data lives in `staff_profile`, keyed 1:1 to `user` (M01).
+**The generated models are not authored by hand, with one necessary exception.** Step 1 has to stay re-runnable across Better Auth upgrades, so nothing may be added to them freely. But Prisma requires both sides of every relation, and the Rasi models point at `User` — so `model User` must carry back-relation fields (`staffProfile`, `notifications`, `pushSubscriptions`) or the schema does not compile.
+
+The enforceable rule is therefore narrower than "do not edit": **relation fields only, never scalar columns.** All Rasi staff data lives in `staff_profile`, keyed 1:1 to `user` (M01). Commit the freshly generated file on its own before adding the back-relations, so `git log -p` on the schema stays the record of every hand-edit to replay after an upgrade.
+
+**The `@better-auth/cli` package is abandoned.** It tops out at `1.4.22` while `better-auth` itself is at `1.7.4`, and npm reports it deprecated. It still generates correct models, because it derives tables from the _installed_ `better-auth` rather than from its own version — but pin `better-auth`, review the generated diff on every regeneration, and expect to hand-maintain these four models if the CLI stops working entirely.
 
 ---
 
@@ -120,20 +125,24 @@ Same-origin in production: Nginx serves the web app at `/` and the API at `/api`
 
 > Third-party cookie restrictions are tightening, and the Junior PWA replaying queued requests from a service worker is exactly where a cross-site cookie fails quietly. One origin removes the problem instead of configuring around it.
 
-Development runs on separate ports, which requires `trustedOrigins` plus `sameSite: "none"` and `secure: true` — a **development-only** configuration that must not reach production.
+**Development is same-origin too.** `apps/web` proxies `/api/:path*` to `:3001` via `rewrites()` in `next.config.js`, so the browser only ever talks to `http://localhost:3000` and the cookie is first-party in both environments.
 
-Cookie settings: `httpOnly`, `secure`, `sameSite: "lax"`, `path: "/"`.
+> An earlier version of this document prescribed `sameSite: "none"` plus `secure: true` for development across the two ports. That configuration cannot work: `secure` cookies are not accepted over plain HTTP, and the dev ports are HTTP. Worse, it made development exercise a different cookie path from production — in exactly the place this document warns a cross-site cookie fails quietly. The proxy removes the special case rather than configuring around it.
+
+Cookie settings: `httpOnly`, `sameSite: "lax"`, `path: "/"`, and `secure` only when `NODE_ENV === "production"`.
+
+`baseURL` is set to `WEB_ORIGIN`. Without it Better Auth derives its origin from each incoming request and warns at startup, which makes callbacks and redirects unreliable.
 
 ---
 
 ## What Better Auth does not own
 
-| Concern | Owner |
-| --- | --- |
-| Roles | `staff_profile.role` (M01) |
-| Line and sector scoping | M02 + M03 |
-| Permission matrix | M02 |
-| Staff metadata | `staff_profile` |
+| Concern                 | Owner                      |
+| ----------------------- | -------------------------- |
+| Roles                   | `staff_profile.role` (M01) |
+| Line and sector scoping | M02 + M03                  |
+| Permission matrix       | M02                        |
+| Staff metadata          | `staff_profile`            |
 
 > Better Auth's admin plugin offers roles and access control, and they are not used. Rasi's roles are business data that change with line reassignments and carry scoping rules the plugin does not model — and the assignment-history tables (M03) would be needed regardless. Splitting authorisation across two systems to save one table would make every scoping question harder to answer.
 
@@ -147,9 +156,9 @@ Cookie settings: `httpOnly`, `secure`, `sameSite: "lax"`, `path: "/"`.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
+| Risk                                                                 | Mitigation                                                                                                                  |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `@thallesp/nestjs-better-auth` is community-maintained, not official | Better Auth exposes a plain node handler; replacing the adapter with a hand-written controller is contained. Version pinned |
-| `bodyParser: false` removed by a future refactor | Documented here and in a code comment at the call site; an auth smoke test in the api suite fails if it goes |
-| Better Auth upgrade changes generated schema | Generated models never hand-edited; upgrade runs `generate` then reviews the migration diff |
-| Cross-origin cookie misconfiguration reaches production | Same-origin in production; dev-only settings gated by `NODE_ENV` |
+| `bodyParser: false` removed by a future refactor                     | Documented here and in a code comment at the call site; an auth smoke test in the api suite fails if it goes                |
+| Better Auth upgrade changes generated schema                         | Generated models never hand-edited; upgrade runs `generate` then reviews the migration diff                                 |
+| Cross-origin cookie misconfiguration reaches production              | Same-origin in production; dev-only settings gated by `NODE_ENV`                                                            |

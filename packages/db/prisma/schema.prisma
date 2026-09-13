@@ -1,0 +1,924 @@
+// Rasi — Prisma schema.
+//
+// packages/db is the sole owner of the schema (system-architecture.md).
+//
+// Order matters here. Better Auth's models (User, Session, Account,
+// Verification) are written into this file by `npx @better-auth/cli generate`
+// and MUST land before the Rasi models, because staff_profile.userId is a
+// foreign key to user.id (data-dictionary.md) and Prisma requires both sides
+// of every relation. The Rasi schema cannot pass `prisma validate` until
+// model User exists.
+//
+// The generated Better Auth models are never hand-edited except to add
+// back-relation fields (staffProfile, notifications, pushSubscriptions).
+// Never add scalar columns to them — `generate` has to stay re-runnable
+// across Better Auth upgrades. See packages/db/README.md.
+//
+// Conventions, applied without exception (erd.md, data-dictionary.md):
+//   - Models are PascalCase, tables snake_case via @@map, columns camelCase.
+//   - Primary keys are cuid() text. The one exception is idempotency_key,
+//     whose PK is the client-supplied UUID itself.
+//   - Money is Decimal @db.Decimal(14,2). Never Float, anywhere, ever (BR-11).
+//   - Business dates are @db.Date; instants are @db.Timestamptz(3). Prisma's
+//     default for DateTime is timestamp WITHOUT time zone, so the annotation
+//     is required rather than decorative — ADR-0009 depends on it.
+//   - Every foreign key carries an index; Postgres does not create one.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+// Prisma 7 removed `url` from the datasource block. The migration connection
+// string lives in prisma7.config.ts; the runtime client takes a driver adapter.
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth — generated. Hand-edits limited to the three back-relations.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  // Back-relations added by hand. Prisma requires both sides of a relation,
+  // so these cannot be omitted. Relation fields only — never scalar columns.
+  staffProfile      StaffProfile?
+  notifications     Notification[]
+  pushSubscriptions PushSubscription[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum StaffRole {
+  SUPER_ADMIN
+  ADMIN
+  SENIOR
+  JUNIOR
+}
+
+enum StaffStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum AssignmentRole {
+  SENIOR
+  JUNIOR
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+  WRITTEN_OFF
+}
+
+enum ScheduleStatus {
+  PENDING
+  COLLECTED
+  PARTIAL
+  MISSED
+  CANCELLED
+}
+
+enum Classification {
+  CORRECT
+  LOW
+  EXTRA
+  NO_PAYMENT
+}
+
+enum EntryType {
+  ORIGINAL
+  ADJUSTMENT
+}
+
+enum CollectionStatus {
+  PENDING_APPROVAL
+  CONFIRMED
+  REVERSED
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DayCloseStatus {
+  OPEN
+  CLOSED
+  REOPENED
+  TALLIED
+}
+
+enum HandoverStatus {
+  PENDING
+  ACKNOWLEDGED
+  DISPUTED
+}
+
+enum LedgerAccountType {
+  CASH_IN_HAND
+  CASH_AT_OFFICE
+  LOAN_RECEIVABLE
+  CAPITAL
+  UNEARNED_PROFIT
+  EARNED_PROFIT
+}
+
+enum Direction {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerTransactionType {
+  DISBURSEMENT
+  COLLECTION
+  HANDOVER
+  ADJUSTMENT
+  WRITE_OFF
+}
+
+enum NotificationCategory {
+  INFORMATION
+  SUCCESS
+  WARNING
+  ALERT
+}
+
+enum NotificationEvent {
+  NEW_ASSIGNMENT
+  LOW_COLLECTION
+  EXTRA_COLLECTION
+  MISSED_COLLECTION
+  ACCOUNT_COMPLETED
+  DAY_CLOSE_DISCREPANCY
+  APPROVAL_REQUESTED
+}
+
+enum PushProvider {
+  WEB_PUSH
+  FCM
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+  EXPIRED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  LOGIN
+  REOPEN_DAY
+}
+
+// ---------------------------------------------------------------------------
+// Identity and organisation
+// ---------------------------------------------------------------------------
+
+/// Single row in v1. Present so multi-tenancy is a migration, not a rewrite.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String
+  currency  String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  sectors       Sector[]
+  lines         Line[]
+  customers     Customer[]
+  accountLoans  AccountLoan[]
+  staffProfiles StaffProfile[]
+  holidays      Holiday[]
+  settings      Setting[]
+
+  @@map("organization")
+}
+
+model StaffProfile {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String      @unique
+  staffCode      String      @unique
+  role           StaffRole
+  phone          String      @unique
+  status         StaffStatus @default(ACTIVE)
+  joinedAt       DateTime    @db.Date
+  /// Soft delete. Excluded from every query when set.
+  deletedAt      DateTime?   @db.Timestamptz(3)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments  LineAssignment[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("staff_profile")
+}
+
+model Sector {
+  id             String  @id @default(cuid())
+  organizationId String
+  code           String  @unique
+  name           String
+  /// Inactive sectors keep history and accept no new lines.
+  isActive       Boolean @default(true)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  lines        Line[]
+  customers    Customer[]
+  holidays     Holiday[]
+
+  @@index([organizationId])
+  @@map("sector")
+}
+
+model Line {
+  id             String  @id @default(cuid())
+  organizationId String
+  sectorId       String
+  /// Unique business-wide, not per sector (LN-07).
+  code           String  @unique
+  name           String
+  isActive       Boolean @default(true)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  sector       Sector           @relation(fields: [sectorId], references: [id])
+  assignments  LineAssignment[]
+  customers    Customer[]
+  accountLoans AccountLoan[]
+  collections  Collection[]
+  dayCloses    DayClose[]
+
+  @@index([organizationId])
+  @@index([sectorId])
+  @@map("line")
+}
+
+/// Temporal staffing record. Who worked which line, and when (BR-15).
+model LineAssignment {
+  id             String         @id @default(cuid())
+  lineId         String
+  staffProfileId String
+  assignmentRole AssignmentRole
+  effectiveFrom  DateTime       @db.Date
+  /// NULL means this is the current assignment.
+  effectiveTo    DateTime?      @db.Date
+  reason         String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  line         Line         @relation(fields: [lineId], references: [id])
+  staffProfile StaffProfile @relation(fields: [staffProfileId], references: [id])
+
+  // Serves the current-staffing lookup (erd.md).
+  @@index([lineId, effectiveTo])
+  @@index([staffProfileId])
+  @@map("line_assignment")
+}
+
+// ---------------------------------------------------------------------------
+// Customers and accounts
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id              String         @id @default(cuid())
+  organizationId  String
+  customerCode    String         @unique
+  name            String
+  /// E.164. Indexed but NOT unique — family members share numbers.
+  mobile          String
+  alternateMobile String?
+  address         String
+  /// Denormalised from line for query convenience.
+  sectorId        String
+  /// Current line. Historical attribution lives on collection (BR-15).
+  lineId          String
+  status          CustomerStatus @default(ACTIVE)
+  notes           String?
+  /// Soft delete. Blocked while any ACTIVE account exists.
+  deletedAt       DateTime?      @db.Timestamptz(3)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  sector       Sector              @relation(fields: [sectorId], references: [id])
+  line         Line                @relation(fields: [lineId], references: [id])
+  references   CustomerReference[]
+  accountLoans AccountLoan[]
+
+  @@index([organizationId])
+  @@index([sectorId])
+  @@index([lineId])
+  @@index([mobile])
+  @@map("customer")
+}
+
+model CustomerReference {
+  id         String  @id @default(cuid())
+  customerId String
+  name       String
+  mobile     String
+  /// Free text — "brother", "shop owner opposite".
+  relation   String?
+  address    String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_reference")
+}
+
+/// The loan. Called "Account" in every piece of user-facing text; named
+/// AccountLoan here because Better Auth owns the model name Account.
+model AccountLoan {
+  id             String @id @default(cuid())
+  organizationId String
+  accountCode    String @unique
+  customerId     String
+  /// Line at creation.
+  lineId         String
+
+  /// A — immutable after disbursement.
+  accountAmount  Decimal @db.Decimal(14, 2)
+  /// I — immutable after disbursement.
+  investedAmount Decimal @db.Decimal(14, 2)
+  /// P — derived (BR-01). A check constraint enforces P = A - I.
+  profitAmount   Decimal @db.Decimal(14, 2)
+  /// D
+  dailyAmount    Decimal @db.Decimal(14, 2)
+  /// N
+  termDays       Int     @default(100)
+
+  /// Day 0, and not itself a collection day (BR-03).
+  disbursementDate     DateTime  @db.Date
+  /// The next working day after disbursement.
+  firstCollectionDate  DateTime  @db.Date
+  /// Recomputed after every collection (BR-06).
+  targetCompletionDate DateTime  @db.Date
+  actualCompletionDate DateTime? @db.Date
+
+  /// Denormalised cache, reconciled nightly.
+  collectedAmount   Decimal       @default(0) @db.Decimal(14, 2)
+  /// Cache of A - collected. Initialised to accountAmount at creation.
+  outstandingAmount Decimal       @db.Decimal(14, 2)
+  status            AccountStatus @default(PENDING)
+  /// A flag on ACTIVE, not a status of its own (BR-05). Set by a scheduled job.
+  isOverdue         Boolean       @default(false)
+  /// Required for DEFAULTED and WRITTEN_OFF.
+  closureNote       String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  customer       Customer          @relation(fields: [customerId], references: [id])
+  line           Line              @relation(fields: [lineId], references: [id])
+  schedules      AccountSchedule[]
+  collections    Collection[]
+  ledgerAccounts LedgerAccount[]
+
+  @@index([organizationId])
+  @@index([customerId])
+  // Line dashboards, and the OVERDUE flagging job (erd.md).
+  @@index([lineId, status])
+  @@index([status, targetCompletionDate])
+  @@map("account_loan")
+}
+
+/// The plan. Regenerable tail, immutable head (BR-04, BR-06).
+model AccountSchedule {
+  id             String         @id @default(cuid())
+  accountLoanId  String
+  /// 1-based, unique within the account.
+  sequence       Int
+  /// Always a working day (BR-02).
+  dueDate        DateTime       @db.Date
+  /// min(D, outstanding at generation) — BR-07.
+  expectedAmount Decimal        @db.Decimal(14, 2)
+  status         ScheduleStatus @default(PENDING)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  accountLoan AccountLoan  @relation(fields: [accountLoanId], references: [id], onDelete: Cascade)
+  collections Collection[]
+
+  @@unique([accountLoanId, sequence])
+  // Today's expected across the business, and the MISSED detection job.
+  @@index([dueDate, status])
+  @@map("account_schedule")
+}
+
+// ---------------------------------------------------------------------------
+// Collections and cash
+// ---------------------------------------------------------------------------
+
+/// Append-only. There is no update or delete path in the API — a correction
+/// inserts an ADJUSTMENT row instead (BR-14).
+model Collection {
+  id String @id @default(cuid())
+
+  /// Client-generated UUID v4, created at record time. The unique constraint
+  /// IS the replay-safety mechanism for offline sync (BR-13).
+  idempotencyKey String @unique
+
+  /// Mandatory and never inferred — a customer may hold several concurrent
+  /// accounts (BR-01a).
+  accountLoanId     String
+  /// Null for adjustments.
+  accountScheduleId String?
+  /// Frozen at write (BR-15). Not read from the customer's current line.
+  lineId            String
+  /// Frozen at write. Who physically collected the money.
+  collectedByUserId String
+
+  /// Asia/Kolkata, computed once at write (BR-12).
+  businessDate DateTime @db.Date
+  /// Device clock at recording. May precede syncedAt by hours when offline.
+  capturedAt   DateTime @db.Timestamptz(3)
+  /// Server receipt. Equals capturedAt when the device was online.
+  syncedAt     DateTime @db.Timestamptz(3)
+
+  /// Snapshot. Not recomputable later, because the schedule may have moved.
+  expectedAmount Decimal @db.Decimal(14, 2)
+  /// 0 is valid (NO_PAYMENT); negative only on an ADJUSTMENT.
+  amount         Decimal @db.Decimal(14, 2)
+  /// amount - expectedAmount.
+  variance       Decimal @db.Decimal(14, 2)
+
+  classification      Classification
+  entryType           EntryType        @default(ORIGINAL)
+  /// Self-reference. Required when entryType = ADJUSTMENT.
+  adjustsCollectionId String?
+  status              CollectionStatus @default(CONFIRMED)
+  note                String?
+
+  /// No updatedAt: nothing updates. Status transitions are the sole
+  /// exception and are themselves audited (data-dictionary.md).
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String?
+
+  accountLoan     AccountLoan         @relation(fields: [accountLoanId], references: [id])
+  accountSchedule AccountSchedule?    @relation(fields: [accountScheduleId], references: [id])
+  line            Line                @relation(fields: [lineId], references: [id])
+  adjusts         Collection?         @relation("CollectionAdjustment", fields: [adjustsCollectionId], references: [id])
+  adjustedBy      Collection[]        @relation("CollectionAdjustment")
+  approval        CollectionApproval?
+
+  // Daily line tally and day close; account history; per-Junior cash
+  // reconciliation (erd.md).
+  @@index([lineId, businessDate])
+  @@index([accountLoanId, businessDate])
+  @@index([collectedByUserId, businessDate])
+  @@index([accountScheduleId])
+  @@index([adjustsCollectionId])
+  @@map("collection")
+}
+
+model CollectionApproval {
+  id                String           @id @default(cuid())
+  collectionId      String           @unique
+  requestedByUserId String
+  /// A Senior on their own line, or an Admin.
+  decidedByUserId   String?
+  decision          ApprovalDecision @default(PENDING)
+  /// Required from the requester.
+  reason            String
+  decisionNote      String?
+  decidedAt         DateTime?        @db.Timestamptz(3)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  collection Collection @relation(fields: [collectionId], references: [id])
+
+  @@index([decision])
+  @@map("collection_approval")
+}
+
+model DayClose {
+  id           String   @id @default(cuid())
+  lineId       String
+  businessDate DateTime @db.Date
+
+  /// Σ expected for slots due that date (BR-16).
+  expectedTotal     Decimal @db.Decimal(14, 2)
+  /// Σ confirmed collections.
+  collectedTotal    Decimal @db.Decimal(14, 2)
+  /// Σ acknowledged handovers.
+  cashReceivedTotal Decimal @db.Decimal(14, 2)
+  /// cashReceivedTotal - collectedTotal.
+  discrepancy       Decimal @db.Decimal(14, 2)
+
+  /// TALLIED is CLOSED with discrepancy = 0 and every handover acknowledged.
+  status         DayCloseStatus @default(OPEN)
+  closedByUserId String?
+  closedAt       DateTime?      @db.Timestamptz(3)
+  /// Required for a manual reopen. Null when a late offline sync reopened the
+  /// day automatically (BR-16a), which is audited with the system as actor.
+  reopenReason   String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  line      Line           @relation(fields: [lineId], references: [id])
+  handovers CashHandover[]
+
+  @@unique([lineId, businessDate])
+  @@map("day_close")
+}
+
+model CashHandover {
+  id         String @id @default(cuid())
+  dayCloseId String
+  /// A Junior, or a Senior on the second hop.
+  fromUserId String
+  /// A Senior, or an Admin.
+  toUserId   String
+
+  /// Physically counted.
+  declaredAmount Decimal @db.Decimal(14, 2)
+  /// What Rasi recorded for that person and date.
+  systemAmount   Decimal @db.Decimal(14, 2)
+  /// declaredAmount - systemAmount.
+  discrepancy    Decimal @db.Decimal(14, 2)
+
+  status         HandoverStatus @default(PENDING)
+  /// Cash has not moved until this is set (BR-17).
+  acknowledgedAt DateTime?      @db.Timestamptz(3)
+  disputeNote    String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  dayClose      DayClose           @relation(fields: [dayCloseId], references: [id])
+  denominations CashDenomination[]
+
+  @@index([dayCloseId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@map("cash_handover")
+}
+
+model CashDenomination {
+  id             String  @id @default(cuid())
+  cashHandoverId String
+  /// 500 | 200 | 100 | 50 | 20 | 10 | 5 | 2 | 1
+  denomination   Int
+  count          Int
+  /// denomination × count. Σ subtotal must equal the handover's declaredAmount.
+  subtotal       Decimal @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  cashHandover CashHandover @relation(fields: [cashHandoverId], references: [id], onDelete: Cascade)
+
+  @@unique([cashHandoverId, denomination])
+  @@map("cash_denomination")
+}
+
+// ---------------------------------------------------------------------------
+// Ledger — append-only (ADR-0006)
+// ---------------------------------------------------------------------------
+
+/// One CASH_IN_HAND per staff member, one LOAN_RECEIVABLE per account, both
+/// created automatically.
+///
+/// NOTE: data-dictionary.md calls all three ledger tables append-only with no
+/// updatedAt, but `balance` here is a mutable cache rebuilt nightly. The spec
+/// is followed literally for now; revisit when M09 is built in Phase 2.
+model LedgerAccount {
+  id            String            @id @default(cuid())
+  accountType   LedgerAccountType
+  /// Required for CASH_IN_HAND.
+  ownerUserId   String?
+  /// Required for LOAN_RECEIVABLE.
+  accountLoanId String?
+  normalBalance Direction
+  /// Cache. Rebuilt and verified by the nightly reconciliation job.
+  balance       Decimal           @default(0) @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  accountLoan AccountLoan?  @relation(fields: [accountLoanId], references: [id])
+  entries     LedgerEntry[]
+
+  @@index([accountType])
+  @@index([ownerUserId])
+  @@index([accountLoanId])
+  @@map("ledger_account")
+}
+
+model LedgerTransaction {
+  id              String                @id @default(cuid())
+  transactionType LedgerTransactionType
+  /// Polymorphic reference, deliberately without a foreign key (erd.md §4).
+  sourceTable     String
+  sourceId        String
+  businessDate    DateTime              @db.Date
+  /// When the event occurred, not when it was recorded.
+  eventAt         DateTime              @db.Timestamptz(3)
+  description     String
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String?
+
+  entries LedgerEntry[]
+
+  @@index([businessDate])
+  @@index([sourceTable, sourceId])
+  @@map("ledger_transaction")
+}
+
+model LedgerEntry {
+  id                  String    @id @default(cuid())
+  ledgerTransactionId String
+  ledgerAccountId     String
+  direction           Direction
+  /// Always positive. The direction carries the sign.
+  amount              Decimal   @db.Decimal(14, 2)
+  /// Ordering within the transaction.
+  sequence            Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  ledgerTransaction LedgerTransaction @relation(fields: [ledgerTransactionId], references: [id])
+  ledgerAccount     LedgerAccount     @relation(fields: [ledgerAccountId], references: [id])
+
+  // Balance recomputation (erd.md).
+  @@index([ledgerAccountId, id])
+  @@index([ledgerTransactionId])
+  @@map("ledger_entry")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications and platform
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  category  NotificationCategory
+  eventType NotificationEvent
+  title     String
+  body      String
+  /// Deep-link context — entity type and id.
+  payload   Json?
+  readAt    DateTime?            @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outbox NotificationOutbox[]
+
+  // Unread badge (erd.md).
+  @@index([userId, readAt])
+  @@map("notification")
+}
+
+model PushSubscription {
+  id       String       @id @default(cuid())
+  userId   String
+  provider PushProvider
+
+  /// Web Push. Unique when set.
+  endpoint String? @unique
+  p256dh   String?
+  auth     String?
+  /// FCM. Unique when set.
+  fcmToken String? @unique
+
+  /// "Suresh — Redmi Note 12"
+  deviceLabel String?
+  lastSeenAt  DateTime @db.Timestamptz(3)
+  /// Set false on a 410 Gone from the push service.
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outbox NotificationOutbox[]
+
+  @@index([userId])
+  @@map("push_subscription")
+}
+
+model NotificationOutbox {
+  id                 String       @id @default(cuid())
+  notificationId     String
+  pushSubscriptionId String
+  status             OutboxStatus @default(PENDING)
+  attempts           Int          @default(0)
+  lastError          String?
+  /// Exponential backoff.
+  nextAttemptAt      DateTime?    @db.Timestamptz(3)
+  sentAt             DateTime?    @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  notification     Notification     @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushSubscription PushSubscription @relation(fields: [pushSubscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@index([pushSubscriptionId])
+  @@index([status, nextAttemptAt])
+  @@map("notification_outbox")
+}
+
+/// Sundays are NOT stored here — they are excluded by rule, not by data (BR-02).
+model Holiday {
+  id             String   @id @default(cuid())
+  organizationId String
+  date           DateTime @db.Date
+  name           String
+  /// NULL means business-wide.
+  sectorId       String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  sector       Sector?      @relation(fields: [sectorId], references: [id])
+
+  /// NOTE: Postgres treats NULLs as distinct in a unique index, so this does
+  /// not prevent duplicate business-wide holidays on the same date. It needs
+  /// NULLS NOT DISTINCT, added with M15 in Phase 5.
+  @@unique([date, sectorId])
+  @@index([organizationId])
+  @@index([sectorId])
+  @@map("holiday")
+}
+
+/// Append-only.
+model AuditLog {
+  id          String      @id @default(cuid())
+  /// Null for system actions.
+  actorUserId String?
+  entityTable String
+  entityId    String
+  action      AuditAction
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityTable, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+/// The primary key is the client-supplied UUID itself, not a cuid.
+model IdempotencyKey {
+  key String @id
+
+  userId         String
+  /// Scopes the key to one operation.
+  endpoint       String
+  /// The original response, replayed verbatim on a repeat (BR-13).
+  responseBody   Json
+  responseStatus Int
+  /// 90 days. Purged by a scheduled job.
+  expiresAt      DateTime @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("idempotency_key")
+}
+
+/// Runtime business settings only. Infrastructure configuration stays in
+/// environment variables.
+model Setting {
+  id             String @id @default(cuid())
+  organizationId String
+  /// e.g. "collection.varianceTolerance"
+  key            String @unique
+  value          Json
+  description    String
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@map("setting")
+}

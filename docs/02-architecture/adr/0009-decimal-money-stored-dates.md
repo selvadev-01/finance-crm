@@ -8,7 +8,7 @@ Two representation choices that look like details and are not. Both have the pro
 
 **Money:** JavaScript's default number is an IEEE 754 double. `0.1 + 0.2 !== 0.3`.
 
-**Dates:** the business runs in `Asia/Kolkata` (UTC+5:30). Servers run in UTC. A collection recorded early in the morning IST falls on the *previous* UTC day.
+**Dates:** the business runs in `Asia/Kolkata` (UTC+5:30). Servers run in UTC. A collection recorded early in the morning IST falls on the _previous_ UTC day.
 
 ## Decision
 

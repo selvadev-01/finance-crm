@@ -36,7 +36,7 @@ interface PushProvider {
 type PushResult =
   | { status: "sent" }
   | { status: "retry"; reason: string }
-  | { status: "gone" }               // 404/410 — deactivate the subscription
+  | { status: "gone" } // 404/410 — deactivate the subscription
   | { status: "failed"; reason: string };
 ```
 
@@ -54,12 +54,12 @@ Implemented in `packages/notifications`, framework-free and unit-testable agains
 PUSH_PROVIDER = WEB_PUSH | FCM | BOTH | NONE
 ```
 
-| Value | Behaviour |
-| --- | --- |
-| `WEB_PUSH` | VAPID only. Subscriptions register as `WEB_PUSH` |
-| `FCM` | Firebase only |
-| `BOTH` | Each subscription dispatches via its own provider — for a migration window |
-| `NONE` | No push. In-app notifications still work. **Development default** |
+| Value      | Behaviour                                                                  |
+| ---------- | -------------------------------------------------------------------------- |
+| `WEB_PUSH` | VAPID only. Subscriptions register as `WEB_PUSH`                           |
+| `FCM`      | Firebase only                                                              |
+| `BOTH`     | Each subscription dispatches via its own provider — for a migration window |
+| `NONE`     | No push. In-app notifications still work. **Development default**          |
 
 The dispatcher routes by `push_subscription.provider`, so a stored subscription always goes to the provider that created it — even under `BOTH`, and even after the env changes.
 
@@ -109,14 +109,14 @@ Single `push_subscription` table discriminated by `provider`; Web Push columns a
 
 One outbox row **per active subscription**. A user with three devices gets three rows, each retried independently.
 
-| Attempt | Delay |
-| --- | --- |
-| 1 | immediate |
-| 2 | 1 min |
-| 3 | 5 min |
-| 4 | 30 min |
-| 5 | 2 hours |
-| then | `FAILED` |
+| Attempt | Delay     |
+| ------- | --------- |
+| 1       | immediate |
+| 2       | 1 min     |
+| 3       | 5 min     |
+| 4       | 30 min    |
+| 5       | 2 hours   |
+| then    | `FAILED`  |
 
 A `gone` result deactivates the subscription immediately and stops retrying. Subscriptions unseen for 90 days are deactivated by a weekly job (M14).
 
@@ -153,12 +153,12 @@ The same service worker that handles offline sync also handles push. `notificati
 
 Not everything in the notification centre warrants a phone buzz.
 
-| Category | Pushed |
-| --- | --- |
-| `ALERT` | Yes — low, missed, no-payment, discrepancy |
-| `WARNING` | Yes — extra collection, approval requested |
-| `SUCCESS` | **No** — in-app only |
-| `INFORMATION` | **No** — in-app only |
+| Category      | Pushed                                     |
+| ------------- | ------------------------------------------ |
+| `ALERT`       | Yes — low, missed, no-payment, discrepancy |
+| `WARNING`     | Yes — extra collection, approval requested |
+| `SUCCESS`     | **No** — in-app only                       |
+| `INFORMATION` | **No** — in-app only                       |
 
 > Pushing every completed account and every new customer would produce dozens of buzzes a day per Senior, and a Senior who silences Rasi stops receiving the low-collection alerts the business needs acted on. `SUCCESS` and `INFORMATION` are things to see when you look, not things to be interrupted for.
 
@@ -168,11 +168,11 @@ Not everything in the notification centre warrants a phone buzz.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Alert fatigue | Only `ALERT` and `WARNING` push; exact-match classification; missed detection deferred until after day close |
-| Stale tokens accumulate | `gone` deactivation, 90-day staleness job |
-| Provider outage | In-app unaffected; outbox retries |
-| VAPID keys lost | Documented in the ops runbook; losing them invalidates every subscription and forces re-registration |
-| Sensitive data on a lock screen | Payload scoped to the recipient's permissions |
-| FCM private key leaked | Env only, never committed; rotation documented |
+| Risk                            | Mitigation                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Alert fatigue                   | Only `ALERT` and `WARNING` push; exact-match classification; missed detection deferred until after day close |
+| Stale tokens accumulate         | `gone` deactivation, 90-day staleness job                                                                    |
+| Provider outage                 | In-app unaffected; outbox retries                                                                            |
+| VAPID keys lost                 | Documented in the ops runbook; losing them invalidates every subscription and forces re-registration         |
+| Sensitive data on a lock screen | Payload scoped to the recipient's permissions                                                                |
+| FCM private key leaked          | Env only, never committed; rotation documented                                                               |

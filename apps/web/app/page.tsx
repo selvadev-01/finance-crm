@@ -1,102 +1,93 @@
-import Image, { type ImageProps } from "next/image";
-import { Button } from "@repo/ui/button";
-import styles from "./page.module.css";
+import {
+  Badge,
+  Button,
+  NoMatches,
+  NothingYet,
+  NotPermitted,
+  formatBusinessDate,
+  formatCurrency,
+} from "@repo/ui";
 
-type Props = Omit<ImageProps, "src"> & {
-  srcLight: string;
-  srcDark: string;
-};
-
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
-
+/**
+ * Design-system preview.
+ *
+ * Not a product screen — Rasi has none yet. This exists so the token set and
+ * the component base can be seen and reviewed at 360px and at desktop width,
+ * and so the Tailwind wiring is demonstrably working end to end: if the
+ * `@source` directive in theme.css ever stops reaching @repo/ui, this page
+ * renders unstyled and the problem is obvious immediately rather than in
+ * whichever feature screen happens to ship next.
+ *
+ * Replace it with the real landing route when M01 lands.
+ */
+export default function DesignPreview() {
   return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
+    <main className="mx-auto flex max-w-3xl flex-col gap-10 px-4 py-10">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold text-ink">Rasi design system</h1>
+        <p className="text-sm text-ink-muted">
+          Tokens and component base. Not a product screen.
+        </p>
+      </header>
 
-export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://turborepo.dev/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-ink-muted">Money and dates</h2>
+        <div className="flex flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-4">
+          <p className="text-2xl font-semibold text-ink" data-numeric>
+            {formatCurrency("123456.5")}
+          </p>
+          <p className="text-sm text-ink-muted">
+            Indian grouping, from a decimal string. Due{" "}
+            {formatBusinessDate("2026-09-13")}.
+          </p>
         </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://turborepo.dev?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to turborepo.dev →
-        </a>
-      </footer>
-    </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-ink-muted">Actions</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button tone="primary">Record collection</Button>
+          <Button tone="secondary">Cancel</Button>
+          <Button tone="ghost">View history</Button>
+          <Button tone="danger">Write off account</Button>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-ink-muted">Status</h2>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="positive">Collected</Badge>
+          <Badge tone="warning">Low</Badge>
+          <Badge tone="critical">Missed</Badge>
+          <Badge tone="info">Syncing</Badge>
+          <Badge tone="neutral">Saved on device</Badge>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-ink-muted">
+          Empty states — three different things
+        </h2>
+        <div className="grid gap-3">
+          <div className="rounded-[var(--radius-surface)] border border-border bg-surface-raised">
+            <NothingYet
+              title="No customers yet"
+              description="Onboard the first customer on this line to get started."
+              action={<Button tone="primary">Onboard customer</Button>}
+            />
+          </div>
+          <div className="rounded-[var(--radius-surface)] border border-border bg-surface-raised">
+            <NoMatches
+              title="No customers match this filter"
+              description="There are customers on this line, just none matching what you searched for."
+              action={<Button tone="secondary">Clear filters</Button>}
+            />
+          </div>
+          <div className="rounded-[var(--radius-surface)] border border-border bg-surface-raised">
+            <NotPermitted />
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

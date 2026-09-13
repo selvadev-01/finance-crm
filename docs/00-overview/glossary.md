@@ -9,7 +9,7 @@ The domain vocabulary is specific, and several terms mean something narrower tha
 **Sector**
 The largest organisational unit below the business itself — a geographic region. A sector contains multiple lines. Sectors do not overlap.
 
-**Line** *(also "collection line")*
+**Line** _(also "collection line")_
 A route: the set of customers one team visits. A line belongs to exactly one sector, has exactly one Senior, and has one or more Juniors. A line is the unit at which daily cash is tallied and reconciled. This is the most important operational unit in the system — most reports, alerts and dashboards are line-scoped.
 
 **Business**
@@ -35,7 +35,7 @@ Supervises exactly one line. Monitors the Juniors on that line, verifies their c
 Collects cash from customers in the field and records each collection in Rasi. A Junior is assigned to one line at a time and sees only the customers assigned to them. Juniors move between lines relatively often; Seniors rarely do.
 
 **Staff**
-Collective term for Super Admin, Admin, Senior and Junior — anyone who logs in. Distinct from *customer*, who never logs in.
+Collective term for Super Admin, Admin, Senior and Junior — anyone who logs in. Distinct from _customer_, who never logs in.
 
 **Customer**
 The borrower. Has a profile and one or more accounts. **Customers are not users** — they have no login, no credentials, and no access to Rasi.
@@ -50,7 +50,7 @@ A contact provided by the customer at onboarding, used to trace the customer if 
 **Account**
 A single lending agreement with a customer. The PDF and all user-facing text call this an "Account". In the database the entity is `account_loan`, because `account` is claimed by the authentication library — see [ADR: Better Auth](../02-architecture/adr/).
 
-**A customer may hold several active accounts simultaneously.** This is why a collection is always recorded against an *account*, never against a customer, and why "what does this customer owe" is a sum rather than a single figure.
+**A customer may hold several active accounts simultaneously.** This is why a collection is always recorded against an _account_, never against a customer, and why "what does this customer owe" is a sum rather than a single figure.
 
 > ⚠️ "Account" in Rasi means **a loan**. It does not mean a user account, a login, or a ledger account. When a ledger account is meant, the term used is always **ledger account**.
 
@@ -62,7 +62,7 @@ A single lending agreement with a customer. The PDF and all user-facing text cal
 
 **Daily Amount** — the amount expected from the customer on each collection day. `₹100`.
 
-**Term Days** — the target number of collection days. `100` by default. A *target*, not a hard limit: see **Balance-driven completion**.
+**Term Days** — the target number of collection days. `100` by default. A _target_, not a hard limit: see **Balance-driven completion**.
 
 **Outstanding** — `Account Amount − total collected to date`. The account completes when this reaches zero.
 
@@ -76,7 +76,7 @@ A day on which collection is expected. Sundays and declared holidays are **not**
 **Working day**
 Synonym for collection day, used when discussing the calendar rather than a specific account.
 
-**Collection** *(noun)*
+**Collection** _(noun)_
 One recorded payment from one customer on one business date. Collections are append-only: a mistake is corrected by a new adjusting record, never by editing the original.
 
 **Expected amount**
@@ -92,6 +92,7 @@ The three variance outcomes. **Correct** = variance zero. **Low** = customer pai
 A collection day on which the customer was not visited at all. Distinct from a visit where the customer paid nothing — see the three states below.
 
 > Three states are easy to conflate and must not be:
+>
 > - **Missed / not visited** — the Junior never went. No collection record exists. An operational failure by staff.
 > - **Visited, no payment** — the Junior went; the customer paid ₹0. A collection record exists with amount zero. A customer behaviour signal.
 > - **Holiday** — not a collection day at all. Nothing is expected, nothing is owed, no alert fires.
@@ -103,7 +104,7 @@ The calendar date a collection belongs to, in `Asia/Kolkata`. Not the UTC date, 
 
 ## Cash control
 
-**Tally** *(also "daily tally")*
+**Tally** _(also "daily tally")_
 The end-of-day reconciliation for one line on one business date: what was expected, what was collected, and whether the physical cash matches. A line whose cash matches its recorded collections has "tallied".
 
 **Day close**
@@ -130,6 +131,7 @@ A single debit or credit line in the ledger. Every transaction has at least two 
 
 **Outbox**
 Two distinct things, disambiguated by context — always qualify which:
+
 - **Client outbox** — the offline queue in the Junior's browser holding collections recorded without network, awaiting replay.
 - **Notification outbox** — the server-side table guaranteeing a notification is dispatched exactly once even if push delivery fails.
 

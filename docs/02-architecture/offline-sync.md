@@ -8,13 +8,13 @@ Rules: BR-13, BR-16a. Stories: [E06](../01-product/user-stories.md#e06--offline-
 
 ## The requirement
 
-| | |
-| --- | --- |
-| Local save | Under 100 ms, **never blocked by network** |
-| Route availability | Full route and balances offline for 72 hours |
-| Sync | Automatic, including while the app is closed |
-| Duplicates | Impossible, even after ambiguous network outcomes |
-| Visibility | Three distinguishable states, always visible |
+|                    |                                                   |
+| ------------------ | ------------------------------------------------- |
+| Local save         | Under 100 ms, **never blocked by network**        |
+| Route availability | Full route and balances offline for 72 hours      |
+| Sync               | Automatic, including while the app is closed      |
+| Duplicates         | Impossible, even after ambiguous network outcomes |
+| Visibility         | Three distinguishable states, always visible      |
 
 > This is not a progressive enhancement. A Junior in a low-signal area who cannot record a collection has no fallback except paper — which is the system Rasi exists to replace. If offline entry does not work, the product does not work.
 
@@ -41,11 +41,11 @@ graph LR
 
 Three IndexedDB stores:
 
-| Store | Contents | Lifetime |
-| --- | --- | --- |
-| `route` | Today's customers, accounts, expected amounts, outstanding | Refreshed on load, 72-hour TTL |
-| `outbox` | Queued collections awaiting sync | Until acknowledged by the server |
-| `meta` | Last sync time, queue depth, session state | — |
+| Store    | Contents                                                   | Lifetime                         |
+| -------- | ---------------------------------------------------------- | -------------------------------- |
+| `route`  | Today's customers, accounts, expected amounts, outstanding | Refreshed on load, 72-hour TTL   |
+| `outbox` | Queued collections awaiting sync                           | Until acknowledged by the server |
+| `meta`   | Last sync time, queue depth, session state                 | —                                |
 
 An outbox entry holds the idempotency key, the full request payload, `capturedAt`, attempt count, last error and status.
 
@@ -63,7 +63,7 @@ The single mechanism preventing duplicates (BR-13).
 
 **The key is a UUID v4 generated at the moment of recording** — when the Junior taps confirm, before any network attempt — and stored with the outbox entry. Every retry of that entry carries the same key.
 
-> Generating the key at send time instead means a retry after an ambiguous outcome carries a *new* key, which is precisely the duplicate the mechanism exists to prevent. This is the most common way idempotency implementations fail, and it is worth being explicit about.
+> Generating the key at send time instead means a retry after an ambiguous outcome carries a _new_ key, which is precisely the duplicate the mechanism exists to prevent. This is the most common way idempotency implementations fail, and it is worth being explicit about.
 
 Server side:
 
@@ -93,12 +93,12 @@ Application-level duplicate checks are not sufficient — they cannot be made ra
 
 **Failures are isolated.** One entry failing does not block the rest. Retries use exponential backoff (2s, 4s, 8s… capped at 5 minutes).
 
-| Server response | Outbox action |
-| --- | --- |
-| `2xx` | Mark synced, remove |
+| Server response  | Outbox action                                               |
+| ---------------- | ----------------------------------------------------------- |
+| `2xx`            | Mark synced, remove                                         |
 | `4xx` validation | Mark failed, surface to the Junior — retrying will not help |
-| `401` | Pause queue, prompt sign-in, **retain entries** |
-| `5xx` / network | Retry with backoff |
+| `401`            | Pause queue, prompt sign-in, **retain entries**             |
+| `5xx` / network  | Retry with backoff                                          |
 
 > A `401` must never discard the queue. Losing a day's collections because a session lapsed is the worst possible failure, and it is entirely avoidable.
 
@@ -108,11 +108,11 @@ Application-level duplicate checks are not sufficient — they cannot be made ra
 
 Three states, never conflated:
 
-| State | Meaning | Indicator |
-| --- | --- | --- |
-| Saved on device | In the outbox | Amber dot, "saved on phone" |
-| Syncing | In flight | Spinner on the row |
-| Synced | Server-acknowledged | Green tick, "sent to office" |
+| State           | Meaning             | Indicator                    |
+| --------------- | ------------------- | ---------------------------- |
+| Saved on device | In the outbox       | Amber dot, "saved on phone"  |
+| Syncing         | In flight           | Spinner on the row           |
+| Synced          | Server-acknowledged | Green tick, "sent to office" |
 
 Plus a persistent offline indicator and an **always-visible unsynced count**.
 
@@ -124,9 +124,9 @@ Plus a persistent offline indicator and an **always-visible unsynced count**.
 
 ## Queue limits
 
-| Threshold | Behaviour |
-| --- | --- |
-| 100 unsynced | Warning banner: find connectivity |
+| Threshold    | Behaviour                           |
+| ------------ | ----------------------------------- |
+| 100 unsynced | Warning banner: find connectivity   |
 | 300 unsynced | Block new entries, instruct to sync |
 
 A hard limit is unpleasant but better than silent storage-quota eviction, which would lose collections with no warning at all.
@@ -137,12 +137,12 @@ A hard limit is unpleasant but better than silent storage-quota eviction, which 
 
 Genuine conflicts are rare, because collections are **append-only and additive** — there is no field-level merge problem, since nothing is edited.
 
-| Situation | Resolution |
-| --- | --- |
-| Account completed while offline | Server rejects with a domain error; surfaced to the Junior |
-| Customer reassigned while offline | Server rejects on scope; surfaced |
-| Day closed before sync | **Accepted**, day reopens (BR-16a) |
-| Same collection replayed | Idempotency key deduplicates |
+| Situation                         | Resolution                                                 |
+| --------------------------------- | ---------------------------------------------------------- |
+| Account completed while offline   | Server rejects with a domain error; surfaced to the Junior |
+| Customer reassigned while offline | Server rejects on scope; surfaced                          |
+| Day closed before sync            | **Accepted**, day reopens (BR-16a)                         |
+| Same collection replayed          | Idempotency key deduplicates                               |
 
 > Append-only is what makes this tractable. A design where offline edits modify existing records would need field-level merge rules and last-write-wins arbitration — which for money is a data-loss generator.
 
@@ -162,25 +162,25 @@ Scoped to the Junior's routes only. The admin console is not burdened with offli
 
 Highest-risk area in the project; tested accordingly.
 
-| Test | Method |
-| --- | --- |
-| Full route offline, all entries survive | Playwright with network disabled |
-| Replay after ambiguous outcome | Server processes, response dropped, client retries |
-| Concurrent replay of the same key | Parallel requests, assert one row |
-| Queue survives app close and device restart | Playwright with browser restart |
-| `401` mid-sync retains the queue | Session invalidated during drain |
-| Ordering per account | Multiple collections, verify application order |
-| Quota exhaustion | Fill storage, assert the hard limit fires before eviction |
+| Test                                        | Method                                                    |
+| ------------------------------------------- | --------------------------------------------------------- |
+| Full route offline, all entries survive     | Playwright with network disabled                          |
+| Replay after ambiguous outcome              | Server processes, response dropped, client retries        |
+| Concurrent replay of the same key           | Parallel requests, assert one row                         |
+| Queue survives app close and device restart | Playwright with browser restart                           |
+| `401` mid-sync retains the queue            | Session invalidated during drain                          |
+| Ordering per account                        | Multiple collections, verify application order            |
+| Quota exhaustion                            | Fill storage, assert the hard limit fires before eviction |
 
 ---
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| **Collections lost** | IndexedDB persistence, queue retained on auth failure, sign-out blocked, hard cap before quota eviction |
-| **Duplicates created** | Key generated at record time; unique constraint; replay returns original |
-| Background Sync unsupported | Four fallback drain triggers |
-| Storage quota evicted by the browser | Persistent storage requested; hard cap; warning at 100 |
-| Device clock wrong | `capturedAt` validated against a plausible window, flagged if wildly divergent; `syncedAt` is server time |
-| Service worker update mid-route | Activation deferred to next launch; versioned outbox schema |
+| Risk                                 | Mitigation                                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Collections lost**                 | IndexedDB persistence, queue retained on auth failure, sign-out blocked, hard cap before quota eviction   |
+| **Duplicates created**               | Key generated at record time; unique constraint; replay returns original                                  |
+| Background Sync unsupported          | Four fallback drain triggers                                                                              |
+| Storage quota evicted by the browser | Persistent storage requested; hard cap; warning at 100                                                    |
+| Device clock wrong                   | `capturedAt` validated against a plausible window, flagged if wildly divergent; `syncedAt` is server time |
+| Service worker update mid-route      | Activation deferred to next launch; versioned outbox schema                                               |

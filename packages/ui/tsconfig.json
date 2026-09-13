@@ -1,9 +1,25 @@
 {
   "extends": "@repo/typescript-config/react-library.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "strictNullChecks": true
+    /**
+     * Bundler resolution, deliberately different from @repo/db and
+     * @repo/domain.
+     *
+     * Those are consumed by Node (apps/api compiles with tsc and runs the
+     * output), so they use NodeNext and their relative imports carry a `.js`
+     * extension. @repo/ui is consumed only by a bundler — it ships raw TSX and
+     * Next compiles it — and Turbopack cannot resolve a `./badge.js` specifier
+     * to `badge.tsx`. Under Bundler resolution the imports are extensionless
+     * and both the type-check and the build agree.
+     *
+     * Do not "align" this with the other packages: the resolution mode has to
+     * match the consumer, and these packages have different consumers.
+     */
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]
 }

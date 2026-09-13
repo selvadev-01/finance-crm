@@ -32,12 +32,12 @@ A collection always targets **one specific account** (BR-01a). `accountLoanId` i
 
 `lineId`, `collectedByUserId`, `expectedAmount`, `businessDate` — each a snapshot of a fact true when the money moved.
 
-| Field | Why frozen |
-| --- | --- |
-| `lineId` | A customer transferring later must not rewrite two lines' history (BR-15) |
-| `collectedByUserId` | Who collected, independent of who staffs the line today |
-| `expectedAmount` | Not recomputable later — the account has progressed since |
-| `businessDate` | Indexable, and immune to a future timezone policy change (BR-12) |
+| Field               | Why frozen                                                                |
+| ------------------- | ------------------------------------------------------------------------- |
+| `lineId`            | A customer transferring later must not rewrite two lines' history (BR-15) |
+| `collectedByUserId` | Who collected, independent of who staffs the line today                   |
+| `expectedAmount`    | Not recomputable later — the account has progressed since                 |
+| `businessDate`      | Indexable, and immune to a future timezone policy change (BR-12)          |
 
 ---
 
@@ -45,13 +45,13 @@ A collection always targets **one specific account** (BR-01a). `accountLoanId` i
 
 `variance = amount − expectedAmount` (BR-08). **Exact match required for `CORRECT`** — no tolerance band.
 
-| Condition | Class | Senior notified |
-| --- | --- | --- |
-| `variance = 0` | `CORRECT` | No |
-| `variance < 0`, `amount > 0` | `LOW` | Alert |
-| `variance > 0` | `EXTRA` | Warning |
-| `amount = 0`, visited | `NO_PAYMENT` | Alert |
-| No record on a due day | `MISSED` (schedule status) | Alert |
+| Condition                    | Class                      | Senior notified |
+| ---------------------------- | -------------------------- | --------------- |
+| `variance = 0`               | `CORRECT`                  | No              |
+| `variance < 0`, `amount > 0` | `LOW`                      | Alert           |
+| `variance > 0`               | `EXTRA`                    | Warning         |
+| `amount = 0`, visited        | `NO_PAYMENT`               | Alert           |
+| No record on a due day       | `MISSED` (schedule status) | Alert           |
 
 Classification is **computed and stored at write time**, not derived on read — the expected amount moves as the account progresses, so a later computation would not reproduce the value true on the day.
 
@@ -67,16 +67,16 @@ A missed visit produces no collection row at all. `MISSED` lives on `account_sch
 
 The hardest requirement in v1. Full design in [`../../02-architecture/offline-sync.md`](../../02-architecture/offline-sync.md).
 
-| Requirement | Detail |
-| --- | --- |
-| Local save | Under 100 ms, **never blocked by network** |
+| Requirement     | Detail                                                            |
+| --------------- | ----------------------------------------------------------------- |
+| Local save      | Under 100 ms, **never blocked by network**                        |
 | Idempotency key | UUID v4, generated **at record time**, before any network attempt |
-| Replay | Same key returns the original result with `200`, not a conflict |
-| Queue | IndexedDB outbox, drained by Background Sync |
-| Route cache | Full route and balances available offline for 72 hours |
-| Status | Three distinguishable states: saved on device, syncing, synced |
+| Replay          | Same key returns the original result with `200`, not a conflict   |
+| Queue           | IndexedDB outbox, drained by Background Sync                      |
+| Route cache     | Full route and balances available offline for 72 hours            |
+| Status          | Three distinguishable states: saved on device, syncing, synced    |
 
-> The key must be generated when the collection is recorded, not when the request is dispatched. Generating it at send time means a retry after an ambiguous outcome carries a *new* key — precisely the duplicate the mechanism exists to prevent.
+> The key must be generated when the collection is recorded, not when the request is dispatched. Generating it at send time means a retry after an ambiguous outcome carries a _new_ key — precisely the duplicate the mechanism exists to prevent.
 >
 > The unique constraint on `idempotencyKey` is the enforcement point. Application-level duplicate checks cannot be made race-free against concurrent replays from the same device.
 
@@ -104,7 +104,7 @@ A correction inserts a **new** `ADJUSTMENT` row referencing the original via `ad
 
 Approval: Senior for their own line, or Admin. **Self-approval is blocked regardless of role.**
 
-> Append-only removes the risk structurally rather than relying on an audit log to catch it afterwards. In a cash business, the ability to silently change a past figure *is* the risk.
+> Append-only removes the risk structurally rather than relying on an audit log to catch it afterwards. In a cash business, the ability to silently change a past figure _is_ the risk.
 
 ---
 
@@ -124,15 +124,15 @@ The most important screen in the application (see [personas](../../00-overview/p
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View today's route | Junior |
-| Record collection | Junior, assigned customers only |
-| Sync queued collections | Junior (automatic) |
-| View collections | Admin+, Senior (own line), Junior (own entries) |
-| Request correction | Junior (own), Senior (own line) |
-| Approve correction | Senior (own line), Admin+ |
-| Reverse a collection | Admin+ |
+| Operation               | Actor                                           |
+| ----------------------- | ----------------------------------------------- |
+| View today's route      | Junior                                          |
+| Record collection       | Junior, assigned customers only                 |
+| Sync queued collections | Junior (automatic)                              |
+| View collections        | Admin+, Senior (own line), Junior (own entries) |
+| Request correction      | Junior (own), Senior (own line)                 |
+| Approve correction      | Senior (own line), Admin+                       |
+| Reverse a collection    | Admin+                                          |
 
 ---
 
@@ -146,10 +146,10 @@ The most important screen in the application (see [personas](../../00-overview/p
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| **Duplicate collections from replay** | Unique constraint on `idempotencyKey`, generated at record time |
-| **Lost offline collections** | IndexedDB persistence, Background Sync, unsynced count always visible, sign-out blocked while queued |
-| Junior mis-splits a multi-account payment | Explicit per-account entry; no combined field |
-| Alert fatigue | Exact-match classification with no tolerance; missed detection deferred until after day close |
-| Clock skew on device | `capturedAt` is device time and `syncedAt` is server time; business date derives from `capturedAt` but is validated against a plausible window and flagged if wildly divergent |
+| Risk                                      | Mitigation                                                                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Duplicate collections from replay**     | Unique constraint on `idempotencyKey`, generated at record time                                                                                                                |
+| **Lost offline collections**              | IndexedDB persistence, Background Sync, unsynced count always visible, sign-out blocked while queued                                                                           |
+| Junior mis-splits a multi-account payment | Explicit per-account entry; no combined field                                                                                                                                  |
+| Alert fatigue                             | Exact-match classification with no tolerance; missed detection deferred until after day close                                                                                  |
+| Clock skew on device                      | `capturedAt` is device time and `syncedAt` is server time; business date derives from `capturedAt` but is validated against a plausible window and flagged if wildly divergent |

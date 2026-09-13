@@ -18,12 +18,12 @@ At creation an Admin enters **Account Amount** (`A`), **Invested Amount** (`I`),
 
 Validation:
 
-| Constraint | Reason |
-| --- | --- |
-| `A > 0`, `I > 0`, `D > 0`, `N > 0` | — |
-| `I < A` | Profit cannot be zero or negative |
-| `D ≤ A` | A single day cannot exceed the whole account |
-| `D × N ≥ A` | The schedule must be able to clear the account within its term |
+| Constraint                         | Reason                                                         |
+| ---------------------------------- | -------------------------------------------------------------- |
+| `A > 0`, `I > 0`, `D > 0`, `N > 0` | —                                                              |
+| `I < A`                            | Profit cannot be zero or negative                              |
+| `D ≤ A`                            | A single day cannot exceed the whole account                   |
+| `D × N ≥ A`                        | The schedule must be able to clear the account within its term |
 
 If `D × N > A` the account simply completes before day `N`; this is legal and common. The form shows the implied term so the Admin sees it before saving.
 
@@ -35,15 +35,15 @@ There is no limit on concurrent `ACTIVE` accounts per customer. A customer with 
 
 This is the single most far-reaching structural decision in the rule set, because it makes "what does this customer owe today" a **sum across accounts** rather than a value. Every part of the system has to respect that:
 
-| Area | Consequence |
-| --- | --- |
-| **Collection** | A collection is always recorded against **one specific account**, never against a customer. `accountLoanId` is mandatory and never inferred. |
-| **Junior's route screen** | One customer may appear as several rows — one per active account, each with its own expected amount and its own confirm action. The customer's name appears once as a group header. |
-| **Cash at the door** | A customer handing over ₹250 against two accounts expecting ₹100 and ₹150 requires the Junior to **split the entry across both accounts**. The UI must make this explicit; a single ₹250 field would be ambiguous and would corrupt both accounts' balances. |
-| **Customer outstanding** | A derived sum across active accounts. Never stored on `customer` — only per account. |
-| **Completion** | Per account (BR-05). One account completing does not affect the other. |
-| **Alerts** | Raised per account. A customer underpaying one account and overpaying another produces two notifications, correctly. |
-| **Day close** | Line totals sum across accounts; no change, since day close already aggregates collections rather than customers. |
+| Area                      | Consequence                                                                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Collection**            | A collection is always recorded against **one specific account**, never against a customer. `accountLoanId` is mandatory and never inferred.                                                                                                                 |
+| **Junior's route screen** | One customer may appear as several rows — one per active account, each with its own expected amount and its own confirm action. The customer's name appears once as a group header.                                                                          |
+| **Cash at the door**      | A customer handing over ₹250 against two accounts expecting ₹100 and ₹150 requires the Junior to **split the entry across both accounts**. The UI must make this explicit; a single ₹250 field would be ambiguous and would corrupt both accounts' balances. |
+| **Customer outstanding**  | A derived sum across active accounts. Never stored on `customer` — only per account.                                                                                                                                                                         |
+| **Completion**            | Per account (BR-05). One account completing does not affect the other.                                                                                                                                                                                       |
+| **Alerts**                | Raised per account. A customer underpaying one account and overpaying another produces two notifications, correctly.                                                                                                                                         |
+| **Day close**             | Line totals sum across accounts; no change, since day close already aggregates collections rather than customers.                                                                                                                                            |
 
 > **Design consequence worth stating plainly:** the Junior's screen is the place this hurts. The common case — one customer, one account, one tap — must stay one tap. The multi-account case must be visibly different rather than a subtle variation, or a Junior in a hurry will put the whole ₹250 against the first account. Screen specs will treat this as a distinct layout, not a loop.
 >
@@ -55,7 +55,7 @@ A **collection day** is any date that is not a Sunday and not a declared holiday
 
 - **Sundays** are excluded permanently (PDF §13).
 - **Holidays** are configurable per sector, because local festival closures differ across regions. A national holiday is entered with business-wide scope.
-- Holidays declared *after* a schedule is generated shift the remaining schedule forward; already-collected days are never touched.
+- Holidays declared _after_ a schedule is generated shift the remaining schedule forward; already-collected days are never touched.
 
 > The PDF mentions only Sundays. Holidays are added because a daily-collection business in India does not collect on major festival days, and without them every such day would raise a false "Missed" alert across every line at once.
 
@@ -63,7 +63,7 @@ A **collection day** is any date that is not a Sunday and not a declared holiday
 
 `Day 0` is the disbursement date. The first collection falls on the **next working day**.
 
-> PDF §2: *"From the next day, a daily collection is made."*
+> PDF §2: _"From the next day, a daily collection is made."_
 
 > **Worked example:** disbursement Saturday 3 Jan. Sunday 4 Jan is not a working day. First collection is **Monday 5 Jan**.
 
@@ -81,7 +81,7 @@ At creation the system materialises schedule slots on consecutive working days, 
 >
 > Deriving the count from the balance is both correct and consistent with BR-05: the term is a target, and an account that can clear sooner does. `N` remains what BR-01 validates against and what the Admin sees as the intended term.
 
-The schedule is a *plan*, not a commitment — BR-06 explains how it is recomputed as reality diverges.
+The schedule is a _plan_, not a commitment — BR-06 explains how it is recomputed as reality diverges.
 
 ---
 
@@ -147,13 +147,13 @@ This prevents over-collection on the final day without any special-casing.
 
 For each collection: `variance = collected − expected`.
 
-| Condition | Classification | Senior notified? |
-| --- | --- | --- |
-| `variance = 0` | `CORRECT` | No |
-| `variance < 0` and `collected > 0` | `LOW` | Yes — Alert |
-| `variance > 0` | `EXTRA` | Yes — Warning |
-| `collected = 0`, visit recorded | `NO_PAYMENT` | Yes — Alert |
-| No record on a due collection day | `MISSED` | Yes — Alert, raised by a scheduled job |
+| Condition                          | Classification | Senior notified?                       |
+| ---------------------------------- | -------------- | -------------------------------------- |
+| `variance = 0`                     | `CORRECT`      | No                                     |
+| `variance < 0` and `collected > 0` | `LOW`          | Yes — Alert                            |
+| `variance > 0`                     | `EXTRA`        | Yes — Warning                          |
+| `collected = 0`, visit recorded    | `NO_PAYMENT`   | Yes — Alert                            |
+| No record on a due collection day  | `MISSED`       | Yes — Alert, raised by a scheduled job |
 
 Classification is computed and stored at write time, not derived at read time — the expected amount changes as the account progresses, so a variance computed later would not reproduce the value that was true on the day.
 
@@ -163,11 +163,11 @@ Classification is computed and stored at write time, not derived at read time �
 
 ### BR-09 — Missed, no-payment and holiday are three different things ⚠ RESOLVES AMBIGUITY
 
-| State | Record exists? | What it means | Counts against customer? |
-| --- | --- | --- | --- |
-| `MISSED` | No collection record | The Junior did not visit. **Staff failure.** | No |
-| `NO_PAYMENT` | Record with amount `0` | Junior visited; customer paid nothing. **Customer signal.** | Yes |
-| Holiday / Sunday | No schedule slot at all | Not a collection day. Nothing expected. | No |
+| State            | Record exists?          | What it means                                               | Counts against customer? |
+| ---------------- | ----------------------- | ----------------------------------------------------------- | ------------------------ |
+| `MISSED`         | No collection record    | The Junior did not visit. **Staff failure.**                | No                       |
+| `NO_PAYMENT`     | Record with amount `0`  | Junior visited; customer paid nothing. **Customer signal.** | Yes                      |
+| Holiday / Sunday | No schedule slot at all | Not a collection day. Nothing expected.                     | No                       |
 
 > This distinction does not exist in the source PDF and it matters more than it looks. Collapsing `MISSED` into `NO_PAYMENT` would blame customers for staff absence and corrupt any future view of customer reliability. Collapsing holidays into `MISSED` would fire a false alert for every customer on every line simultaneously.
 >
@@ -216,7 +216,7 @@ The client generates a UUID v4 for each collection **at the moment of recording*
 - A replayed key returns the **original result** with `200`, not a conflict error. A duplicate submission is a success, not a failure — the collection exists, which is what the client needs to know.
 - Keys are retained 90 days, then purged.
 
-> The key must be generated at record time, not at send time. Generating it when the request is dispatched means a retry after an ambiguous outcome carries a *new* key — which is precisely the duplicate the mechanism exists to prevent.
+> The key must be generated at record time, not at send time. Generating it when the request is dispatched means a retry after an ambiguous outcome carries a _new_ key — which is precisely the duplicate the mechanism exists to prevent.
 
 ### BR-14 — Collections are append-only; corrections are new records
 
@@ -253,7 +253,7 @@ shortfall       = expectedTotal − collectedTotal   (when positive)
 surplus         = collectedTotal − expectedTotal   (when positive)
 ```
 
-A line has **tallied** when it is closed *and* its cash handovers reconcile to `collectedTotal` with no discrepancy.
+A line has **tallied** when it is closed _and_ its cash handovers reconcile to `collectedTotal` with no discrepancy.
 
 Closing locks the line's collections for that date: further entries require an Admin to reopen the day, which is audited.
 
@@ -287,29 +287,29 @@ The ledger is double-entry and append-only. Postings within a transaction always
 
 **Disbursement** — `A = 10,000`, `I = 8,500`, `P = 1,500`:
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `LOAN_RECEIVABLE` (customer) | 10,000.00 | |
-| `CASH_AT_OFFICE` | | 8,500.00 |
-| `UNEARNED_PROFIT` | | 1,500.00 |
+| Ledger account               |     Debit |   Credit |
+| ---------------------------- | --------: | -------: |
+| `LOAN_RECEIVABLE` (customer) | 10,000.00 |          |
+| `CASH_AT_OFFICE`             |           | 8,500.00 |
+| `UNEARNED_PROFIT`            |           | 1,500.00 |
 
 The customer owes ₹10,000; ₹8,500 of cash left the business; ₹1,500 of profit is recognised but not yet earned.
 
 **Collection of ₹100** — profit is recognised proportionally, at `P / A = 15%`:
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `CASH_IN_HAND` (Junior) | 100.00 | |
-| `LOAN_RECEIVABLE` (customer) | | 100.00 |
-| `UNEARNED_PROFIT` | 15.00 | |
-| `EARNED_PROFIT` | | 15.00 |
+| Ledger account               |  Debit | Credit |
+| ---------------------------- | -----: | -----: |
+| `CASH_IN_HAND` (Junior)      | 100.00 |        |
+| `LOAN_RECEIVABLE` (customer) |        | 100.00 |
+| `UNEARNED_PROFIT`            |  15.00 |        |
+| `EARNED_PROFIT`              |        |  15.00 |
 
 **Handover of ₹5,000, Junior → Senior:**
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `CASH_IN_HAND` (Senior) | 5,000.00 | |
-| `CASH_IN_HAND` (Junior) | | 5,000.00 |
+| Ledger account          |    Debit |   Credit |
+| ----------------------- | -------: | -------: |
+| `CASH_IN_HAND` (Senior) | 5,000.00 |          |
+| `CASH_IN_HAND` (Junior) |          | 5,000.00 |
 
 > Proportional profit recognition means `EARNED_PROFIT` at any moment reflects profit on money actually received — so a half-collected account shows roughly half its profit, not all of it. This is what makes the Super Admin's profit figure meaningful rather than optimistic.
 >
@@ -325,10 +325,10 @@ These need your answer before the affected modules can be specified.
 
 Still open. Each has a proposed answer that will be taken as the decision unless you say otherwise, since none blocks the remaining documents:
 
-| # | Question | Affects | Proposed |
-| --- | --- | --- | --- |
-| 1 | Who may declare a holiday, and how far ahead? | BR-02 | Admin and Super Admin, any future date. Declaring a holiday in the past is blocked — it would retroactively invalidate alerts already raised |
-| 2 | What happens to an account when its customer is marked `INACTIVE` mid-term? | BR-05 | Collection continues. Only `DEFAULTED` / `WRITTEN_OFF` on the account stop it; customer status is a contact-quality flag, not a collection switch |
-| 3 | Is there a grace period before an open account is flagged `OVERDUE`? | BR-05 | None — flagged the day after `targetCompletionDate`. A grace period hides exactly the signal the flag exists to surface |
-| 4 | Can a Junior record a collection for a customer outside their assigned line? | BR-15, M02 | No. Scoping is enforced server-side, not merely hidden in the UI |
-| 5 | When a Junior is reassigned mid-day, who owns that day's cash? | BR-17 | The Junior who collected it. Handover follows `collection.collectedByUserId`, not current line staffing |
+| #   | Question                                                                     | Affects    | Proposed                                                                                                                                          |
+| --- | ---------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Who may declare a holiday, and how far ahead?                                | BR-02      | Admin and Super Admin, any future date. Declaring a holiday in the past is blocked — it would retroactively invalidate alerts already raised      |
+| 2   | What happens to an account when its customer is marked `INACTIVE` mid-term?  | BR-05      | Collection continues. Only `DEFAULTED` / `WRITTEN_OFF` on the account stop it; customer status is a contact-quality flag, not a collection switch |
+| 3   | Is there a grace period before an open account is flagged `OVERDUE`?         | BR-05      | None — flagged the day after `targetCompletionDate`. A grace period hides exactly the signal the flag exists to surface                           |
+| 4   | Can a Junior record a collection for a customer outside their assigned line? | BR-15, M02 | No. Scoping is enforced server-side, not merely hidden in the UI                                                                                  |
+| 5   | When a Junior is reassigned mid-day, who owns that day's cash?               | BR-17      | The Junior who collected it. Handover follows `collection.collectedByUserId`, not current line staffing                                           |

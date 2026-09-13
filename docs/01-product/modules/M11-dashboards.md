@@ -52,7 +52,7 @@ Thirteen figures: sectors, lines, customers, active accounts, completed accounts
 
 Comparison across sectors: line count, customer count, account amount, invested, profit, collection status.
 
-Collection status per §19 — how many sectors tallied, how many have extra, how many have low collection. *"Tally Completed 8; Extra Collection 2; Low Collection 2."*
+Collection status per §19 — how many sectors tallied, how many have extra, how many have low collection. _"Tally Completed 8; Extra Collection 2; Low Collection 2."_
 
 A sector's tally status derives from its lines' `day_close` states (M08): all lines `TALLIED` means the sector has tallied.
 
@@ -100,12 +100,12 @@ If the Super Admin dashboard exceeds the 2 s p95 target, the first response is a
 
 Strictly per the [RBAC matrix](../rbac-matrix.md#money-visibility-m09-m11-m12):
 
-| Level | Super Admin | Admin | Senior | Junior |
-| --- | :-: | :-: | :-: | :-: |
-| Business | ✓ | ✓ | — | — |
-| Sector | ✓ | ✓ | — | — |
-| Line | ✓ | ✓ | own | — |
-| Profit | ✓ | ✓ | own line | **—** |
+| Level    | Super Admin | Admin |  Senior  | Junior |
+| -------- | :---------: | :---: | :------: | :----: |
+| Business |      ✓      |   ✓   |    —     |   —    |
+| Sector   |      ✓      |   ✓   |    —     |   —    |
+| Line     |      ✓      |   ✓   |   own    |   —    |
+| Profit   |      ✓      |   ✓   | own line | **—**  |
 
 Aggregates are computed from scoped queries, so a Senior's line dashboard cannot leak a business total through a sum.
 
@@ -113,9 +113,9 @@ Aggregates are computed from scoped queries, so a Senior's line dashboard cannot
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Live aggregation degrades as data grows | Indexes specified; snapshot table as the planned next step with a defined trigger |
-| Dashboard figures disagree with the ledger | All money figures derive from ledger-backed values; nightly reconciliation |
-| Scope leaks through aggregates | Aggregates built on scoped queries, tested at API level |
-| Thirteen figures overwhelm the phone view | Ranked layout; drill-down rather than density |
+| Risk                                       | Mitigation                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
+| Live aggregation degrades as data grows    | Indexes specified; snapshot table as the planned next step with a defined trigger |
+| Dashboard figures disagree with the ledger | All money figures derive from ledger-backed values; nightly reconciliation        |
+| Scope leaks through aggregates             | Aggregates built on scoped queries, tested at API level                           |
+| Thirteen figures overwhelm the phone view  | Ranked layout; drill-down rather than density                                     |

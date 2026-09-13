@@ -22,30 +22,30 @@
 
 ## The dividing line
 
-| Belongs in `setting` | Belongs in env |
-| --- | --- |
-| Changes business behaviour | Changes deployment behaviour |
+| Belongs in `setting`           | Belongs in env               |
+| ------------------------------ | ---------------------------- |
+| Changes business behaviour     | Changes deployment behaviour |
 | A Super Admin should change it | An operator should change it |
-| Safe to change at runtime | Requires a restart |
-| Example: default term days | Example: `DATABASE_URL` |
-| Example: job cron expressions | Example: `PUSH_PROVIDER` |
+| Safe to change at runtime      | Requires a restart           |
+| Example: default term days     | Example: `DATABASE_URL`      |
+| Example: job cron expressions  | Example: `PUSH_PROVIDER`     |
 
-> The test is *who should be allowed to change this, and does changing it need a deploy*. Putting a cron expression in code means changing a schedule requires a release; putting a database URL in the settings table means a misconfigured row takes the application down with no way to fix it from outside.
+> The test is _who should be allowed to change this, and does changing it need a deploy_. Putting a cron expression in code means changing a schedule requires a release; putting a database URL in the settings table means a misconfigured row takes the application down with no way to fix it from outside.
 
 ---
 
 ## Settings
 
-| Key | Default | Effect |
-| --- | --- | --- |
-| `account.defaultTermDays` | `100` | Pre-filled term on the creation form |
-| `account.overdueGraceDays` | `0` | Days past target before `isOverdue` (open question 3) |
-| `collection.varianceTolerance` | — | **Not implemented.** Exact match is the rule (BR-08) |
-| `dayClose.autoCloseTime` | `null` | Optional automatic close; null means manual only |
-| `notification.alertCategoriesLocked` | `["ALERT"]` | Categories users cannot opt out of |
-| `jobs.*.cron` | see M14 | Schedule expressions |
-| `sync.maxUnsyncedWarning` | `100` | Warn the Junior at this queue depth |
-| `sync.maxUnsyncedHard` | `300` | Block further entries beyond this |
+| Key                                  | Default     | Effect                                                |
+| ------------------------------------ | ----------- | ----------------------------------------------------- |
+| `account.defaultTermDays`            | `100`       | Pre-filled term on the creation form                  |
+| `account.overdueGraceDays`           | `0`         | Days past target before `isOverdue` (open question 3) |
+| `collection.varianceTolerance`       | —           | **Not implemented.** Exact match is the rule (BR-08)  |
+| `dayClose.autoCloseTime`             | `null`      | Optional automatic close; null means manual only      |
+| `notification.alertCategoriesLocked` | `["ALERT"]` | Categories users cannot opt out of                    |
+| `jobs.*.cron`                        | see M14     | Schedule expressions                                  |
+| `sync.maxUnsyncedWarning`            | `100`       | Warn the Junior at this queue depth                   |
+| `sync.maxUnsyncedHard`               | `300`       | Block further entries beyond this                     |
 
 ### `collection.varianceTolerance` is listed but not built
 
@@ -57,11 +57,11 @@
 
 Environment-driven, not database-driven — they gate code paths, and a database flag that turns on unfinished code is a deployment risk rather than a feature.
 
-| Flag | Purpose |
-| --- | --- |
-| `PUSH_PROVIDER` | `WEB_PUSH` \| `FCM` \| `BOTH` \| `NONE` (M10) |
-| `WORKER_ENABLED` | Run job consumers in this process (M14) |
-| `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox |
+| Flag                   | Purpose                                       |
+| ---------------------- | --------------------------------------------- |
+| `PUSH_PROVIDER`        | `WEB_PUSH` \| `FCM` \| `BOTH` \| `NONE` (M10) |
+| `WORKER_ENABLED`       | Run job consumers in this process (M14)       |
+| `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox            |
 
 `PUSH_PROVIDER=NONE` is the development default so local work raises no push traffic. `BOTH` exists for the migration window if the business moves between providers.
 
@@ -77,11 +77,11 @@ Present so multi-tenancy is a migration rather than a rewrite. **The timezone va
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View settings | Super Admin |
-| Change a setting | **Super Admin only** |
-| View organisation profile | Admin+ |
+| Operation                 | Actor                |
+| ------------------------- | -------------------- |
+| View settings             | Super Admin          |
+| Change a setting          | **Super Admin only** |
+| View organisation profile | Admin+               |
 
 Every change is audited (M13) with before and after values.
 
@@ -91,9 +91,9 @@ Every change is audited (M13) with before and after values.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| A setting change breaks running behaviour | Each is validated on write against a schema; invalid values rejected |
-| Settings drift from documented defaults | Defaults live in code; the table holds only overrides, and the settings screen shows both |
-| Cron changed to an invalid expression | Parsed and validated before saving; rejected with the parse error |
-| Timezone changed by accident | Not settable — informational only |
+| Risk                                      | Mitigation                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| A setting change breaks running behaviour | Each is validated on write against a schema; invalid values rejected                      |
+| Settings drift from documented defaults   | Defaults live in code; the table holds only overrides, and the settings screen shows both |
+| Cron changed to an invalid expression     | Parsed and validated before saving; rejected with the parse error                         |
+| Timezone changed by accident              | Not settable — informational only                                                         |

@@ -1,0 +1,6 @@
+# Prisma client, emitted by `prisma generate` (the package `build` script).
+# Generated from prisma/schema.prisma — never edited by hand, never committed.
+src/generated/
+
+# tsc output
+dist/

@@ -34,12 +34,12 @@ A Junior calling the collection endpoint for another line's customer passes chec
 
 ## Scoping predicates
 
-| Role | Predicate |
-| --- | --- |
-| `SUPER_ADMIN` | none |
-| `ADMIN` | none |
-| `SENIOR` | `lineId = current assignment` |
-| `JUNIOR` | `lineId = current assignment` **and** customer assigned to this Junior |
+| Role          | Predicate                                                              |
+| ------------- | ---------------------------------------------------------------------- |
+| `SUPER_ADMIN` | none                                                                   |
+| `ADMIN`       | none                                                                   |
+| `SENIOR`      | `lineId = current assignment`                                          |
+| `JUNIOR`      | `lineId = current assignment` **and** customer assigned to this Junior |
 
 **"Current assignment" is resolved from `line_assignment` where `effectiveTo IS NULL`** — never from a field on the staff record (M03).
 
@@ -63,11 +63,11 @@ A request context carrying `userId`, `role` and `currentLineId` is resolved once
 
 ## Failure semantics
 
-| Situation | Response | Reason |
-| --- | --- | --- |
-| Row outside scope | `404` | A Junior probing IDs learns nothing about what exists |
-| Denied action on a visible row | `403` | Existence is already known; no information leaks |
-| No session | `401` | |
+| Situation                      | Response | Reason                                                |
+| ------------------------------ | -------- | ----------------------------------------------------- |
+| Row outside scope              | `404`    | A Junior probing IDs learns nothing about what exists |
+| Denied action on a visible row | `403`    | Existence is already known; no information leaks      |
+| No session                     | `401`    |                                                       |
 
 ---
 
@@ -84,10 +84,10 @@ This module exposes no endpoints of its own. It provides:
 
 ## Events consumed
 
-| Event | Effect |
-| --- | --- |
-| `staff.suspended` (M01) | Revoke sessions immediately |
-| `staff.role_changed` (M01) | Invalidate cached context |
+| Event                      | Effect                            |
+| -------------------------- | --------------------------------- |
+| `staff.suspended` (M01)    | Revoke sessions immediately       |
+| `staff.role_changed` (M01) | Invalidate cached context         |
 | `assignment.changed` (M03) | Invalidate cached `currentLineId` |
 
 > Assignment changes must invalidate the cached context immediately. A Senior moved off a line who keeps that line's visibility until their session refreshes is a real access-control failure, not a cosmetic lag.
@@ -102,8 +102,8 @@ This module exposes no endpoints of its own. It provides:
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| A new endpoint forgets scoping | Repository layer refuses unscoped queries; no default context |
-| Stale `currentLineId` after reassignment | Event-driven invalidation, not TTL |
+| Risk                                     | Mitigation                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| A new endpoint forgets scoping           | Repository layer refuses unscoped queries; no default context                          |
+| Stale `currentLineId` after reassignment | Event-driven invalidation, not TTL                                                     |
 | Scope check skipped on aggregate queries | Dashboard endpoints are explicitly role-gated; totals are computed from scoped queries |

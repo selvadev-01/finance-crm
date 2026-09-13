@@ -4,7 +4,7 @@
 
 **Source:** PDF §19 mentions a "daily tally" but never says who holds the cash. Rules: BR-16, BR-16a, BR-17.
 
-> **This module closes the largest gap in the source document.** The PDF tracks collection *records* and stops there. In a business moving cash through three pairs of hands every day, the record is only half the story — the other half is who is holding the money right now.
+> **This module closes the largest gap in the source document.** The PDF tracks collection _records_ and stops there. In a business moving cash through three pairs of hands every day, the record is only half the story — the other half is who is holding the money right now.
 
 ---
 
@@ -92,15 +92,15 @@ Cash follows `collection.collectedByUserId`, not current line staffing (open que
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View day close | Admin+, Senior (own line) |
-| Close day | Admin+, Senior (own line) |
-| Reopen day (manual) | Admin+ |
-| Initiate handover | Junior (own cash), Senior (own line) |
-| Record denominations | Junior, Senior |
-| Acknowledge handover | Senior (own line), Admin+ |
-| Dispute handover | Either party, Admin+ |
+| Operation            | Actor                                |
+| -------------------- | ------------------------------------ |
+| View day close       | Admin+, Senior (own line)            |
+| Close day            | Admin+, Senior (own line)            |
+| Reopen day (manual)  | Admin+                               |
+| Initiate handover    | Junior (own cash), Senior (own line) |
+| Record denominations | Junior, Senior                       |
+| Acknowledge handover | Senior (own line), Admin+            |
+| Dispute handover     | Either party, Admin+                 |
 
 ---
 
@@ -114,9 +114,9 @@ Cash follows `collection.collectedByUserId`, not current line staffing (open que
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Cash acknowledged but never physically received | Denomination count at both ends; dispute path; discrepancy visible on the line dashboard |
-| Days never close because a device is offline | Close-with-warning; automatic reopen on late sync |
-| Reopen used to alter settled figures | Manual reopen is Admin-only, reason mandatory, audited; collections remain append-only regardless |
-| Discrepancies accumulate unnoticed | Surfaced on the Senior and Admin dashboards, and in the overdue/discrepancy report |
+| Risk                                            | Mitigation                                                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Cash acknowledged but never physically received | Denomination count at both ends; dispute path; discrepancy visible on the line dashboard          |
+| Days never close because a device is offline    | Close-with-warning; automatic reopen on late sync                                                 |
+| Reopen used to alter settled figures            | Manual reopen is Admin-only, reason mandatory, audited; collections remain append-only regardless |
+| Discrepancies accumulate unnoticed              | Surfaced on the Senior and Admin dashboards, and in the overdue/discrepancy report                |

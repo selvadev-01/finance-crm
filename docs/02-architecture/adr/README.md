@@ -6,19 +6,20 @@ One decision per file, numbered, never deleted. A decision that turns out wrong 
 
 **Status:** `Proposed` · `Accepted` · `Superseded by ADR-nnnn`.
 
-> **Accepted is not implemented.** All nine decisions below are settled, and none is in the code yet beyond the monorepo shape of 0001 — no Prisma, no ts-rest, no pg-boss, no Better Auth, no service worker. [`project-structure.md`](../../04-engineering/project-structure.md#not-yet-present) tracks the gap. If implementation contradicts an ADR, write the superseding ADR; do not quietly diverge.
+> **Accepted is not implemented.** Of the ten decisions below, 0001 (monorepo shape), 0006 and 0009 (Decimal money, stored business dates — now in the schema), 0007 (Better Auth, mounted and signing users in) and 0010 (Tailwind v4) are in the code. ts-rest, pg-boss and the service worker are not. [`project-structure.md`](../../04-engineering/project-structure.md#not-yet-present) tracks the gap. If implementation contradicts an ADR, write the superseding ADR; do not quietly diverge.
 
-| # | Decision | Status |
-| --- | --- | --- |
-| [0001](0001-modular-monolith.md) | Modular monolith, not microservices | Accepted |
-| [0002](0002-ts-rest-api-contract.md) | ts-rest + Zod for the API contract | Accepted |
-| [0003](0003-worker-in-api-process.md) | Worker is the API app in `--worker` mode | Accepted |
-| [0004](0004-pg-boss-over-redis.md) | pg-boss on Postgres, no Redis | Accepted |
-| [0005](0005-balance-driven-completion.md) | Accounts complete on balance, not day count | Accepted |
-| [0006](0006-append-only-ledger.md) | Append-only collections + double-entry ledger | Accepted |
-| [0007](0007-better-auth.md) | Better Auth, mounted in the NestJS API | Accepted |
-| [0008](0008-offline-first-pwa.md) | Offline-first PWA with an IndexedDB outbox | Accepted |
-| [0009](0009-decimal-money-stored-dates.md) | Decimal money and stored business dates | Accepted |
+| #                                          | Decision                                      | Status   |
+| ------------------------------------------ | --------------------------------------------- | -------- |
+| [0001](0001-modular-monolith.md)           | Modular monolith, not microservices           | Accepted |
+| [0002](0002-ts-rest-api-contract.md)       | ts-rest + Zod for the API contract            | Accepted |
+| [0003](0003-worker-in-api-process.md)      | Worker is the API app in `--worker` mode      | Accepted |
+| [0004](0004-pg-boss-over-redis.md)         | pg-boss on Postgres, no Redis                 | Accepted |
+| [0005](0005-balance-driven-completion.md)  | Accounts complete on balance, not day count   | Accepted |
+| [0006](0006-append-only-ledger.md)         | Append-only collections + double-entry ledger | Accepted |
+| [0007](0007-better-auth.md)                | Better Auth, mounted in the NestJS API        | Accepted |
+| [0008](0008-offline-first-pwa.md)          | Offline-first PWA with an IndexedDB outbox    | Accepted |
+| [0009](0009-decimal-money-stored-dates.md) | Decimal money and stored business dates       | Accepted |
+| [0010](0010-tailwind-v4-component-base.md) | Tailwind v4 and an owned component base       | Accepted |
 
 ## When to write one
 

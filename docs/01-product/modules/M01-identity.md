@@ -10,16 +10,16 @@
 
 **In:** Better Auth configuration and mounting, email/password sign-in, session lifecycle, password reset, staff profile CRUD, device registration handoff to M10.
 
-**Out:** authorisation and scoping (M02), line assignment (M03). This module answers *who you are*, never *what you may do*.
+**Out:** authorisation and scoping (M02), line assignment (M03). This module answers _who you are_, never _what you may do_.
 
 ---
 
 ## Owned entities
 
-| Entity | Owner | Notes |
-| --- | --- | --- |
-| `user`, `session`, `account`, `verification` | **Better Auth** | Generated. Never hand-edited |
-| `staff_profile` | Rasi | 1:1 with `user`. Role, staff code, phone, status |
+| Entity                                       | Owner           | Notes                                            |
+| -------------------------------------------- | --------------- | ------------------------------------------------ |
+| `user`, `session`, `account`, `verification` | **Better Auth** | Generated. Never hand-edited                     |
+| `staff_profile`                              | Rasi            | 1:1 with `user`. Role, staff code, phone, status |
 
 The split is deliberate: keeping Rasi data out of the generated tables means `better-auth generate` stays re-runnable across version upgrades. See [`../../02-architecture/authentication.md`](../../02-architecture/authentication.md).
 
@@ -44,27 +44,27 @@ Sessions last **30 days with rolling renewal**, far longer than a typical web ap
 
 ## Operations
 
-| Operation | Actor | Notes |
-| --- | --- | --- |
-| Sign in | Anyone | Better Auth. Audited |
-| Sign out | Self | **Blocked with a warning if unsynced collections exist** — local data dies with the session |
-| Request password reset | Self | Email |
-| Reset another's password | Admin+ | For field staff without email |
-| Create staff | Admin+ | Creates `user` + `staff_profile` atomically |
-| Update staff | Admin+ | |
-| Change role | **Super Admin only** | Otherwise an Admin could promote themselves |
-| Suspend / reactivate | Admin+ | Immediate |
+| Operation                | Actor                | Notes                                                                                       |
+| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| Sign in                  | Anyone               | Better Auth. Audited                                                                        |
+| Sign out                 | Self                 | **Blocked with a warning if unsynced collections exist** — local data dies with the session |
+| Request password reset   | Self                 | Email                                                                                       |
+| Reset another's password | Admin+               | For field staff without email                                                               |
+| Create staff             | Admin+               | Creates `user` + `staff_profile` atomically                                                 |
+| Update staff             | Admin+               |                                                                                             |
+| Change role              | **Super Admin only** | Otherwise an Admin could promote themselves                                                 |
+| Suspend / reactivate     | Admin+               | Immediate                                                                                   |
 
 ---
 
 ## Events emitted
 
-| Event | Consumed by |
-| --- | --- |
-| `staff.created` | M03 (assignment eligibility), M13 |
-| `staff.suspended` | M02 (session revocation), M13 |
-| `staff.role_changed` | M02, M13 |
-| `auth.signed_in` | M13 |
+| Event                | Consumed by                       |
+| -------------------- | --------------------------------- |
+| `staff.created`      | M03 (assignment eligibility), M13 |
+| `staff.suspended`    | M02 (session revocation), M13     |
+| `staff.role_changed` | M02, M13                          |
+| `auth.signed_in`     | M13                               |
 
 ---
 
@@ -76,8 +76,8 @@ Phone + OTP or PIN sign-in for field staff, using Better Auth's `phoneNumber` pl
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
+| Risk                                                   | Mitigation                                                                                                           |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | The NestJS Better Auth adapter is community-maintained | Better Auth exposes a plain node handler; replacing the adapter with a hand-written controller is a contained change |
-| Field staff may not have email addresses | Admin-initiated password reset; phone sign-in is the Phase-2 answer |
-| Long sessions widen the window on a stolen device | Immediate server-side revocation on suspend; device list visible to the user |
+| Field staff may not have email addresses               | Admin-initiated password reset; phone sign-in is the Phase-2 answer                                                  |
+| Long sessions widen the window on a stolen device      | Immediate server-side revocation on suspend; device list visible to the user                                         |

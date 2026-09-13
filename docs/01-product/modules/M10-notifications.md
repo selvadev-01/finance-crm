@@ -34,33 +34,33 @@ One notification fans out to every active device the user has registered, each r
 
 Categories from §24:
 
-| Category | Meaning |
-| --- | --- |
-| `INFORMATION` | New customer, new assignment |
-| `SUCCESS` | Day tallied, account completed |
-| `WARNING` | Extra collection, pending collection |
-| `ALERT` | Low collection, missed collection, discrepancy |
+| Category      | Meaning                                        |
+| ------------- | ---------------------------------------------- |
+| `INFORMATION` | New customer, new assignment                   |
+| `SUCCESS`     | Day tallied, account completed                 |
+| `WARNING`     | Extra collection, pending collection           |
+| `ALERT`       | Low collection, missed collection, discrepancy |
 
-| Event | Recipient | Category | Source |
-| --- | --- | --- | --- |
-| `NEW_ASSIGNMENT` | Both staff, both Seniors | `INFORMATION` | M03 |
-| `LOW_COLLECTION` | Senior of the line | `ALERT` | M07 |
-| `EXTRA_COLLECTION` | Senior of the line | `WARNING` | M07 |
-| `MISSED_COLLECTION` | Senior of the line | `ALERT` | M07 |
-| `ACCOUNT_COMPLETED` | Senior of the line | `SUCCESS` | M05 |
-| `DAY_CLOSE_DISCREPANCY` | Senior, Admin | `ALERT` | M08 |
-| `APPROVAL_REQUESTED` | Senior of the line | `WARNING` | M07 |
+| Event                   | Recipient                | Category      | Source |
+| ----------------------- | ------------------------ | ------------- | ------ |
+| `NEW_ASSIGNMENT`        | Both staff, both Seniors | `INFORMATION` | M03    |
+| `LOW_COLLECTION`        | Senior of the line       | `ALERT`       | M07    |
+| `EXTRA_COLLECTION`      | Senior of the line       | `WARNING`     | M07    |
+| `MISSED_COLLECTION`     | Senior of the line       | `ALERT`       | M07    |
+| `ACCOUNT_COMPLETED`     | Senior of the line       | `SUCCESS`     | M05    |
+| `DAY_CLOSE_DISCREPANCY` | Senior, Admin            | `ALERT`       | M08    |
+| `APPROVAL_REQUESTED`    | Senior of the line       | `WARNING`     | M07    |
 
 Every notification carries a `payload` with entity type and id, so tapping it deep-links to the subject.
 
 ### Scoping
 
-| Role | Receives |
-| --- | --- |
-| Super Admin | All |
-| Admin | Operational |
-| Senior | Their line |
-| Junior | Their own entries |
+| Role        | Receives          |
+| ----------- | ----------------- |
+| Super Admin | All               |
+| Admin       | Operational       |
+| Senior      | Their line        |
+| Junior      | Their own entries |
 
 Matches Appendix A. "Senior of the line" means the current assignment at the moment the event fires (M03).
 
@@ -107,22 +107,22 @@ Per-category opt-out. **`ALERT` cannot be disabled** — low collections, missed
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| List own notifications | All |
-| Mark read / mark all read | Self |
-| Register device | All |
-| Deregister device | Self, Admin+ |
-| Manage preferences | Self |
+| Operation                 | Actor        |
+| ------------------------- | ------------ |
+| List own notifications    | All          |
+| Mark read / mark all read | Self         |
+| Register device           | All          |
+| Deregister device         | Self, Admin+ |
+| Manage preferences        | Self         |
 
 ---
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| **Alert fatigue** | Exact-match classification (no tolerance band); missed detection deferred until after day close; `SUCCESS` notifications are not pushed, only shown in-app |
-| Stale push tokens | `410` deactivation; `lastSeenAt` tracking |
-| Push provider outage | In-app centre unaffected; outbox retries |
-| Notification storm on holiday misconfiguration | Holidays suppress missed detection entirely (M06) |
-| Senior changed mid-event | Recipient resolved at event time from current assignment |
+| Risk                                           | Mitigation                                                                                                                                                 |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Alert fatigue**                              | Exact-match classification (no tolerance band); missed detection deferred until after day close; `SUCCESS` notifications are not pushed, only shown in-app |
+| Stale push tokens                              | `410` deactivation; `lastSeenAt` tracking                                                                                                                  |
+| Push provider outage                           | In-app centre unaffected; outbox retries                                                                                                                   |
+| Notification storm on holiday misconfiguration | Holidays suppress missed detection entirely (M06)                                                                                                          |
+| Senior changed mid-event                       | Recipient resolved at event time from current assignment                                                                                                   |

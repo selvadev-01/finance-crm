@@ -18,47 +18,51 @@ New to the project? Read in this order:
 
 ## Structure
 
-| Folder | Contents |
-| --- | --- |
-| `00-overview/` | Vision, glossary, personas |
-| `01-product/` | PRD, per-module specs, user stories, business rules, RBAC matrix |
+| Folder             | Contents                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `00-overview/`     | Vision, glossary, personas                                                               |
+| `01-product/`      | PRD, per-module specs, user stories, business rules, RBAC matrix                         |
 | `02-architecture/` | System architecture, ADRs, API design, auth, jobs, notifications, offline sync, security |
-| `03-data/` | ERD, data dictionary |
-| `04-engineering/` | Project structure, coding guidelines, definition of done |
-| `05-ux/` | Screen specifications, navigation/IA |
-| `06-delivery/` | Roadmap, backlog |
-| `reference/` | Original source documents |
+| `03-data/`         | ERD, data dictionary                                                                     |
+| `04-engineering/`  | Project structure, coding guidelines, definition of done                                 |
+| `05-ux/`           | Design system, screen specifications, navigation/IA                                      |
+| `06-delivery/`     | Roadmap, backlog                                                                         |
+| `reference/`       | Original source documents                                                                |
 
 ## Status
 
 ### Specification
 
-| Stage | State |
-| --- | --- |
-| Overview + business rules | **Complete** — three ambiguities resolved (BR-08, BR-01a, BR-16a) |
-| Data model | **Complete** |
-| Product specs | **Complete** — PRD, 16 module specs, 60 stories, RBAC matrix |
-| Architecture | **Complete** — C4, 9 ADRs, auth, API, jobs, notifications, offline, security |
-| Engineering guidelines | **Complete** — project structure, coding guidelines, DoD |
-| UX specs | **Complete** — navigation + 7 screens in full, 23 listed |
-| Delivery plan | **Complete** — 6 build phases, ~16 weeks |
+| Stage                     | State                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| Overview + business rules | **Complete** — three ambiguities resolved (BR-08, BR-01a, BR-16a)             |
+| Data model                | **Complete**                                                                  |
+| Product specs             | **Complete** — PRD, 16 module specs, 97 stories, RBAC matrix                  |
+| Architecture              | **Complete** — C4, 10 ADRs, auth, API, jobs, notifications, offline, security |
+| Engineering guidelines    | **Complete** — project structure, coding guidelines, DoD                      |
+| UX specs                  | **Complete** — navigation, design system, 7 screens in full, 23 listed        |
+| Delivery plan             | **Complete** — 6 build phases, ~16 weeks                                      |
 
 > Five open questions remain in [`01-product/business-rules.md`](01-product/business-rules.md#open-questions), each with a proposed answer that stands unless overridden — none blocks implementation.
 
 ### Implementation
 
-**Phase 0, partially done.** The repository is a Turborepo scaffold: `apps/web` (Next.js 16, React 19) and `apps/api` (NestJS 12, Vitest) both run, alongside `@repo/ui`, `@repo/eslint-config` and `@repo/typescript-config`.
+**Phase 0 complete. No product modules built.** The foundations are in place and verified; M01–M16 are untouched.
 
-| Foundation | State |
-| --- | --- |
-| Turborepo + pnpm workspace | **Done** |
-| Shared eslint / tsconfig packages | **Done** |
-| `apps/web`, `apps/api` booting | **Done** — starter content only |
-| Lint, type-check, test, format scripts | **Done** |
-| PostgreSQL, `packages/db`, Prisma | **Not started** |
-| Better Auth | **Not started** |
-| `packages/domain`, `packages/contracts`, `packages/notifications` | **Not started** |
-| M01–M16 | **Not started** |
+| Foundation                                                           | State                     |
+| -------------------------------------------------------------------- | ------------------------- |
+| Turborepo + pnpm workspace                                           | **Done**                  |
+| Shared eslint / tsconfig packages                                    | **Done**                  |
+| `apps/web`, `apps/api` booting                                       | **Done**                  |
+| Lint, type-check, test, format scripts                               | **Done**                  |
+| PostgreSQL 17 — `rasi_dev`, `public` + `test` schemas                | **Done**                  |
+| `packages/db` — Prisma 7, 28 tables, 2 migrations                    | **Done**                  |
+| Better Auth, mounted and signing users in                            | **Done**                  |
+| `packages/domain`, `packages/contracts` — empty, boundaries enforced | **Done**                  |
+| `@repo/ui` — Tailwind v4 tokens and component base                   | **Done**                  |
+| Test harness — two-tier isolation                                    | **Done**                  |
+| `packages/notifications`                                             | **Not started** — Phase 4 |
+| M01–M16                                                              | **Not started**           |
 
 This table is a phase-level summary, refreshed at phase boundaries. **Per-story status lives in [`06-delivery/backlog.md`](06-delivery/backlog.md)** and nowhere else — check there before assuming anything is built. Repository detail, with versions and the exact gap list, is in [`04-engineering/project-structure.md`](04-engineering/project-structure.md).
 

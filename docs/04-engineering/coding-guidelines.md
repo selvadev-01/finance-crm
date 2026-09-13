@@ -75,15 +75,27 @@ const businessDate = toBusinessDate(capturedAt);
 
 ## Package boundaries
 
-| Package | May import | Must not import |
-| --- | --- | --- |
-| `packages/domain` | Nothing but `decimal.js` and date utilities | **Prisma, NestJS, anything framework** |
-| `packages/contracts` | Zod | Prisma, NestJS |
-| `packages/db` | Prisma | Application code |
-| `apps/api` | All packages | `apps/web` |
-| `apps/web` | `contracts`, `ui`, `domain` | `db`, `apps/api` |
+| Package              | May import                                  | Must not import                        |
+| -------------------- | ------------------------------------------- | -------------------------------------- |
+| `packages/domain`    | Nothing but `decimal.js` and date utilities | **Prisma, NestJS, anything framework** |
+| `packages/contracts` | Zod                                         | Prisma, NestJS                         |
+| `packages/db`        | Prisma                                      | Application code                       |
+| `apps/api`           | All packages                                | `apps/web`                             |
+| `apps/web`           | `contracts`, `ui`, `domain`                 | `db`, `apps/api`                       |
 
-Enforced by lint import rules, not convention. `apps/web` and `packages/ui` lint with the shared flat configs in `@repo/eslint-config`; `apps/api` uses oxlint, so a boundary rule added for one needs adding to the other.
+Enforced by **two independent mechanisms**, strongest first — and ADR-0001's remark that "boundary discipline is a convention" is superseded by this.
+
+**1. Dependency hygiene is the primary control.** `.npmrc` is empty, so pnpm's isolated `node_modules` means a package can import only what its own `package.json` declares. `packages/domain` depends on exactly `decimal.js`, `date-fns` and `@date-fns/tz`, so `import { PrismaClient } from "@prisma/client"` is an unresolvable module — a hard `tsc` failure, with no rule to configure and no disable comment that silences it. This covers four of the five rows above outright.
+
+**2. `no-restricted-imports`** in `@repo/eslint-config/boundaries` covers the residue: deep-path escapes, re-exports through another package, and transitive leakage where a forbidden package happens to be installed as someone else's dependency. ESLint core only — no plugins, no type information — so it works under the existing parser and does not stake a foundation rule on type-aware linting under the new TypeScript 7 native port.
+
+Both were verified by adding a deliberate `@prisma/client` import to `packages/domain`, watching `pnpm lint` **and** `pnpm check-types` fail, and reverting. A rule nobody has seen fail is indistinguishable from no rule.
+
+> **Flat config does not lint TypeScript unless a block says so.** A config object with no `files` key applies to `**/*.{js,mjs,cjs}` and nothing else. `base.js` sets no `files` anywhere, so despite configuring a TypeScript-capable parser it lints **no `.ts` file in this repository** — ESLint reports _"File ignored because no matching configuration was supplied"_ and exits 0. The boundary blocks therefore carry their own `files` glob and parser. Everything else in `base.js` — including `js.configs.recommended` — is still not reaching any TypeScript, which is worth fixing separately.
+
+`apps/api` uses oxlint rather than ESLint, so a boundary rule added for one needs adding to the other. Its one boundary (must not import `apps/web`) is covered by dependency hygiene regardless, since `web` is not and will never be a dependency of `api`.
+
+**Enforcement lives in the script, not the config.** `base.js` registers `eslint-plugin-only-warn`, which downgrades every rule to a warning — so a boundary violation only _fails_ where the package's lint script passes `--max-warnings 0`. Every package ships that flag. A new package that omits it silently stops enforcing anything.
 
 > `packages/domain` being framework-free is the rule with the most leverage. It means schedule generation, working-day arithmetic, variance classification and profit apportionment are testable exhaustively in milliseconds, with no database and no application context. The moment a Prisma import appears there, that property is gone — and it will not come back, because the next contributor will follow the precedent.
 
@@ -170,15 +182,15 @@ type Result =
 
 Follow the [glossary](../00-overview/glossary.md) exactly. The domain vocabulary is precise and code that renames it creates a translation layer in every reader's head.
 
-| Concept | Code | Never |
-| --- | --- | --- |
-| A loan | `AccountLoan`, `accountLoanId` | `loan`, `account` |
-| Ledger account | `ledgerAccount` | `account` |
-| Auth account | `account` (Better Auth's) | — |
-| Collection day | `collectionDay`, `workingDay` | `businessDay` |
-| Business date | `businessDate` | `date`, `collectionDate` |
-| Expected amount | `expectedAmount` | `dueAmount`, `target` |
-| Variance | `variance` | `difference`, `delta` |
+| Concept         | Code                           | Never                    |
+| --------------- | ------------------------------ | ------------------------ |
+| A loan          | `AccountLoan`, `accountLoanId` | `loan`, `account`        |
+| Ledger account  | `ledgerAccount`                | `account`                |
+| Auth account    | `account` (Better Auth's)      | —                        |
+| Collection day  | `collectionDay`, `workingDay`  | `businessDay`            |
+| Business date   | `businessDate`                 | `date`, `collectionDate` |
+| Expected amount | `expectedAmount`               | `dueAmount`, `target`    |
+| Variance        | `variance`                     | `difference`, `delta`    |
 
 > "Account" is the dangerous one. It means a loan in the product, an OAuth link in Better Auth, and a bookkeeping account in the ledger. Bare `account` in Rasi code always means Better Auth's table; the other two are always qualified.
 
@@ -267,8 +279,10 @@ The testing rules that belong in this document:
 Structured, via the injected logger. Never `console.log`.
 
 ```ts
-this.logger.info({ collectionId, accountLoanId, amount: amount.toString() },
-  "collection confirmed");
+this.logger.info(
+  { collectionId, accountLoanId, amount: amount.toString() },
+  "collection confirmed",
+);
 ```
 
 **Money as strings in logs**, so a log line cannot introduce float drift into an investigation.

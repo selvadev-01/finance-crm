@@ -28,12 +28,12 @@ Admin enters `A` (account amount), `I` (invested), `D` (daily), `N` (term days, 
 
 Validation — all enforced as database check constraints, not only in the form:
 
-| Constraint | Message |
-| --- | --- |
-| `I < A` | Profit cannot be zero or negative |
-| `D ≤ A` | A single day cannot exceed the account |
-| `D × N ≥ A` | The term cannot clear the account |
-| `A, I, D, N > 0` | |
+| Constraint       | Message                                |
+| ---------------- | -------------------------------------- |
+| `I < A`          | Profit cannot be zero or negative      |
+| `D ≤ A`          | A single day cannot exceed the account |
+| `D × N ≥ A`      | The term cannot clear the account      |
+| `A, I, D, N > 0` |                                        |
 
 **Multiple concurrent accounts per customer are permitted** (BR-01a). No constraint restricts this.
 
@@ -96,13 +96,13 @@ stateDiagram-v2
 
 `isOverdue` is a **flag on `ACTIVE`**, not a status (BR-05) — an overdue account is still active and still collecting. Set the day after `targetCompletionDate` passes with outstanding remaining, with no grace period (open question 3).
 
-| Status | Collection | Set by |
-| --- | --- | --- |
-| `PENDING` | No | Creation |
-| `ACTIVE` | Yes | Disbursement |
-| `COMPLETED` | No | Automatic on `outstanding ≤ 0` |
-| `DEFAULTED` | No | Super Admin, reason mandatory |
-| `WRITTEN_OFF` | No | Super Admin, reason mandatory |
+| Status        | Collection | Set by                         |
+| ------------- | ---------- | ------------------------------ |
+| `PENDING`     | No         | Creation                       |
+| `ACTIVE`      | Yes        | Disbursement                   |
+| `COMPLETED`   | No         | Automatic on `outstanding ≤ 0` |
+| `DEFAULTED`   | No         | Super Admin, reason mandatory  |
+| `WRITTEN_OFF` | No         | Super Admin, reason mandatory  |
 
 > Write-off is Super Admin only because it destroys receivable value. It must not be an action an Admin can take to tidy up a difficult account.
 
@@ -126,13 +126,13 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| Create | Admin+ |
-| Update terms | Admin+, **pre-disbursement only** |
-| Disburse | Admin+ |
-| Mark defaulted / written off | Super Admin |
-| View, view schedule | Admin+, Senior (own line), Junior (assigned) |
+| Operation                    | Actor                                        |
+| ---------------------------- | -------------------------------------------- |
+| Create                       | Admin+                                       |
+| Update terms                 | Admin+, **pre-disbursement only**            |
+| Disburse                     | Admin+                                       |
+| Mark defaulted / written off | Super Admin                                  |
+| View, view schedule          | Admin+, Senior (own line), Junior (assigned) |
 
 ---
 
@@ -146,9 +146,9 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Cached balance drifts from the ledger | Same-transaction updates plus nightly reconciliation with alerting |
-| Schedule regeneration touches collected slots | Regeneration filters to `PENDING` only; covered by tests |
-| Amounts edited after disbursement | Blocked at the service layer and by the permission matrix |
+| Risk                                              | Mitigation                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Cached balance drifts from the ledger             | Same-transaction updates plus nightly reconciliation with alerting            |
+| Schedule regeneration touches collected slots     | Regeneration filters to `PENDING` only; covered by tests                      |
+| Amounts edited after disbursement                 | Blocked at the service layer and by the permission matrix                     |
 | Multi-account customers confuse balance reporting | Outstanding is always per account; customer-level is an explicit labelled sum |

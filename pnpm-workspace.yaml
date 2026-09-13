@@ -1,3 +1,21 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# pnpm 11 blocks package build scripts unless they are allowed here.
+#
+# Prisma needs @prisma/engines to unpack the query engine binary and prisma's
+# own postinstall to run; without them the client is simply missing at runtime,
+# with no error explaining why. esbuild builds its platform binary for Vitest.
+#
+# msgpackr-extract and workerd are optional native accelerators pulled in
+# transitively; they fall back to pure JS, so they stay off.
+allowBuilds:
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+  msgpackr-extract: false
+  workerd: false
+
+minimumReleaseAgeExclude:
+  - tailwind-merge@3.7.0

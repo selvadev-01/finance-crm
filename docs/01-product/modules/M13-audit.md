@@ -2,7 +2,7 @@
 
 **Purpose:** an immutable record of who did what, when, and what changed.
 
-**Source:** not in the PDF. Added because §29's *"the Super Admin controls the complete business"* is unenforceable without it.
+**Source:** not in the PDF. Added because §29's _"the Super Admin controls the complete business"_ is unenforceable without it.
 
 ---
 
@@ -10,7 +10,7 @@
 
 **In:** the audit trail, entity history views, retention.
 
-**Out:** the financial trail itself — that is the ledger (M09). Audit records *actions*; the ledger records *money*.
+**Out:** the financial trail itself — that is the ledger (M09). Audit records _actions_; the ledger records _money_.
 
 ---
 
@@ -22,20 +22,20 @@
 
 ## What is audited
 
-| Action | Recorded |
-| --- | --- |
-| `CREATE` | Customers, accounts, staff, sectors, lines, holidays |
-| `UPDATE` | Any change to the above, with before/after |
-| `DELETE` | Soft deletes |
-| `APPROVE` / `REJECT` | Collection corrections |
-| `LOGIN` | Every sign-in, success and failure |
-| `REOPEN_DAY` | Manual reopen, with reason |
+| Action               | Recorded                                             |
+| -------------------- | ---------------------------------------------------- |
+| `CREATE`             | Customers, accounts, staff, sectors, lines, holidays |
+| `UPDATE`             | Any change to the above, with before/after           |
+| `DELETE`             | Soft deletes                                         |
+| `APPROVE` / `REJECT` | Collection corrections                               |
+| `LOGIN`              | Every sign-in, success and failure                   |
+| `REOPEN_DAY`         | Manual reopen, with reason                           |
 
 Each entry records actor, entity table and id, action, before/after JSON, IP address, user agent and timestamp. System actions (scheduled jobs, automatic day reopen) record a null actor and are labelled as system.
 
 ### Collections are not audited as updates
 
-Collections are append-only (BR-14) — there is nothing to audit, because nothing changes. The correction *approval* is audited; the collection records themselves are their own history.
+Collections are append-only (BR-14) — there is nothing to audit, because nothing changes. The correction _approval_ is audited; the collection records themselves are their own history.
 
 > This is the point of append-only. An audit log that catches unauthorised changes is a detective control; a structure where the change cannot happen is a preventive one. The audit log covers what remains mutable.
 
@@ -63,13 +63,13 @@ This assembles the audit log with the collection and ledger records — the scre
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View audit log | Admin+ |
-| Filter by actor, entity, action, date | Admin+ |
-| View entity history | Admin+ |
-| Write | **System only** |
-| Modify or delete | **Nobody** |
+| Operation                             | Actor           |
+| ------------------------------------- | --------------- |
+| View audit log                        | Admin+          |
+| Filter by actor, entity, action, date | Admin+          |
+| View entity history                   | Admin+          |
+| Write                                 | **System only** |
+| Modify or delete                      | **Nobody**      |
 
 Seniors and Juniors have no access. The audit log records their actions; exposing it to them serves no operational purpose and reveals other staff members' activity.
 
@@ -85,9 +85,9 @@ All modules emit domain events; this module subscribes broadly rather than each 
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Audit write fails silently, action succeeds | Same-transaction write; failure rolls back the action |
-| Log growth degrades performance | Yearly partitioning; indexed on `(entityTable, entityId)` and `(actorUserId, createdAt)` |
-| Sensitive data in before/after snapshots | Credential fields are redacted before writing; enforced by a field allowlist |
-| An action is missed | Event-driven subscription, not per-module calls |
+| Risk                                        | Mitigation                                                                               |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Audit write fails silently, action succeeds | Same-transaction write; failure rolls back the action                                    |
+| Log growth degrades performance             | Yearly partitioning; indexed on `(entityTable, entityId)` and `(actorUserId, createdAt)` |
+| Sensitive data in before/after snapshots    | Credential fields are redacted before writing; enforced by a field allowlist             |
+| An action is missed                         | Event-driven subscription, not per-module calls                                          |

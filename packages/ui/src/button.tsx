@@ -1,20 +1,55 @@
-"use client";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { ComponentProps } from "react";
 
-import { ReactNode } from "react";
+import { cn } from "./cn";
 
-interface ButtonProps {
-  children: ReactNode;
-  className?: string;
-  appName: string;
-}
+/**
+ * `tone` is a named set of intents, not a pile of booleans.
+ *
+ * `<Button primary danger>` is representable and meaningless; `tone="danger"`
+ * is not. Every destructive action in Rasi writes off money or reopens a
+ * closed day, so the difference has to be visible in the type as well as on
+ * screen.
+ *
+ * Height comes from `--control-height`, which the density mode sets — so the
+ * same Button is a 44px touch target in the Junior's field app and a 36px
+ * control in the admin console, with no `dense` prop and no second component.
+ */
+const button = cva(
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap",
+    "rounded-[var(--radius-control)] font-medium",
+    "h-[var(--control-height)] px-[var(--control-padding-x)]",
+    "transition-colors",
+    "disabled:pointer-events-none disabled:opacity-50",
+    // Tactile press. Cheap, and it tells a gloved thumb the tap registered.
+    "active:translate-y-px",
+  ],
+  {
+    variants: {
+      tone: {
+        primary: "bg-accent text-accent-ink hover:bg-accent-hover",
+        secondary:
+          "border border-border-strong bg-surface-raised text-ink hover:bg-surface-sunken",
+        ghost: "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+        danger: "bg-critical text-ink-inverse hover:brightness-95",
+      },
+    },
+    defaultVariants: { tone: "secondary" },
+  },
+);
 
-export const Button = ({ children, className, appName }: ButtonProps) => {
+export type ButtonProps = ComponentProps<"button"> &
+  VariantProps<typeof button>;
+
+export function Button({ tone, className, type, ...props }: ButtonProps) {
   return (
     <button
-      className={className}
-      onClick={() => alert(`Hello from your ${appName} app!`)}
-    >
-      {children}
-    </button>
+      // Buttons inside a form default to submit, which has surprised every
+      // developer at least once. Opt in explicitly instead.
+      type={type ?? "button"}
+      className={cn(button({ tone }), className)}
+      {...props}
+    />
   );
-};
+}

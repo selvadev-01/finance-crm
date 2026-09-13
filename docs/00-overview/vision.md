@@ -20,7 +20,7 @@ Rasi's central claim is **money correctness**. Every rupee that enters the syste
 
 ## Principles
 
-**The four roles stay simple.** From the source document: *the Junior collects, the Senior monitors, the Admin manages, the Super Admin controls.* Each role sees only what its job requires. A Junior's screen should be usable while standing at a customer's door — a route list and an amount field, and very little else.
+**The four roles stay simple.** From the source document: _the Junior collects, the Senior monitors, the Admin manages, the Super Admin controls._ Each role sees only what its job requires. A Junior's screen should be usable while standing at a customer's door — a route list and an amount field, and very little else.
 
 **The field never waits for a network.** Juniors work in areas with unreliable signal. Recording a collection must always succeed immediately and locally; synchronisation is the application's problem, not the collector's. Nothing in the design may assume connectivity at the moment of collection.
 
@@ -44,13 +44,13 @@ The first version replaces the spreadsheet and controls the cash. It is not yet 
 
 Out of scope, with the reasoning:
 
-| Excluded | Why |
-| --- | --- |
-| Customer-facing app or portal | Customers are not users. The relationship is in person, daily, by design. |
-| Credit scoring or automated approval | Lending decisions stay human. Rasi records them; it does not make them. |
-| Online payments / UPI collection | The business is cash. Digital collection changes the cash-control model entirely and deserves its own design. |
-| Accounting-package integration | The internal ledger must be trustworthy first. Exporting to Tally is a later conversation. |
-| Multi-business tenancy | One business. The schema leaves room, but no multi-tenant machinery is built. |
+| Excluded                             | Why                                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Customer-facing app or portal        | Customers are not users. The relationship is in person, daily, by design.                                     |
+| Credit scoring or automated approval | Lending decisions stay human. Rasi records them; it does not make them.                                       |
+| Online payments / UPI collection     | The business is cash. Digital collection changes the cash-control model entirely and deserves its own design. |
+| Accounting-package integration       | The internal ledger must be trustworthy first. Exporting to Tally is a later conversation.                    |
+| Multi-business tenancy               | One business. The schema leaves room, but no multi-tenant machinery is built.                                 |
 
 Deferred to Phase 2 and tracked in the roadmap: Tamil language support, GPS and photo proof-of-visit, SMS/WhatsApp receipts to customers, and Excel/PDF report export.
 

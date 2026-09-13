@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+/**
+ * Rasi design tokens.
+ *
+ * Tailwind v4 has no `presets` mechanism — the shared layer is CSS, not a JS
+ * config object, so this file IS the preset. Import it once from the app's
+ * global stylesheet.
+ *
+ * The `@source` line below is load-bearing and easy to miss. @repo/ui ships
+ * raw TSX from its own directory, which is outside apps/web, and Tailwind only
+ * scans the importing project by default. Without it every class used by a
+ * @repo/ui component is purged from the production build and the components
+ * render unstyled — which looks like a component bug, not a config one.
+ */
+@source "../../ui/src";
+
+@theme {
+  /* ---------------------------------------------------------------------
+   * Colour
+   *
+   * One accent, locked for the whole product. Neutrals are a single cool
+   * grey family — never mixed warm and cool in one interface.
+   *
+   * Deep green rather than the default blue: this is a cash-handling tool
+   * where the recurring semantic is money reconciling correctly, and green
+   * is already the "tallied" signal. Status colours are reserved for
+   * status, so the accent must not be red, amber, or a green close enough
+   * to be confused with "collected".
+   * ------------------------------------------------------------------- */
+  --color-surface: oklch(99% 0.002 250);
+  --color-surface-raised: oklch(100% 0 0);
+  --color-surface-sunken: oklch(96.5% 0.004 250);
+  --color-border: oklch(90% 0.006 250);
+  --color-border-strong: oklch(80% 0.008 250);
+
+  --color-ink: oklch(23% 0.012 250);
+  --color-ink-muted: oklch(48% 0.012 250);
+  --color-ink-subtle: oklch(62% 0.01 250);
+  --color-ink-inverse: oklch(99% 0.002 250);
+
+  --color-accent: oklch(48% 0.11 165);
+  --color-accent-hover: oklch(42% 0.11 165);
+  --color-accent-subtle: oklch(95% 0.03 165);
+  --color-accent-ink: oklch(99% 0.002 250);
+
+  /* Status. These map to collection classification (BR-08) and must stay
+   * distinguishable from the accent and from each other at a glance, in
+   * sunlight, on a mid-range phone. */
+  --color-positive: oklch(52% 0.13 150);
+  --color-positive-subtle: oklch(95% 0.04 150);
+  --color-warning: oklch(65% 0.14 75);
+  --color-warning-subtle: oklch(96% 0.05 75);
+  --color-critical: oklch(52% 0.18 25);
+  --color-critical-subtle: oklch(95% 0.04 25);
+  --color-info: oklch(55% 0.11 250);
+  --color-info-subtle: oklch(95% 0.03 250);
+
+  /* ---------------------------------------------------------------------
+   * Type
+   *
+   * System stack, deliberately. The Junior app loads over a poor connection
+   * on a mid-range Android; a webfont is a render-blocking request that buys
+   * nothing a collector notices. Tabular figures everywhere numbers are
+   * compared down a column — which in this product is most places.
+   * ------------------------------------------------------------------- */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo,
+    Consolas, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* ---------------------------------------------------------------------
+   * Shape and elevation
+   *
+   * One radius scale, applied consistently. Shadows are tinted to the
+   * background hue rather than pure black, and kept shallow — this is a
+   * dense data tool, not a marketing page.
+   * ------------------------------------------------------------------- */
+  --radius-control: 0.5rem;
+  --radius-surface: 0.75rem;
+
+  --shadow-raised: 0 1px 2px oklch(23% 0.012 250 / 0.06);
+  --shadow-overlay:
+    0 12px 32px oklch(23% 0.012 250 / 0.14), 0 2px 8px oklch(23% 0.012 250 / 0.08);
+
+  /* ---------------------------------------------------------------------
+   * Touch targets
+   *
+   * The Junior works one-handed, outdoors, sometimes gloved. 44px is the
+   * floor for anything tappable in the field app; the admin console is a
+   * mouse-and-keyboard surface and may go denser.
+   * ------------------------------------------------------------------- */
+  --spacing-touch: 2.75rem;
+  --spacing-touch-lg: 3.25rem;
+}
+
+/**
+ * Two density modes, because this product is genuinely two products.
+ *
+ * `data-density="comfortable"` — the Junior's field app at 360px. Large
+ * targets, generous spacing, high contrast.
+ * `data-density="compact"` — the admin console, where information density is
+ * a feature and a Senior scans hundreds of rows.
+ *
+ * Components read these variables rather than hard-coding sizes, so the same
+ * component serves both surfaces without a `dense` boolean prop.
+ */
+:root,
+[data-density="comfortable"] {
+  --control-height: var(--spacing-touch);
+  --control-padding-x: 1rem;
+  --row-padding-y: 0.875rem;
+  --stack-gap: 1rem;
+}
+
+[data-density="compact"] {
+  --control-height: 2.25rem;
+  --control-padding-x: 0.75rem;
+  --row-padding-y: 0.5rem;
+  --stack-gap: 0.625rem;
+}
+
+/* Focus is always visible. Never remove it without replacing it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Numbers line up in columns. Money is compared vertically constantly. */
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+}

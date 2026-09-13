@@ -38,13 +38,13 @@ POST   /api/cash-handovers/:id/acknowledgement
 
 **Nesting is one level deep, maximum.** `/api/lines/:id/customers` is fine; deeper nesting becomes a query parameter.
 
-| Method | Semantics |
-| --- | --- |
-| `GET` | Read, no side effects |
-| `POST` | Create, or a state transition |
-| `PATCH` | Partial update |
-| `PUT` | Not used — no full-replacement semantics anywhere |
-| `DELETE` | Soft delete only |
+| Method   | Semantics                                         |
+| -------- | ------------------------------------------------- |
+| `GET`    | Read, no side effects                             |
+| `POST`   | Create, or a state transition                     |
+| `PATCH`  | Partial update                                    |
+| `PUT`    | Not used — no full-replacement semantics anywhere |
+| `DELETE` | Soft delete only                                  |
 
 **Collections are never `PATCH`ed or `DELETE`d.** There is no update route for them at all — corrections are `POST /collections/:id/correction` (BR-14).
 
@@ -68,11 +68,11 @@ Dates: `businessDate` as `YYYY-MM-DD`, timestamps as ISO 8601 with offset.
 
 `POST /api/collections` requires an `idempotencyKey` in the body (BR-13).
 
-| Situation | Response |
-| --- | --- |
-| First submission | `201` with the created collection |
-| Replay of the same key | **`200` with the original body** |
-| Key present, different payload | `409` — a genuine client bug |
+| Situation                      | Response                          |
+| ------------------------------ | --------------------------------- |
+| First submission               | `201` with the created collection |
+| Replay of the same key         | **`200` with the original body**  |
+| Key present, different payload | `409` — a genuine client bug      |
 
 > A replay returns success, not a conflict. The client needs to know the collection exists; whether this request created it is irrelevant. Returning `409` for a replay would force clients to treat an error as a success.
 
@@ -86,20 +86,22 @@ One shape for every error:
 {
   "code": "ACCOUNT_INVESTED_EXCEEDS_AMOUNT",
   "message": "Invested amount must be below the account amount",
-  "details": [{ "field": "investedAmount", "issue": "must be less than accountAmount" }],
+  "details": [
+    { "field": "investedAmount", "issue": "must be less than accountAmount" }
+  ],
   "correlationId": "req_01H..."
 }
 ```
 
-| Status | Category |
-| --- | --- |
-| `400` | Malformed input |
-| `401` | No valid session |
-| `403` | Denied action on a visible row |
-| `404` | Absent **or out of scope** |
-| `409` | State conflict (not idempotent replay) |
-| `422` | Business rule violation |
-| `500` | Internal — correlation id only, never a stack trace |
+| Status | Category                                            |
+| ------ | --------------------------------------------------- |
+| `400`  | Malformed input                                     |
+| `401`  | No valid session                                    |
+| `403`  | Denied action on a visible row                      |
+| `404`  | Absent **or out of scope**                          |
+| `409`  | State conflict (not idempotent replay)              |
+| `422`  | Business rule violation                             |
+| `500`  | Internal — correlation id only, never a stack trace |
 
 **`404` for out-of-scope rows is deliberate** (M02): a Junior probing IDs learns nothing about what exists. `403` is safe only where the row's existence is already known.
 
@@ -159,12 +161,12 @@ Better Auth session cookie (`httpOnly`, `secure`, `sameSite: "lax"`). Same-origi
 
 ## Rate limiting
 
-| Endpoint group | Limit |
-| --- | --- |
-| `/api/auth/sign-in` | 5 / 15 min per IP |
+| Endpoint group          | Limit              |
+| ----------------------- | ------------------ |
+| `/api/auth/sign-in`     | 5 / 15 min per IP  |
 | `POST /api/collections` | 300 / min per user |
-| Reports | 10 / min per user |
-| Default | 100 / min per user |
+| Reports                 | 10 / min per user  |
+| Default                 | 100 / min per user |
 
 > The collection limit is high on purpose: a Junior reconnecting after a day offline legitimately submits a hundred collections in seconds. Rate limiting the sync path too aggressively would break the core offline guarantee — the limit exists to catch a runaway client, not to shape normal traffic.
 

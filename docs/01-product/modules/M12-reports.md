@@ -36,7 +36,7 @@ Who handles each line: Senior, Junior count, customer count. Lighter than the li
 
 Per line and overall: account amount, invested amount, profit. Figures come from the ledger (M09), not from summing `account_loan` rows.
 
-> Summing account rows would give the *contracted* position. The ledger gives the *actual* one — profit recognised on money received, not money promised. §22's example totals are contracted values; the report shows both, labelled, because the difference is exactly what the Super Admin needs to see.
+> Summing account rows would give the _contracted_ position. The ledger gives the _actual_ one — profit recognised on money received, not money promised. §22's example totals are contracted values; the report shows both, labelled, because the difference is exactly what the Super Admin needs to see.
 
 ### Collection report
 
@@ -72,14 +72,14 @@ Cash discrepancies by line, Junior and date, traceable to the specific handover 
 
 Per Appendix A:
 
-| Report | Super Admin | Admin | Senior | Junior |
-| --- | :-: | :-: | :-: | :-: |
-| Line-wise | ✓ | ✓ | own line | — |
-| Line overview | ✓ | ✓ | own line | — |
-| Investment | ✓ | ✓ | own line | — |
-| Collection | ✓ | ✓ | own line | — |
-| Overdue | ✓ | ✓ | own line | — |
-| Discrepancy | ✓ | ✓ | own line | — |
+| Report        | Super Admin | Admin |  Senior  | Junior |
+| ------------- | :---------: | :---: | :------: | :----: |
+| Line-wise     |      ✓      |   ✓   | own line |   —    |
+| Line overview |      ✓      |   ✓   | own line |   —    |
+| Investment    |      ✓      |   ✓   | own line |   —    |
+| Collection    |      ✓      |   ✓   | own line |   —    |
+| Overdue       |      ✓      |   ✓   | own line |   —    |
+| Discrepancy   |      ✓      |   ✓   | own line |   —    |
 
 Appendix A's "Limited" for Senior is interpreted throughout as **their own line only**.
 
@@ -97,9 +97,9 @@ Also deferred: scheduled report delivery by email, and custom report builders.
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Unbounded queries as data grows | Mandatory date bounds, server-side pagination |
+| Risk                                    | Mitigation                                                       |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| Unbounded queries as data grows         | Mandatory date bounds, server-side pagination                    |
 | Report figures disagree with dashboards | Same data source, same aggregation functions, shared query layer |
-| Scope bypassed via filters | Scoping applied before filters, tested at API level |
-| Contracted vs actual profit confusion | Both shown, explicitly labelled |
+| Scope bypassed via filters              | Scoping applied before filters, tested at API level              |
+| Contracted vs actual profit confusion   | Both shown, explicitly labelled                                  |

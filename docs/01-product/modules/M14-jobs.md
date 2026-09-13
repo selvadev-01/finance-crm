@@ -10,7 +10,7 @@
 
 **In:** pg-boss queues and schedules, job handlers, retry policy, dead-letter handling, worker process.
 
-**Out:** the business logic each job invokes — owned by the module it belongs to. This module owns *when and how reliably*, never *what*.
+**Out:** the business logic each job invokes — owned by the module it belongs to. This module owns _when and how reliably_, never _what_.
 
 ---
 
@@ -26,16 +26,16 @@ pg-boss manages its own schema in the same PostgreSQL database.
 
 All times `Asia/Kolkata`. Cron expressions live in configuration, not code (M15).
 
-| Job | Schedule | Module | Purpose |
-| --- | --- | --- | --- |
-| `detect-missed-collections` | Hourly, 18:00–22:00 | M07 | Mark `MISSED` slots for closed lines, alert Seniors |
-| `flag-overdue-accounts` | Daily 00:30 | M05 | Set `isOverdue` past target completion |
-| `reconcile-balances` | Daily 01:00 | M09 | Rebuild ledger balances, verify account caches, alert on mismatch |
-| `dispatch-notifications` | Continuous worker | M10 | Drain the notification outbox |
-| `retry-failed-push` | Every 5 min | M10 | Backoff retries |
-| `purge-idempotency-keys` | Daily 02:00 | M07 | Remove keys past 90 days |
-| `deactivate-stale-subscriptions` | Weekly | M10 | Clear subscriptions unseen for 90 days |
-| `archive-audit-partitions` | Monthly | M13 | Roll yearly partitions |
+| Job                              | Schedule            | Module | Purpose                                                           |
+| -------------------------------- | ------------------- | ------ | ----------------------------------------------------------------- |
+| `detect-missed-collections`      | Hourly, 18:00–22:00 | M07    | Mark `MISSED` slots for closed lines, alert Seniors               |
+| `flag-overdue-accounts`          | Daily 00:30         | M05    | Set `isOverdue` past target completion                            |
+| `reconcile-balances`             | Daily 01:00         | M09    | Rebuild ledger balances, verify account caches, alert on mismatch |
+| `dispatch-notifications`         | Continuous worker   | M10    | Drain the notification outbox                                     |
+| `retry-failed-push`              | Every 5 min         | M10    | Backoff retries                                                   |
+| `purge-idempotency-keys`         | Daily 02:00         | M07    | Remove keys past 90 days                                          |
+| `deactivate-stale-subscriptions` | Weekly              | M10    | Clear subscriptions unseen for 90 days                            |
+| `archive-audit-partitions`       | Monthly             | M13    | Roll yearly partitions                                            |
 
 ### Missed detection runs per line, after that line closes
 
@@ -90,21 +90,21 @@ If the transaction rolls back, the job never existed. This removes the entire cl
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View job status and history | Admin+ |
-| View dead-letter queue | Admin+ |
-| Replay a dead-lettered job | Super Admin |
+| Operation                        | Actor       |
+| -------------------------------- | ----------- |
+| View job status and history      | Admin+      |
+| View dead-letter queue           | Admin+      |
+| Replay a dead-lettered job       | Super Admin |
 | Trigger a scheduled job manually | Super Admin |
 
 ---
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Silent job failure | Structured logging, alerting after retry budget, dead-letter visibility |
-| Overlapping runs | pg-boss singleton keys |
+| Risk                                          | Mitigation                                                                          |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Silent job failure                            | Structured logging, alerting after retry budget, dead-letter visibility             |
+| Overlapping runs                              | pg-boss singleton keys                                                              |
 | Non-idempotent handler corrupts data on retry | Idempotency required by convention and covered by tests that run each handler twice |
-| Queue backs up during peak collection hours | Worker scales independently; notification dispatch is the only high-volume queue |
-| Clock or timezone drift on the worker host | Schedules declare timezone explicitly; health check reports server time |
+| Queue backs up during peak collection hours   | Worker scales independently; notification dispatch is the only high-volume queue    |
+| Clock or timezone drift on the worker host    | Schedules declare timezone explicitly; health check reports server time             |

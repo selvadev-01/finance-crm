@@ -25,6 +25,7 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 **Notifications.** None raised here.
 
 **Empty state.** Three distinct messages, never collapsed into one:
+
 - Sunday — "No collections on Sundays"
 - Declared holiday — "Today is a holiday: Deepavali"
 - Nothing due — "No collections due today"
@@ -43,10 +44,10 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 
 **Fields.**
 
-| Field | Type | Default | Notes |
-| --- | --- | --- | --- |
-| Amount | Decimal, numeric keypad | **Pre-filled with expected** | One per account |
-| Note | Text, optional | — | For unusual circumstances |
+| Field  | Type                    | Default                      | Notes                     |
+| ------ | ----------------------- | ---------------------------- | ------------------------- |
+| Amount | Decimal, numeric keypad | **Pre-filled with expected** | One per account           |
+| Note   | Text, optional          | —                            | For unusual circumstances |
 
 **Actions.** Confirm · Confirm as no payment (records ₹0 with a visit) · Cancel.
 
@@ -61,6 +62,7 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 **Empty state.** Not applicable.
 
 **Error state.**
+
 - Amount exceeds outstanding → rejected, stating the outstanding
 - Account completed while offline → rejected on sync, surfaced with an explanation
 - Customer reassigned while offline → rejected on scope, surfaced
@@ -104,16 +106,16 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 
 **Fields.**
 
-| Field | Type | Default | Validation |
-| --- | --- | --- | --- |
-| Customer | Search | — | Required |
-| Account amount `A` | Decimal | — | `> 0` |
-| Invested amount `I` | Decimal | — | `> 0`, **`< A`** |
-| Profit `P` | Decimal | **Derived, read-only** | `A − I` |
-| Daily amount `D` | Decimal | — | `> 0`, `≤ A` |
-| Term days `N` | Integer | `100` | `> 0`, **`D × N ≥ A`** |
-| Disbursement date | Date | Today | **Past dates allowed** — see below |
-| Collected to date | Decimal | `0` | Only shown when the disbursement date is in the past |
+| Field               | Type    | Default                | Validation                                           |
+| ------------------- | ------- | ---------------------- | ---------------------------------------------------- |
+| Customer            | Search  | —                      | Required                                             |
+| Account amount `A`  | Decimal | —                      | `> 0`                                                |
+| Invested amount `I` | Decimal | —                      | `> 0`, **`< A`**                                     |
+| Profit `P`          | Decimal | **Derived, read-only** | `A − I`                                              |
+| Daily amount `D`    | Decimal | —                      | `> 0`, `≤ A`                                         |
+| Term days `N`       | Integer | `100`                  | `> 0`, **`D × N ≥ A`**                               |
+| Disbursement date   | Date    | Today                  | **Past dates allowed** — see below                   |
+| Collected to date   | Decimal | `0`                    | Only shown when the disbursement date is in the past |
 
 **Actions.** Save as pending · Save and disburse · Cancel.
 
@@ -122,6 +124,7 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 **Status.** `PENDING` until disbursed.
 
 **Calculations — all live as the Admin types:**
+
 - `P = A − I`
 - First collection date = next working day after disbursement (BR-03)
 - Schedule preview: `N` slots, last absorbing the remainder (BR-04)
@@ -187,11 +190,11 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 
 **Fields.**
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| ₹500 … ₹1 count | Integer × 9 | One per denomination |
-| Declared total | Decimal | **Computed from counts, read-only** |
-| Note | Text | Required when a discrepancy exists |
+| Field           | Type        | Notes                               |
+| --------------- | ----------- | ----------------------------------- |
+| ₹500 … ₹1 count | Integer × 9 | One per denomination                |
+| Declared total  | Decimal     | **Computed from counts, read-only** |
+| Note            | Text        | Required when a discrepancy exists  |
 
 **Actions.** Submit handover · Acknowledge (receiver) · Dispute (either party).
 
@@ -243,27 +246,27 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 
 ## Remaining screens
 
-| ID | Screen | Pattern |
-| --- | --- | --- |
-| S-08 | Customer list | Filterable list, role-scoped, search by name/mobile/code |
-| S-09 | Customer 360 | Detail with tabs: profile, accounts, history. **Total outstanding labelled as a sum across accounts** |
-| S-10 | Create/edit customer | Form, reference person mandatory, duplicate-mobile warning |
-| S-11 | Account detail | Detail with schedule, collection history, ledger view (Admin+) |
-| S-12 | Line list / detail | List + detail showing §14's figures |
-| S-13 | Sector list / detail | As above |
-| S-14 | Team list / staff detail | List + detail with assignment history |
-| S-15 | Assign staff to line | Form with explicit effective date |
-| S-16 | Collection list | Filterable list, date-bounded |
-| S-17 | Collection detail | Detail with adjustments and approval trail |
-| S-18 | Pending approvals | Action queue; **self-approval blocked** |
-| S-19 | Senior line dashboard | Dashboard, one line |
-| S-20 | Admin dashboard | Dashboard, §21 figures |
-| S-21 | Notification centre | Grouped list, deep-linking |
-| S-22–26 | Reports | Filterable, date-bounded tables |
-| S-27 | Holidays | List + create, future dates only |
-| S-28 | Settings | Form, Super Admin only, audited |
-| S-29 | Audit log | Filterable list, read-only |
-| S-30 | Sign in | Form; generic failure message |
+| ID      | Screen                   | Pattern                                                                                               |
+| ------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| S-08    | Customer list            | Filterable list, role-scoped, search by name/mobile/code                                              |
+| S-09    | Customer 360             | Detail with tabs: profile, accounts, history. **Total outstanding labelled as a sum across accounts** |
+| S-10    | Create/edit customer     | Form, reference person mandatory, duplicate-mobile warning                                            |
+| S-11    | Account detail           | Detail with schedule, collection history, ledger view (Admin+)                                        |
+| S-12    | Line list / detail       | List + detail showing §14's figures                                                                   |
+| S-13    | Sector list / detail     | As above                                                                                              |
+| S-14    | Team list / staff detail | List + detail with assignment history                                                                 |
+| S-15    | Assign staff to line     | Form with explicit effective date                                                                     |
+| S-16    | Collection list          | Filterable list, date-bounded                                                                         |
+| S-17    | Collection detail        | Detail with adjustments and approval trail                                                            |
+| S-18    | Pending approvals        | Action queue; **self-approval blocked**                                                               |
+| S-19    | Senior line dashboard    | Dashboard, one line                                                                                   |
+| S-20    | Admin dashboard          | Dashboard, §21 figures                                                                                |
+| S-21    | Notification centre      | Grouped list, deep-linking                                                                            |
+| S-22–26 | Reports                  | Filterable, date-bounded tables                                                                       |
+| S-27    | Holidays                 | List + create, future dates only                                                                      |
+| S-28    | Settings                 | Form, Super Admin only, audited                                                                       |
+| S-29    | Audit log                | Filterable list, read-only                                                                            |
+| S-30    | Sign in                  | Form; generic failure message                                                                         |
 
 ---
 
@@ -273,7 +276,7 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 
 **Dates** display as `DD MMM YYYY`; business dates never show a time.
 
-**Every list** has loading, empty and error states, and distinguishes *no data yet* from *no results for this filter* from *nothing permitted here*.
+**Every list** has loading, empty and error states, and distinguishes _no data yet_ from _no results for this filter_ from _nothing permitted here_.
 
 **Destructive actions confirm**, naming what will happen — "Write off account ACC-2026-00892 (₹4,200 outstanding)", not "Are you sure?".
 

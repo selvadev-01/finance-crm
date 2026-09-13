@@ -63,14 +63,14 @@ graph TB
     API -.enqueue.-> DB
 ```
 
-| Container | Technology | Responsibility | Today |
-| --- | --- | --- | --- |
+| Container     | Technology                      | Responsibility                                             | Today               |
+| ------------- | ------------------------------- | ---------------------------------------------------------- | ------------------- |
 | Admin console | Next.js 16 App Router, React 19 | Super Admin, Admin, Senior. Desktop-first, server-rendered | Shell runs on :3000 |
-| Junior PWA | Next.js + Service Worker | The route screen. **Offline-first** | Not started |
-| API | NestJS 12 modular monolith, ESM | All business logic, M01–M16 | Shell runs on :3001 |
-| Worker | Same app, `--worker` | Scheduled jobs, notification dispatch | Not started |
-| PostgreSQL | Postgres 16 | Application data **and** pg-boss queues | Not installed |
-| IndexedDB | Browser | Cached route, outbox queue | Not started |
+| Junior PWA    | Next.js + Service Worker        | The route screen. **Offline-first**                        | Not started         |
+| API           | NestJS 12 modular monolith, ESM | All business logic, M01–M16                                | Shell runs on :3001 |
+| Worker        | Same app, `--worker`            | Scheduled jobs, notification dispatch                      | Not started         |
+| PostgreSQL    | Postgres 17.7                   | Application data **and** pg-boss queues                    | Installed, native   |
+| IndexedDB     | Browser                         | Cached route, outbox queue                                 | Not started         |
 
 ### Both front ends are one Next.js application
 
@@ -202,7 +202,7 @@ The Junior's path never blocks on the network. That constraint shapes the entire
 localhost
 ├─ apps/web      :3000    Next.js              ✓ running
 ├─ apps/api      :3001    NestJS (WORKER_ENABLED=true → same process)   ✓ running, port from PORT
-└─ PostgreSQL    :5432    rasi_dev + rasi_test ○ not installed yet
+└─ PostgreSQL    :5432    rasi_dev — schemas: public (dev), test (harness)
 ```
 
 `pnpm dev` starts both apps today. The api reads `process.env.PORT` and falls back to 3001; there is no other configuration in the scaffold.
@@ -225,26 +225,26 @@ These are architectural, not operational, and must hold whatever the eventual ho
 
 ## Quality attributes
 
-| Attribute | How the architecture serves it |
-| --- | --- |
-| **Offline resilience** | IndexedDB outbox, Background Sync, idempotency keys, cached route |
-| **Money correctness** | Append-only records, double-entry ledger, DB-enforced balancing, same-transaction posting |
-| **Auditability** | Event-driven audit, append-only collections, 7-year retention |
-| **Scope safety** | Repository-level predicates, API-level tests for every matrix cell |
-| **Operational simplicity** | One datastore, no containers, no external services beyond push |
-| **Deployment-agnostic** | Nothing assumes a hosting shape; the process split works under any supervisor |
-| **Testability** | Pure domain package; framework-free money logic |
+| Attribute                  | How the architecture serves it                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| **Offline resilience**     | IndexedDB outbox, Background Sync, idempotency keys, cached route                         |
+| **Money correctness**      | Append-only records, double-entry ledger, DB-enforced balancing, same-transaction posting |
+| **Auditability**           | Event-driven audit, append-only collections, 7-year retention                             |
+| **Scope safety**           | Repository-level predicates, API-level tests for every matrix cell                        |
+| **Operational simplicity** | One datastore, no containers, no external services beyond push                            |
+| **Deployment-agnostic**    | Nothing assumes a hosting shape; the process split works under any supervisor             |
+| **Testability**            | Pure domain package; framework-free money logic                                           |
 
 ---
 
 ## What is deliberately absent
 
-| Absent | Why |
-| --- | --- |
-| Microservices | One team, one business, ~60 users. A monolith with enforced module boundaries gives the structure without the distribution |
-| Redis | Postgres covers queueing; caching is not yet needed ([ADR-0004](adr/0004-pg-boss-over-redis.md)) |
-| Separate reporting store | Reports and dashboards read the same data. No ETL, no eventual consistency between two answers to the same question |
-| GraphQL | REST with a typed contract fits; the offline outbox replays plain HTTP |
-| Docker / Kubernetes | PostgreSQL and Node run natively. Containers add a layer for a system deployed to one place |
-| Data import tooling | No exportable dataset exists behind the current spreadsheet. Customers are onboarded by hand |
-| Aggregation/snapshot tables | Live computation is within reach at this size; snapshots are the planned response *if* dashboards degrade (M11) |
+| Absent                      | Why                                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Microservices               | One team, one business, ~60 users. A monolith with enforced module boundaries gives the structure without the distribution |
+| Redis                       | Postgres covers queueing; caching is not yet needed ([ADR-0004](adr/0004-pg-boss-over-redis.md))                           |
+| Separate reporting store    | Reports and dashboards read the same data. No ETL, no eventual consistency between two answers to the same question        |
+| GraphQL                     | REST with a typed contract fits; the offline outbox replays plain HTTP                                                     |
+| Docker / Kubernetes         | PostgreSQL and Node run natively. Containers add a layer for a system deployed to one place                                |
+| Data import tooling         | No exportable dataset exists behind the current spreadsheet. Customers are onboarded by hand                               |
+| Aggregation/snapshot tables | Live computation is within reach at this size; snapshots are the planned response _if_ dashboards degrade (M11)            |

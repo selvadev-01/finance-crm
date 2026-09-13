@@ -4,7 +4,7 @@
 
 **Source:** PDF §9, §22, §23. Rule: BR-18.
 
-> The PDF asks for investment and profit at customer, line, sector and business level (§9, §23). A ledger is how those figures become *provable* rather than merely computed — every total traces to postings, and the postings must balance.
+> The PDF asks for investment and profit at customer, line, sector and business level (§9, §23). A ledger is how those figures become _provable_ rather than merely computed — every total traces to postings, and the postings must balance.
 
 ---
 
@@ -26,14 +26,14 @@ All three are **append-only with no update path at all**. A correction is a new 
 
 ## Ledger accounts
 
-| Type | Cardinality | Normal balance |
-| --- | --- | --- |
-| `CASH_IN_HAND` | One per staff member | Debit |
-| `CASH_AT_OFFICE` | One | Debit |
-| `LOAN_RECEIVABLE` | One per account | Debit |
-| `CAPITAL` | One | Credit |
-| `UNEARNED_PROFIT` | One | Credit |
-| `EARNED_PROFIT` | One | Credit |
+| Type              | Cardinality          | Normal balance |
+| ----------------- | -------------------- | -------------- |
+| `CASH_IN_HAND`    | One per staff member | Debit          |
+| `CASH_AT_OFFICE`  | One                  | Debit          |
+| `LOAN_RECEIVABLE` | One per account      | Debit          |
+| `CAPITAL`         | One                  | Credit         |
+| `UNEARNED_PROFIT` | One                  | Credit         |
+| `EARNED_PROFIT`   | One                  | Credit         |
 
 Created automatically with their owner — a staff member gets a cash account, an account gets a receivable.
 
@@ -45,27 +45,27 @@ Using the reference figures: `A = 10,000`, `I = 8,500`, `P = 1,500`.
 
 **Disbursement**
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `LOAN_RECEIVABLE` (customer) | 10,000.00 | |
-| `CASH_AT_OFFICE` | | 8,500.00 |
-| `UNEARNED_PROFIT` | | 1,500.00 |
+| Ledger account               |     Debit |   Credit |
+| ---------------------------- | --------: | -------: |
+| `LOAN_RECEIVABLE` (customer) | 10,000.00 |          |
+| `CASH_AT_OFFICE`             |           | 8,500.00 |
+| `UNEARNED_PROFIT`            |           | 1,500.00 |
 
 **Collection of ₹100** — profit recognised proportionally at `P / A = 15%`
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `CASH_IN_HAND` (Junior) | 100.00 | |
-| `LOAN_RECEIVABLE` (customer) | | 100.00 |
-| `UNEARNED_PROFIT` | 15.00 | |
-| `EARNED_PROFIT` | | 15.00 |
+| Ledger account               |  Debit | Credit |
+| ---------------------------- | -----: | -----: |
+| `CASH_IN_HAND` (Junior)      | 100.00 |        |
+| `LOAN_RECEIVABLE` (customer) |        | 100.00 |
+| `UNEARNED_PROFIT`            |  15.00 |        |
+| `EARNED_PROFIT`              |        |  15.00 |
 
 **Handover ₹5,000, Junior → Senior**
 
-| Ledger account | Debit | Credit |
-| --- | ---: | ---: |
-| `CASH_IN_HAND` (Senior) | 5,000.00 | |
-| `CASH_IN_HAND` (Junior) | | 5,000.00 |
+| Ledger account          |    Debit |   Credit |
+| ----------------------- | -------: | -------: |
+| `CASH_IN_HAND` (Senior) | 5,000.00 |          |
+| `CASH_IN_HAND` (Junior) |          | 5,000.00 |
 
 **Adjustment** — the reverse of the original, at the original's proportions.
 **Write-off** — remaining receivable and unearned profit cleared against a loss account.
@@ -104,12 +104,12 @@ This is also why `sourceTable` + `sourceId` is a deliberate polymorphic referenc
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| View ledger accounts and balances | Admin+ |
-| View transactions and entries | Admin+ |
-| Trial balance report | Admin+ |
-| Post a transaction | **System only** — no human-initiated posting endpoint exists |
+| Operation                         | Actor                                                        |
+| --------------------------------- | ------------------------------------------------------------ |
+| View ledger accounts and balances | Admin+                                                       |
+| View transactions and entries     | Admin+                                                       |
+| Trial balance report              | Admin+                                                       |
+| Post a transaction                | **System only** — no human-initiated posting endpoint exists |
 
 Seniors cannot read the ledger: cash and capital account balances would let them infer business-wide figures they are not permitted to see.
 
@@ -125,10 +125,10 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Ledger and state diverge | Same-transaction commitment; nightly reconciliation |
-| Rounding leaves residual unearned profit | Final collection absorbs the difference; verified nightly |
+| Risk                                            | Mitigation                                                             |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| Ledger and state diverge                        | Same-transaction commitment; nightly reconciliation                    |
+| Rounding leaves residual unearned profit        | Final collection absorbs the difference; verified nightly              |
 | Polymorphic source has no referential integrity | Accepted — guaranteed by co-commitment; reconciliation detects orphans |
-| Balance cache drifts | Recomputed nightly from entries, which are immutable |
-| An imbalanced transaction is written | Database trigger makes it impossible, not merely unlikely |
+| Balance cache drifts                            | Recomputed nightly from entries, which are immutable                   |
+| An imbalanced transaction is written            | Database trigger makes it impossible, not merely unlikely              |

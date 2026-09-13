@@ -8,10 +8,10 @@ This document says how.
 
 ## Two applications, one deployment
 
-| Surface | Roles | Device | Shell |
-| --- | --- | --- | --- |
-| **Admin console** | Super Admin, Admin, Senior | Desktop and tablet | Sidebar navigation |
-| **Field app** | Junior | Phone | **No navigation chrome** |
+| Surface           | Roles                      | Device             | Shell                    |
+| ----------------- | -------------------------- | ------------------ | ------------------------ |
+| **Admin console** | Super Admin, Admin, Senior | Desktop and tablet | Sidebar navigation       |
+| **Field app**     | Junior                     | Phone              | **No navigation chrome** |
 
 One Next.js deployment, routed by role at sign-in. A Junior signing in never sees the console shell; a Super Admin never sees the route screen.
 
@@ -19,17 +19,17 @@ One Next.js deployment, routed by role at sign-in. A Junior signing in never see
 
 ## Navigation by role
 
-| Item | Super Admin | Admin | Senior | Junior |
-| --- | :-: | :-: | :-: | :-: |
-| Dashboard | ✓ | ✓ | Line view | **Route** |
-| Customers | ✓ | ✓ | Own line | Assigned |
-| Sectors | ✓ | ✓ | — | — |
-| Lines | ✓ | ✓ | Own line | — |
-| Collections | ✓ | ✓ | ✓ | Own entries |
-| Team | ✓ | ✓ | Own line | — |
-| Notifications | ✓ | ✓ | ✓ | ✓ |
-| Reports | ✓ | ✓ | Limited | — |
-| Settings | ✓ | — | — | — |
+| Item          | Super Admin | Admin |  Senior   |   Junior    |
+| ------------- | :---------: | :---: | :-------: | :---------: |
+| Dashboard     |      ✓      |   ✓   | Line view |  **Route**  |
+| Customers     |      ✓      |   ✓   | Own line  |  Assigned   |
+| Sectors       |      ✓      |   ✓   |     —     |      —      |
+| Lines         |      ✓      |   ✓   | Own line  |      —      |
+| Collections   |      ✓      |   ✓   |     ✓     | Own entries |
+| Team          |      ✓      |   ✓   | Own line  |      —      |
+| Notifications |      ✓      |   ✓   |     ✓     |      ✓      |
+| Reports       |      ✓      |   ✓   |  Limited  |      —      |
+| Settings      |      ✓      |   —   |     —     |      —      |
 
 **Hidden, not disabled.** A Senior does not see a greyed-out Sectors link — it is absent. A disabled control invites the question "how do I get access", which is not a conversation the product should start.
 
@@ -101,12 +101,12 @@ Settings                     Super Admin only
 
 ## Landing by role
 
-| Role | Lands on | Because |
-| --- | --- | --- |
-| Super Admin | Business overview | "How did we do today" is the question they open the app to ask |
-| Admin | Operational dashboard | Today's work: new customers, pending approvals, problem lines |
-| Senior | Their line's dashboard | Their entire scope is one line |
-| Junior | Today's route | Their entire job |
+| Role        | Lands on               | Because                                                        |
+| ----------- | ---------------------- | -------------------------------------------------------------- |
+| Super Admin | Business overview      | "How did we do today" is the question they open the app to ask |
+| Admin       | Operational dashboard  | Today's work: new customers, pending approvals, problem lines  |
+| Senior      | Their line's dashboard | Their entire scope is one line                                 |
+| Junior      | Today's route          | Their entire job                                               |
 
 ---
 
@@ -149,11 +149,11 @@ Resource-oriented, bookmarkable, shareable. **The Junior's routes are under `/ro
 
 ## Responsive behaviour
 
-| Width | Console |
-| --- | --- |
-| ≥1280px | Sidebar expanded, dense tables |
+| Width      | Console                                                |
+| ---------- | ------------------------------------------------------ |
+| ≥1280px    | Sidebar expanded, dense tables                         |
 | 768–1279px | Sidebar collapsed to icons, tables scroll horizontally |
-| <768px | Sidebar becomes a drawer; tables become cards |
+| <768px     | Sidebar becomes a drawer; tables become cards          |
 
 The Junior's app is **phone-only by design** — 360px is the design target, and it is not adapted upward for desktop because it is never used there.
 

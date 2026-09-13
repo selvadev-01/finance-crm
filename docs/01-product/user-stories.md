@@ -11,7 +11,8 @@ Acceptance criteria are Gherkin. Money-critical stories carry full scenarios inc
 ## E01 — Identity and Access (M01, M02)
 
 ### US-001 · Staff sign-in · P0
-*As a staff member, I want to sign in, so that I can use Rasi.*
+
+_As a staff member, I want to sign in, so that I can use Rasi._
 
 ```gherkin
 Scenario: Valid credentials
@@ -37,13 +38,16 @@ Scenario: Field device stays signed in
 > The last scenario is a hard requirement, not a nicety. A session expiring overnight would strand a Junior with no way to sign in and no way to record collections.
 
 ### US-002 · Sign out · P0
+
 Session invalidated server-side; **any unsynced offline collections block sign-out with a warning**, since local data is lost with the session.
 
 ### US-003 · Password reset · P1
+
 Email-based. Admin-initiated reset for field staff without email access.
 
 ### US-004 · Server-side scope enforcement · P0
-*As the business, I want data scoping enforced by the API, so that hidden UI is not the only protection.*
+
+_As the business, I want data scoping enforced by the API, so that hidden UI is not the only protection._
 
 ```gherkin
 Scenario: Junior requests another line's customer
@@ -65,6 +69,7 @@ Scenario: Scope follows reassignment
 ```
 
 ### US-005 · Register a device for push · P1
+
 Device registers for Web Push or FCM depending on the configured provider; the same user may have several active devices.
 
 ---
@@ -72,9 +77,11 @@ Device registers for Web Push or FCM depending on the configured provider; the s
 ## E02 — Organisation (M03)
 
 ### US-010 · Manage sectors · P0
+
 Create, rename, deactivate. A sector with active lines cannot be deactivated.
 
 ### US-011 · Manage lines · P0
+
 Create a line within a sector, rename, deactivate. A line with `ACTIVE` accounts cannot be deactivated.
 
 ### US-012 · Assign a Senior to a line · P0
@@ -90,7 +97,8 @@ Scenario: Assigning replaces the incumbent
 ```
 
 ### US-013 · Move a Junior between lines · P0
-*As an Admin, I want to move a Junior to another line, so that staffing follows demand.*
+
+_As an Admin, I want to move a Junior to another line, so that staffing follows demand._
 
 ```gherkin
 Scenario: Mid-term reassignment preserves history
@@ -105,9 +113,11 @@ Scenario: Mid-term reassignment preserves history
 > This scenario is the acceptance test for BR-15. If Line 3's totals move, the implementation is wrong.
 
 ### US-014 · View who is on which line · P1
+
 Covers PDF §20 — Senior, Junior count and customer count per line.
 
 ### US-015 · View assignment history · P2
+
 Who was responsible for a line on any past date. Needed when investigating an old discrepancy.
 
 ---
@@ -115,6 +125,7 @@ Who was responsible for a line on any past date. Needed when investigating an ol
 ## E03 — Customers (M04)
 
 ### US-020 · Onboard a customer · P0
+
 Name, mobile, address, sector, line, and at least one reference person. Assignment to a Junior happens here or at account creation.
 
 ```gherkin
@@ -133,7 +144,9 @@ Scenario: Duplicate mobile is allowed but warned
 > Mobile numbers are shared within families and between a customer and their shop. Blocking duplicates would obstruct real onboarding; warning catches genuine double-entry.
 
 ### US-021 · Edit a customer · P1
+
 ### US-022 · Customer 360 · P1
+
 Profile, all accounts (active and completed), full collection history, outstanding across accounts, references, assigned staff.
 
 ```gherkin
@@ -146,9 +159,11 @@ Scenario: Multiple active accounts
 ```
 
 ### US-023 · Transfer a customer to another line · P1
+
 Future collections attribute to the new line; historical collections do not move (BR-15).
 
 ### US-024 · Search customers · P1
+
 By name, mobile or code, scoped by role.
 
 ---
@@ -156,7 +171,8 @@ By name, mobile or code, scoped by role.
 ## E04 — Accounts (M05, M06)
 
 ### US-030 · Create an account · P0
-*As an Admin, I want to create an account with live-derived values, so that mistakes surface before saving.*
+
+_As an Admin, I want to create an account with live-derived values, so that mistakes surface before saving._
 
 ```gherkin
 Scenario: Derivation is live
@@ -192,7 +208,8 @@ Scenario: A second concurrent account is permitted
 ```
 
 ### US-030a · Create a mid-term account · P0
-*As an Admin, I want to enter a customer who is already partway through their term, so that existing customers can be brought into Rasi.*
+
+_As an Admin, I want to enter a customer who is already partway through their term, so that existing customers can be brought into Rasi._
 
 ```gherkin
 Scenario: Past disbursement date with a collected balance
@@ -232,6 +249,7 @@ Scenario: Last slot absorbs the remainder
 ```
 
 ### US-032 · Disburse an account · P0
+
 Status `PENDING → ACTIVE`; ledger posts the disbursement (BR-18); schedule activates.
 
 ### US-033 · Account completes on balance · P0
@@ -284,6 +302,7 @@ Scenario: Holiday raises no missed alerts
 ```
 
 ### US-035 · Close an account manually · P2
+
 Super Admin marks `DEFAULTED` or `WRITTEN_OFF` with a mandatory reason; collection stops; the ledger posts a write-off.
 
 ---
@@ -291,7 +310,8 @@ Super Admin marks `DEFAULTED` or `WRITTEN_OFF` with a mandatory reason; collecti
 ## E05 — Collections (M07)
 
 ### US-040 · View today's route · P0
-*As a Junior, I want today's route, so that I know who to visit and what to collect.*
+
+_As a Junior, I want today's route, so that I know who to visit and what to collect._
 
 ```gherkin
 Scenario: Route content
@@ -351,7 +371,8 @@ Scenario: Cannot exceed outstanding
 ```
 
 ### US-042 · Split a payment across accounts · P1
-*As a Junior, I want to split one payment across a customer's accounts, so that each account's balance is correct.*
+
+_As a Junior, I want to split one payment across a customer's accounts, so that each account's balance is correct._
 
 ```gherkin
 Scenario: Explicit split
@@ -408,6 +429,7 @@ Scenario: Self-approval is blocked
 ```
 
 ### US-045 · View collection history · P1
+
 Per account and per customer, showing originals and adjustments with variance and collector.
 
 ---
@@ -496,6 +518,7 @@ Scenario: Sync after close
 ```
 
 ### US-056 · Device storage limits · P2
+
 Warn at 100 unsynced entries; block new entries beyond a hard limit with instructions to find connectivity.
 
 ---
@@ -540,15 +563,19 @@ Scenario: Discrepancy is recorded, not blocked
 > Blocking a short handover would mean the cash never gets recorded as moving. Recording the discrepancy is what makes it traceable.
 
 ### US-062 · Acknowledge a handover · P0
+
 Cash has not moved until acknowledged; the ledger posts on acknowledgement (BR-17, BR-18).
 
 ### US-063 · Dispute a handover · P1
+
 Either party may dispute with a note; escalates to Admin.
 
 ### US-064 · Senior hands over to Admin · P0
+
 Second hop, same mechanism.
 
 ### US-065 · Investigate a discrepancy · P1
+
 Trace from a line discrepancy to the specific handover and denomination breakdown.
 
 ---
@@ -556,6 +583,7 @@ Trace from a line discrepancy to the specific handover and denomination breakdow
 ## E08 — Notifications (M10)
 
 ### US-070 · Notification centre · P1
+
 Role-scoped list with unread badge, categorised `INFORMATION` / `SUCCESS` / `WARNING` / `ALERT` (PDF §24); each deep-links to its subject.
 
 ### US-071 · Push notifications · P1
@@ -579,9 +607,11 @@ Scenario: Push failure does not lose the notification
 ```
 
 ### US-072 · Senior alerts · P0
+
 Low, extra, no-payment, missed, account completion, new assignment, discrepancy — scoped to their line (PDF §12).
 
 ### US-073 · Notification preferences · P2
+
 Per-category opt-out. `ALERT` cannot be disabled.
 
 ---
@@ -606,24 +636,31 @@ Scenario: Every figure drills down
 > PDF §17 lists thirteen figures. Fitting them above the fold on a phone is a design problem, not a data problem — the screen specs resolve it by ranking, not by dropping any.
 
 ### US-081 · Sector comparison · P1
+
 §18 and §19 — line count, customers, amounts, and how many sectors tallied, had extra, had low collection.
 
 ### US-082 · Admin operational dashboard · P1
+
 §21 — new and active customers, completed accounts, sector and line breakdowns, collection status, assignments, investment and profit.
 
 ### US-083 · Senior line dashboard · P1
+
 One line: today's expected and collected, each Junior's progress, open alerts, accounts nearing completion, overdue accounts.
 
 ### US-084 · Line-wise report · P1
+
 §14 — sector, Senior, Juniors, customers, account count and value, invested, profit, expected, actual, pending, extra, completed.
 
 ### US-085 · Investment overview · P1
+
 §22 — per line and overall: account amount, invested, profit.
 
 ### US-086 · Collection report · P1
+
 Date range, filterable by line, sector, Junior, classification.
 
 ### US-087 · Overdue report · P1
+
 Accounts past target completion, ordered by outstanding and days overdue.
 
 ---
@@ -631,18 +668,23 @@ Accounts past target completion, ordered by outstanding and days overdue.
 ## E10 — Audit and Administration (M13, M15)
 
 ### US-090 · Audit log · P0
+
 Every create, update, approve, reject, login and day reopen recorded with actor, before/after, IP and timestamp. **Append-only and visible to no role as editable.**
 
 ### US-091 · Investigate an account's history · P1
+
 Full chronological trail — creation, disbursement, every collection, adjustments, approvals, completion.
 
 ### US-092 · Manage staff · P1
+
 Create, suspend, reset credentials. Role change is Super Admin only.
 
 ### US-093 · Declare holidays · P1
+
 Business-wide or per sector; future dates only; regenerates affected schedules and notifies.
 
 ### US-094 · Business settings · P2
+
 Super Admin only, audited.
 
 ### US-095 · Nightly reconciliation · P0
@@ -662,18 +704,18 @@ Scenario: Cached balances are verified
 
 ## Summary
 
-| Epic | Stories | P0 |
-| --- | --- | --- |
-| E01 Identity and Access | 5 | 2 |
-| E02 Organisation | 6 | 3 |
-| E03 Customers | 5 | 1 |
-| E04 Accounts | 7 | 6 |
-| E05 Collections | 6 | 3 |
-| E06 Offline | 7 | 5 |
-| E07 Day Close and Cash | 6 | 3 |
-| E08 Notifications | 4 | 1 |
-| E09 Dashboards and Reports | 8 | 0 |
-| E10 Audit and Administration | 6 | 2 |
-| **Total** | **60** | **26** |
+| Epic                         | Stories | P0     |
+| ---------------------------- | ------- | ------ |
+| E01 Identity and Access      | 5       | 2      |
+| E02 Organisation             | 6       | 3      |
+| E03 Customers                | 5       | 1      |
+| E04 Accounts                 | 7       | 6      |
+| E05 Collections              | 6       | 3      |
+| E06 Offline                  | 7       | 5      |
+| E07 Day Close and Cash       | 6       | 3      |
+| E08 Notifications            | 4       | 1      |
+| E09 Dashboards and Reports   | 8       | 0      |
+| E10 Audit and Administration | 6       | 2      |
+| **Total**                    | **60**  | **26** |
 
-**Where the risk concentrates:** E06 (Offline) is five P0 stories and the highest technical risk in the project. E04 and E05 carry the money correctness. E09 has no P0 stories at all — dashboards are how the business *sees* the data, but nothing is lost if they arrive late, whereas a collection that fails to record is gone.
+**Where the risk concentrates:** E06 (Offline) is five P0 stories and the highest technical risk in the project. E04 and E05 carry the money correctness. E09 has no P0 stories at all — dashboards are how the business _sees_ the data, but nothing is lost if they arrive late, whereas a collection that fails to record is gone.

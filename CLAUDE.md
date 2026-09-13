@@ -4,15 +4,18 @@ Daily-collection finance application replacing a manual Google Sheet process —
 
 The repo directory is `finance-crm`; the product and the root package are `rasi`.
 
-## State: specification complete, code is a scaffold
+## State: Phase 0 complete, no product modules built
 
-The `docs/` set fully specifies the system (16 modules, 9 ADRs, 60 stories). **Almost none of it is built.** What exists:
+The `docs/` set fully specifies the system (16 modules, 10 ADRs, 97 stories). **Phase 0 foundations are done; none of M01–M16 is built.** What exists:
 
-- `apps/web` — Next.js 16 App Router starter page, runs on :3000
-- `apps/api` — NestJS 12 `AppController`/`AppService` scaffold, runs on :3001
-- `packages/ui` (`@repo/ui`), `packages/eslint-config`, `packages/typescript-config`
+- `apps/web` — Next.js 16, Tailwind v4, a design-system preview at `/`, runs on :3000 and proxies `/api` to the API in development
+- `apps/api` — NestJS 12 with Better Auth mounted at `/api/auth/*`; the create-nest-app scaffold has been deleted
+- `packages/db` — Prisma 7, the full 28-table schema, two applied migrations
+- `packages/domain`, `packages/contracts` — created and boundary-enforced, deliberately empty until Phase 1
+- `packages/ui` — Tailwind v4 tokens and a small component base
+- PostgreSQL 17 — one database `rasi_dev`, `public` for development and `test` for the harness
 
-No database, no Prisma, no auth, no domain logic, no M01–M16. Before assuming a module, package or table exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list. The scaffold `app.controller.ts` / `app.service.ts` and the starter page are meant to be deleted, not grown.
+No domain logic, no scoping layer, no M01–M16. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
 
 ## Commands
 
@@ -27,7 +30,11 @@ pnpm test          # Vitest in api; nothing else has tests yet
 pnpm format        # Prettier over ts, tsx, md
 ```
 
-Node >=24, pnpm 11.25.0 pinned via `packageManager`. PostgreSQL will be installed **natively, no Docker**.
+`pnpm test` runs the Tier 1 suite; `pnpm --filter api test:e2e` runs the HTTP tier. Both need PostgreSQL running and a `.env` — copy `.env.example`. `packages/db` adds `db:migrate`, `db:deploy`, `db:reset`, `db:generate` and `db:studio`.
+
+Node >=24, pnpm 11.25.0 pinned via `packageManager`. PostgreSQL 17 is installed **natively, no Docker** — one database `rasi_dev`, with `public` for development and `test` owned by the harness. Setup is in [packages/db/README.md](packages/db/README.md).
+
+**Never install Prisma with `@latest`.** `prisma`'s `latest` dist-tag currently points at an 8.0 release candidate while `@prisma/client`'s points at stable 7.10.0, so the obvious command installs mismatched majors. Both are pinned to exactly `7.10.0`.
 
 ## Non-negotiables
 
@@ -43,9 +50,13 @@ Out-of-scope rows return `404`, not `403`. Every RBAC matrix cell is an API-leve
 
 ## Conventions
 
-**Package names are `@repo/*`** — `@repo/db`, `@repo/domain`, `@repo/contracts` when those get created. Not `@rasi/*`.
+**Package names are `@repo/*`** — `@repo/db`, `@repo/domain`, `@repo/contracts`, `@repo/ui`. Not `@rasi/*`.
 
-**`apps/api` is ESM.** Relative imports carry a `.js` extension even from `.ts` files: `import { X } from './x.service.js'`. Omitting it type-checks and fails at runtime.
+**`apps/api` is ESM.** Relative imports carry a `.js` extension even from `.ts` files: `import { X } from './x.service.js'`. Omitting it type-checks and fails at runtime. The same applies in `packages/db` and `packages/domain`, which are NodeNext.
+
+**`@repo/ui` is the exception — Bundler resolution, no `.js` specifiers.** Resolution has to match the consumer: `@repo/ui` ships raw TSX compiled by Turbopack, which cannot resolve `./badge.js` to `badge.tsx`. Do not "align" it with the others.
+
+**`apps/api` stays on TypeScript 6.** TypeScript 7 is the native port and ships only the `tsc` executable — no programmatic compiler API, which the Nest CLI needs to build. Raising it type-checks fine and then fails at `nest build`. Revisit when 7.1 restores the API.
 
 **`packages/domain` must stay framework-free** — no Prisma, no NestJS. That is what makes the money maths exhaustively testable, and it does not come back once broken.
 
@@ -55,17 +66,32 @@ Out-of-scope rows return `404`, not `403`. Every RBAC matrix cell is an API-leve
 
 **Vitest, not Jest.** Test names state behaviour, not method names.
 
+## Frontend and design system
+
+**`@repo/ui` is Tailwind v4 with an owned component base.** Tokens live in `packages/ui/src/theme.css` as a `@theme` block and are the only source of colour, type, radius and elevation — a hard-coded hex value is a review comment. Full guidance in [docs/05-ux/design-system.md](docs/05-ux/design-system.md), decision in [ADR-0010](docs/02-architecture/adr/0010-tailwind-v4-component-base.md).
+
+**Invoke `ecc:design-system`** before changing tokens or adding a component family, and run its audit and slop-check before marking any UI story `Done`.
+
+**Component APIs follow `vercel-composition-patterns`** — explicit variants, never boolean props (`tone="danger"`, not `<Button primary danger>`); no `dense` prop, read the density variables; no `forwardRef` on React 19. **`apps/web` follows `vercel-react-best-practices`** — Server Components by default, with the Junior's route as the documented client-heavy exception.
+
+**`design-taste-frontend` applies as an anti-slop review checklist only.** Its own §13 rules it out for dashboards, data tables and multi-step product UI, which is nearly all of Rasi — do not apply its hero dials or landing-page composition rules to a collections table.
+
+**Icons: `@phosphor-icons/react`, one family, `strokeWidth` 1.5.** Never hand-roll an SVG path.
+
+**Money never becomes a `number` in the UI.** `formatCurrency` takes a decimal string; `toFixed` is banned.
+
 ## Docs map
 
-| Need | Read |
-| --- | --- |
-| What exists vs what doesn't | [04-engineering/project-structure.md](docs/04-engineering/project-structure.md) |
-| Domain vocabulary | [00-overview/glossary.md](docs/00-overview/glossary.md) |
-| Money rules, with worked examples | [01-product/business-rules.md](docs/01-product/business-rules.md) |
-| A module's spec | `docs/01-product/modules/M01`–`M16` |
-| Why a decision was made | [02-architecture/adr/](docs/02-architecture/adr/) |
-| Data model | [03-data/erd.md](docs/03-data/erd.md), [03-data/data-dictionary.md](docs/03-data/data-dictionary.md) |
-| What to build next | [06-delivery/roadmap.md](docs/06-delivery/roadmap.md) |
+| Need                              | Read                                                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| What exists vs what doesn't       | [04-engineering/project-structure.md](docs/04-engineering/project-structure.md)                      |
+| Domain vocabulary                 | [00-overview/glossary.md](docs/00-overview/glossary.md)                                              |
+| Money rules, with worked examples | [01-product/business-rules.md](docs/01-product/business-rules.md)                                    |
+| A module's spec                   | `docs/01-product/modules/M01`–`M16`                                                                  |
+| Why a decision was made           | [02-architecture/adr/](docs/02-architecture/adr/)                                                    |
+| Data model                        | [03-data/erd.md](docs/03-data/erd.md), [03-data/data-dictionary.md](docs/03-data/data-dictionary.md) |
+| Tokens, density, components       | [05-ux/design-system.md](docs/05-ux/design-system.md)                                                |
+| What to build next                | [06-delivery/roadmap.md](docs/06-delivery/roadmap.md)                                                |
 
 Source of business intent is `docs/reference/Rasi_Application_Product_Documentation_v0.1.pdf`, but where the docs contradict it, **the docs win** — they resolve ambiguities the PDF left open.
 

@@ -1,6 +1,15 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "API_PORT",
+    "BETTER_AUTH_SECRET",
+    "DATABASE_URL",
+    "NODE_ENV",
+    "PORT",
+    "TEST_DATABASE_URL",
+    "WEB_ORIGIN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -9,7 +18,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "lint": {
       "dependsOn": ["^lint"]

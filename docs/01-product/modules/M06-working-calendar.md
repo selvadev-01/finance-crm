@@ -32,11 +32,11 @@ Working-day arithmetic looks like a helper function. It is load-bearing for ever
 
 **A working day is any date that is not a Sunday and not a declared holiday.**
 
-| Rule | Detail |
-| --- | --- |
-| Sundays | Excluded permanently by rule, **never stored as holiday rows** |
-| Holidays | Per sector, or business-wide when `sectorId` is null |
-| Declaration window | Future dates only |
+| Rule                    | Detail                                                                      |
+| ----------------------- | --------------------------------------------------------------------------- |
+| Sundays                 | Excluded permanently by rule, **never stored as holiday rows**              |
+| Holidays                | Per sector, or business-wide when `sectorId` is null                        |
+| Declaration window      | Future dates only                                                           |
 | Retroactive declaration | Blocked — it would invalidate alerts already raised and reopen settled days |
 
 > Holidays are absent from the source document, which mentions only Sundays. They are added because a daily-collection business in India does not collect on major festival days — and without them, every such day raises a false `MISSED` alert for every customer on every line simultaneously. That is the kind of false alarm that teaches Seniors to ignore alerts.
@@ -49,14 +49,14 @@ Working-day arithmetic looks like a helper function. It is load-bearing for ever
 
 A pure, framework-free library in `packages/domain`. No database access, no Nest imports — holidays are passed in.
 
-| Function | Purpose |
-| --- | --- |
-| `isWorkingDay(date, holidays)` | The predicate |
-| `nextWorkingDay(date, holidays)` | First working day strictly after |
-| `addWorkingDays(date, n, holidays)` | The `n`-th working day after |
-| `countWorkingDays(from, to, holidays)` | Inclusive count |
-| `workingDayRange(from, count, holidays)` | Generate `count` consecutive working dates |
-| `toBusinessDate(instant)` | `DATE(instant AT TIME ZONE 'Asia/Kolkata')` |
+| Function                                 | Purpose                                     |
+| ---------------------------------------- | ------------------------------------------- |
+| `isWorkingDay(date, holidays)`           | The predicate                               |
+| `nextWorkingDay(date, holidays)`         | First working day strictly after            |
+| `addWorkingDays(date, n, holidays)`      | The `n`-th working day after                |
+| `countWorkingDays(from, to, holidays)`   | Inclusive count                             |
+| `workingDayRange(from, count, holidays)` | Generate `count` consecutive working dates  |
+| `toBusinessDate(instant)`                | `DATE(instant AT TIME ZONE 'Asia/Kolkata')` |
 
 All dates are calendar dates with no time component, except `toBusinessDate`, which converts an instant.
 
@@ -82,11 +82,11 @@ Staff on affected lines are notified, since a declared holiday changes tomorrow'
 
 ## Operations
 
-| Operation | Actor |
-| --- | --- |
-| Declare holiday | Admin+ (open question 1) |
+| Operation               | Actor                                   |
+| ----------------------- | --------------------------------------- |
+| Declare holiday         | Admin+ (open question 1)                |
 | Remove a future holiday | Admin+ — triggers schedule regeneration |
-| List holidays | All roles |
+| List holidays           | All roles                               |
 
 ---
 
@@ -106,9 +106,9 @@ The most heavily tested module in the system, and cheap to test because it is pu
 
 ## Risks
 
-| Risk | Mitigation |
-| --- | --- |
-| Off-by-one in day counting | Property-based tests plus a hand-verified 100-day fixture |
-| Timezone handling drifts into other modules | `toBusinessDate` is the only conversion point; reviewed as a rule |
-| Holiday declared after schedules are generated | Explicit regeneration path with notification |
-| DST | India observes none — but the implementation uses a real timezone library rather than a fixed offset, so this is not a latent assumption |
+| Risk                                           | Mitigation                                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Off-by-one in day counting                     | Property-based tests plus a hand-verified 100-day fixture                                                                                |
+| Timezone handling drifts into other modules    | `toBusinessDate` is the only conversion point; reviewed as a rule                                                                        |
+| Holiday declared after schedules are generated | Explicit regeneration path with notification                                                                                             |
+| DST                                            | India observes none — but the implementation uses a real timezone library rather than a fixed offset, so this is not a latent assumption |

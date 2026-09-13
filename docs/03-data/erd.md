@@ -141,7 +141,7 @@ erDiagram
 
 **`account_schedule` is a regenerable plan, not history.** Under balance-driven completion (BR-05) the uncollected tail is regenerated whenever variance changes the outlook (BR-06). Slots already `COLLECTED` are immutable; only `PENDING` slots are rewritten. This is what keeps `targetCompletionDate` honest without inventing a second projection mechanism.
 
-**Multiple `ACTIVE` accounts per customer are permitted** (BR-01a) — deliberately *no* constraint restricts this. The structural consequence is that `collection.accountLoanId` is mandatory and never inferred from the customer: a payment always lands on one specific account. Customer-level outstanding is a sum across accounts computed at read time, and is never stored on `customer`.
+**Multiple `ACTIVE` accounts per customer are permitted** (BR-01a) — deliberately _no_ constraint restricts this. The structural consequence is that `collection.accountLoanId` is mandatory and never inferred from the customer: a payment always lands on one specific account. Customer-level outstanding is a sum across accounts computed at read time, and is never stored on `customer`.
 
 ---
 
@@ -218,7 +218,7 @@ erDiagram
 
 **`collection` is append-only** (BR-14). There is no update path in the API: a correction inserts an `ADJUSTMENT` row pointing at the original via `adjustsCollectionId`, gated by `collection_approval`. The collected total is the sum of all confirmed rows, originals and adjustments together.
 
-**Four fields are deliberately denormalised onto `collection`:** `lineId`, `collectedByUserId`, `expectedAmount` and `businessDate`. Each is a *snapshot of a fact that was true when the money changed hands*. Line attribution must not move when a customer transfers (BR-15); the expected amount cannot be recomputed later because the account has progressed since (BR-08); the business date must be indexable and immune to a future timezone policy change (BR-12).
+**Four fields are deliberately denormalised onto `collection`:** `lineId`, `collectedByUserId`, `expectedAmount` and `businessDate`. Each is a _snapshot of a fact that was true when the money changed hands_. Line attribution must not move when a customer transfers (BR-15); the expected amount cannot be recomputed later because the account has progressed since (BR-08); the business date must be indexable and immune to a future timezone policy change (BR-12).
 
 **`idempotencyKey` is `UNIQUE` and carries the whole offline-safety guarantee** (BR-13). The unique constraint is the enforcement point — not application logic, which cannot be made race-free against concurrent replays from the same device.
 
@@ -358,18 +358,18 @@ erDiagram
 
 The dashboards (PDF §17–§23) and the Junior route screen drive these. They are load-bearing, not optimisation:
 
-| Table | Index | Serves |
-| --- | --- | --- |
-| `collection` | `(lineId, businessDate)` | Daily line tally, day close |
-| `collection` | `(accountLoanId, businessDate)` | Account history |
-| `collection` | `(collectedByUserId, businessDate)` | Per-Junior cash reconciliation |
-| `collection` | `UNIQUE (idempotencyKey)` | Offline replay safety (BR-13) |
-| `account_schedule` | `(dueDate, status)` | Today's expected across the business; `MISSED` detection job |
-| `account_loan` | `(lineId, status)` | Line dashboards |
-| `account_loan` | `(status, targetCompletionDate)` | `OVERDUE` flagging job |
-| `line_assignment` | `(lineId, effectiveTo)` | Current staffing lookup |
-| `ledger_entry` | `(ledgerAccountId, id)` | Balance recomputation |
-| `notification` | `(userId, readAt)` | Unread badge |
+| Table              | Index                               | Serves                                                       |
+| ------------------ | ----------------------------------- | ------------------------------------------------------------ |
+| `collection`       | `(lineId, businessDate)`            | Daily line tally, day close                                  |
+| `collection`       | `(accountLoanId, businessDate)`     | Account history                                              |
+| `collection`       | `(collectedByUserId, businessDate)` | Per-Junior cash reconciliation                               |
+| `collection`       | `UNIQUE (idempotencyKey)`           | Offline replay safety (BR-13)                                |
+| `account_schedule` | `(dueDate, status)`                 | Today's expected across the business; `MISSED` detection job |
+| `account_loan`     | `(lineId, status)`                  | Line dashboards                                              |
+| `account_loan`     | `(status, targetCompletionDate)`    | `OVERDUE` flagging job                                       |
+| `line_assignment`  | `(lineId, effectiveTo)`             | Current staffing lookup                                      |
+| `ledger_entry`     | `(ledgerAccountId, id)`             | Balance recomputation                                        |
+| `notification`     | `(userId, readAt)`                  | Unread badge                                                 |
 
 > Dashboard rollups (`Customer → Line → Sector → Business`) are computed live in v1. At 1,000 customers this is comfortably within Postgres's reach. If the Super Admin dashboard degrades, the first response is a nightly `daily_snapshot` table keyed `(lineId, businessDate)` — **not** a cache layer. That decision is deferred rather than pre-built, and recorded in the roadmap.
 

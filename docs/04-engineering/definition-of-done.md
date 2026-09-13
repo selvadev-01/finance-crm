@@ -86,15 +86,15 @@ A story is done when a Junior could use it tomorrow and nobody would be surprise
 
 Stated plainly, because these are the ways work gets called finished when it is not:
 
-| Claim | Reality |
-| --- | --- |
-| "Works on my machine" | The only machine there is — so run the full suite on it, not just the unit tests |
-| "Unit tests pass" | Not run against `rasi_test` |
-| "I'll add tests after" | Not done |
-| "The button is hidden for that role" | Not an access control — the API must refuse it |
-| "It works online" | The offline path is the requirement, not the fallback |
-| "Rounding is close enough" | A paisa of drift compounds across 150,000 collections |
-| "I'll write the ADR later" | The reasoning is gone by then |
+| Claim                                | Reality                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------- |
+| "Works on my machine"                | The only machine there is — so run the full suite on it, not just the unit tests |
+| "Unit tests pass"                    | Not run against the `test` schema                                                |
+| "I'll add tests after"               | Not done                                                                         |
+| "The button is hidden for that role" | Not an access control — the API must refuse it                                   |
+| "It works online"                    | The offline path is the requirement, not the fallback                            |
+| "Rounding is close enough"           | A paisa of drift compounds across 150,000 collections                            |
+| "I'll write the ADR later"           | The reasoning is gone by then                                                    |
 
 ---
 
