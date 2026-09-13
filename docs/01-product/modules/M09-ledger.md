@@ -78,7 +78,11 @@ Profit is earned as money arrives, not at disbursement.
 
 > An account half collected shows roughly half its profit. Recognising the full ₹1,500 at disbursement would make the Super Admin's profit figure a statement of hope rather than fact — it would count profit on money that may never arrive. Proportional recognition is what makes §22's investment overview meaningful.
 >
-> **Rounding:** 15% of ₹100 is exactly ₹15.00, but uneven amounts will not divide cleanly. The final collection on an account absorbs the accumulated difference, so `UNEARNED_PROFIT` for a completed account lands at exactly zero. This is checked by the nightly reconciliation.
+> **Rounding is applied to the running total** (BR-18). Each collection or adjustment posts `round(collectedAfter × P/A) − round(collectedBefore × P/A)`, half-up to the paisa. When the account is fully collected, earned profit is exactly `P` and `UNEARNED_PROFIT` lands at zero — no "final collection" logic exists. This is still checked by the nightly reconciliation.
+
+Implemented in `packages/domain` (`src/ledger/profit.ts`): `profitForCollection({ accountAmount, profitAmount, collectedBefore, amount })` returns the amount to post — debit `UNEARNED_PROFIT` / credit `EARNED_PROFIT` when positive, the reverse when negative, no profit lines when zero. `recognisedProfit` and `unearnedProfit` give the balances for a collected total; `unearnedProfit` is the amount a write-off clears. A total outside `0…A` throws. The mid-term catch-up posting (US-030a) is `profitForCollection` with `collectedBefore = 0`, which yields exactly what a day-one account's individual collections would have earned.
+
+⚠️ **Corrected during implementation.** This note previously said the final collection absorbs the accumulated difference. The running-total method was chosen instead; see BR-18.
 
 ---
 
@@ -128,7 +132,7 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 | Risk                                            | Mitigation                                                             |
 | ----------------------------------------------- | ---------------------------------------------------------------------- |
 | Ledger and state diverge                        | Same-transaction commitment; nightly reconciliation                    |
-| Rounding leaves residual unearned profit        | Final collection absorbs the difference; verified nightly              |
+| Rounding leaves residual unearned profit        | Rounding on the running total cannot leave a residue; verified nightly |
 | Polymorphic source has no referential integrity | Accepted — guaranteed by co-commitment; reconciliation detects orphans |
 | Balance cache drifts                            | Recomputed nightly from entries, which are immutable                   |
 | An imbalanced transaction is written            | Database trigger makes it impossible, not merely unlikely              |

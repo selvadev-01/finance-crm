@@ -2,7 +2,7 @@
 
 What is actually in the repository right now, as opposed to the target shape described in [`system-architecture.md`](../02-architecture/system-architecture.md#repository-shape).
 
-**Read this before starting work.** The specification set is complete; the code is a Turborepo scaffold with two runnable apps and no domain logic. Every module spec (M01–M16) is still unimplemented.
+**Read this before starting work.** The specification set is complete; the code is a Turborepo scaffold with two runnable apps, and `packages/domain` holds the Phase 1 money maths — working calendar, schedule generation, variance classification and profit apportionment — but nothing consumes it yet. Every module spec (M01–M16) is still unimplemented.
 
 ---
 
@@ -16,7 +16,7 @@ rasi/
 ├─ packages/
 │  ├─ contracts/         @repo/contracts — Zod 4.6.2, empty until the first endpoint
 │  ├─ db/                @repo/db — Prisma 7.10.0, schema, migrations, client
-│  ├─ domain/            @repo/domain — decimal.js + date-fns, empty until M06
+│  ├─ domain/            @repo/domain — working calendar (M06), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment (BR-18); decimal.js 10.6.0, date-fns 4.4.0, @date-fns/tz 1.5.0, fast-check 4.10.0 (dev)
 │  ├─ ui/                @repo/ui — Tailwind v4 theme, Button, Badge, empty states
 │  ├─ eslint-config/     @repo/eslint-config — base, boundaries, next, react-internal
 │  └─ typescript-config/ @repo/typescript-config — base, nextjs, react-library
@@ -56,7 +56,7 @@ rasi/
 
 **`@repo/ui` uses Bundler module resolution; `@repo/db` and `@repo/domain` use NodeNext.** This is deliberate and must not be "aligned" — resolution has to match the consumer. `@repo/ui` ships raw TSX compiled by Turbopack, which cannot resolve the `.js` specifiers NodeNext requires; the others are compiled and run by Node, which needs them.
 
-**Vitest, not Jest**, in `apps/api` — including `test:e2e` via `vitest.config.e2e.ts` with supertest.
+**Vitest, not Jest**, in `apps/api` — including `test:e2e` via `vitest.config.e2e.ts` with supertest — and in `packages/domain`, where specs sit beside the source as `*.spec.ts`. Its `build` uses `tsconfig.build.json` to keep them out of `dist`, while `check-types` still covers them.
 
 ---
 
@@ -70,7 +70,7 @@ Run from the repository root; Turborepo fans them out.
 | `pnpm build`       | `next build` + `nest build`, topologically ordered |
 | `pnpm lint`        | ESLint in web/ui, oxlint in api                    |
 | `pnpm check-types` | `tsc --noEmit` across the workspace                |
-| `pnpm test`        | Vitest in api; nothing else has tests yet          |
+| `pnpm test`        | Vitest in api and domain                           |
 | `pnpm format`      | Prettier write across `ts`, `tsx`, `md`            |
 
 `packages/db` adds its own, run with `pnpm --filter @repo/db <script>`:
@@ -115,7 +115,6 @@ Everything in this list is specified but unbuilt. The [roadmap](../06-delivery/r
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | The 24 Rasi models — only Better Auth's four tables exist so far                 | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
 | `packages/db` seed                                                               | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
-| `packages/domain` contents — money maths (the package exists, empty)             | [business-rules.md](../01-product/business-rules.md)                                                                            |
 | `packages/contracts` contents — the ts-rest contract (the package exists, empty) | [ADR-0002](../02-architecture/adr/0002-ts-rest-api-contract.md)                                                                 |
 | `packages/notifications` — Web Push + FCM adapters                               | [notifications.md](../02-architecture/notifications.md)                                                                         |
 | pg-boss queues and the `--worker` boot mode                                      | [ADR-0003](../02-architecture/adr/0003-worker-in-api-process.md), [ADR-0004](../02-architecture/adr/0004-pg-boss-over-redis.md) |
@@ -136,7 +135,9 @@ pnpm dev          # web :3000, api :3001
 
 PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-architecture/system-architecture.md#runtime)). Installed version is **17.7**, not the 16 named in system-architecture.
 
-**One database, two schemas.** `rasi_dev` holds development data in `public`; the harness owns `test` and truncates it between runs. `DATABASE_URL` and `TEST_DATABASE_URL` point at the same database and differ only by `?schema=`. The separately-specified `rasi_test` database was not built — schema separation gives the same protection with less to set up. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
+**One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
+
+**Database constraints** are in nine migrations — `add_better_auth`, `rasi_core`, then seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes. The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
 
 `.env.example` exists at the repository root. Validation of those variables is still an M16 item ([M16 Platform](../01-product/modules/M16-platform.md)); `apps/api` reads `process.env` directly until the config module lands.
 

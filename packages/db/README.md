@@ -4,25 +4,18 @@ Prisma schema, migrations and the client. **Sole owner of the database schema** 
 
 ## Local setup
 
-PostgreSQL is installed natively, no Docker. **One database, two schemas:**
-
-| Schema   | Used by                         | Notes                                        |
-| -------- | ------------------------------- | -------------------------------------------- |
-| `public` | `pnpm dev`, your data, the seed | `DATABASE_URL`                               |
-| `test`   | the test harness only           | `TEST_DATABASE_URL`, truncated between tests |
+PostgreSQL is installed natively, no Docker. **One database, one schema** — `public` in `rasi_dev`, shared by `pnpm dev` and the test suite through `DATABASE_URL`.
 
 One-time creation, as a superuser:
 
 ```sql
 CREATE ROLE rasi WITH LOGIN CREATEDB PASSWORD '...';
 CREATE DATABASE rasi_dev OWNER rasi;
-\c rasi_dev
-CREATE SCHEMA test AUTHORIZATION rasi;
 ```
 
 `CREATEDB` is required: `prisma migrate dev` creates and drops a shadow database to diff migrations against.
 
-Then copy `.env.example` to `.env` at the repository root and fill in the password. Both URLs point at `rasi_dev` and differ only by `?schema=`.
+Then copy `.env.example` to `.env` at the repository root and fill in the password. Apply migrations with `pnpm --filter @repo/db db:deploy` — the test suite checks for pending migrations and refuses to run, but never applies them itself.
 
 ## Scripts
 
@@ -46,6 +39,25 @@ Then copy `.env.example` to `.env` at the repository root and fill in the passwo
 > `authentication.md` says the generated models "must not be hand-edited". Taken literally that is impossible: without the back-relations the schema does not compile. The narrower rule above is what is actually enforceable.
 
 **`src/generated` is not committed.** It is rebuilt by `build`.
+
+## Constraints
+
+Invariants are enforced by PostgreSQL, not only by the services ([coding-guidelines](../../docs/04-engineering/coding-guidelines.md#database)). Where each kind lives:
+
+| Kind                                    | Lives in                                     | Prisma's view                      |
+| --------------------------------------- | -------------------------------------------- | ---------------------------------- |
+| Partial unique index                    | `schema.prisma`, `where: raw(...)`           | Managed (`partialIndexes` preview) |
+| CHECK constraint                        | a `constraints_*` migration                  | Not diffed, never dropped          |
+| Trigger, including deferred ones        | a `constraints_*` migration                  | Not diffed, never dropped          |
+| `NULLS NOT DISTINCT` on an existing key | a `constraints_*` migration, same index name | Not diffed                         |
+
+Rules for writing more:
+
+- **Write the migration by hand** as a new folder, and when it adds a partial index declare it in `schema.prisma` too, copying the SQL from `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`. After applying, that same command must print an empty migration.
+- **Trigger functions pin `SET search_path FROM CURRENT`.** The runtime client does not set `search_path`, so a function that names a table unqualified would otherwise resolve it against the session's default.
+- **Raise with plpgsql's default SQLSTATE or `check_violation`**, and start the message with the rule's name. Prisma's pg adapter turns `restrict_violation` into "Foreign key constraint violated on the (not available)" and drops the message.
+- **Every constraint gets a spec** in `apps/api/test/db-constraints/` that writes straight through Prisma inside `withRollback` and asserts the constraint's name.
+- **Dry-run first:** `BEGIN; \i migration.sql; ROLLBACK;` in psql catches SQL errors without leaving a half-applied migration.
 
 ## Prisma 7 notes
 

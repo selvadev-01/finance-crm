@@ -55,8 +55,8 @@ New to the project? Read in this order:
 | Shared eslint / tsconfig packages                                    | **Done**                  |
 | `apps/web`, `apps/api` booting                                       | **Done**                  |
 | Lint, type-check, test, format scripts                               | **Done**                  |
-| PostgreSQL 17 — `rasi_dev`, `public` + `test` schemas                | **Done**                  |
-| `packages/db` — Prisma 7, 28 tables, 2 migrations                    | **Done**                  |
+| PostgreSQL 17 — `rasi_dev`, single `public` schema                   | **Done**                  |
+| `packages/db` — Prisma 7, 28 tables, 9 migrations, constraints       | **Done**                  |
 | Better Auth, mounted and signing users in                            | **Done**                  |
 | `packages/domain`, `packages/contracts` — empty, boundaries enforced | **Done**                  |
 | `@repo/ui` — Tailwind v4 tokens and component base                   | **Done**                  |

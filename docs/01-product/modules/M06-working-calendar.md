@@ -47,18 +47,26 @@ Working-day arithmetic looks like a helper function. It is load-bearing for ever
 
 ## Interface
 
-A pure, framework-free library in `packages/domain`. No database access, no Nest imports — holidays are passed in.
+A pure, framework-free library in `packages/domain` (`src/calendar/`). No database access, no Nest imports — holidays are passed in.
 
-| Function                                 | Purpose                                     |
-| ---------------------------------------- | ------------------------------------------- |
-| `isWorkingDay(date, holidays)`           | The predicate                               |
-| `nextWorkingDay(date, holidays)`         | First working day strictly after            |
-| `addWorkingDays(date, n, holidays)`      | The `n`-th working day after                |
-| `countWorkingDays(from, to, holidays)`   | Inclusive count                             |
-| `workingDayRange(from, count, holidays)` | Generate `count` consecutive working dates  |
-| `toBusinessDate(instant)`                | `DATE(instant AT TIME ZONE 'Asia/Kolkata')` |
+| Function                                 | Purpose                                                          |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `isWorkingDay(date, holidays)`           | The predicate                                                    |
+| `nextWorkingDay(date, holidays)`         | First working day strictly after                                 |
+| `addWorkingDays(date, n, holidays)`      | The `n`-th working day after; `n = 0` returns `date`             |
+| `countWorkingDays(from, to, holidays)`   | Working days in `(from, to]` — after `from`, up to and incl `to` |
+| `workingDayRange(from, count, holidays)` | The `count` consecutive working dates after `from`               |
+| `toBusinessDate(instant)`                | `DATE(instant AT TIME ZONE 'Asia/Kolkata')`                      |
 
-All dates are calendar dates with no time component, except `toBusinessDate`, which converts an instant.
+**Dates are `CalendarDate`** — a branded `"YYYY-MM-DD"` string, not a JS `Date`, so no conversion can shift a day. It is created by `parseCalendarDate` (which rejects dates that do not exist), by `fromUtcMidnight` when reading a `@db.Date` column (which refuses anything but 00:00 UTC, so a `timestamptz` cannot be truncated into a date), or by `toBusinessDate`. `toUtcMidnight` writes one back.
+
+**Every function counts from the day after its start date.** The start date is day 0 — for an account, the disbursement date, which is never a collection day (BR-03). So `workingDayRange(disbursementDate, slots, holidays)` gives an account's collection days, and `countWorkingDays(disbursementDate, lastSlot, holidays)` is the slot count.
+
+> ⚠️ **Corrected during implementation.** This table previously called `countWorkingDays` an _inclusive_ count, while the testing section required `countWorkingDays(d, addWorkingDays(d, n)) === n`. Both cannot hold: when `d` is a working day an inclusive count gives `n + 1`. The half-open range was chosen because it satisfies the property for every `d` and matches BR-03's day-0 convention.
+
+**`holidays` is a set already resolved for one sector** — business-wide rows plus that sector's own. Resolving scope belongs to the caller; the arithmetic never sees a `sectorId`.
+
+Negative or non-integer counts, and a `to` before `from`, throw `RangeError` rather than returning a plausible number.
 
 > Framework-free is the point: these functions can be tested exhaustively — every day of the week, every boundary, leap years, long holiday runs, month and year crossings — in milliseconds, without a database or an application context. That is what makes exhaustive coverage realistic rather than aspirational.
 
@@ -99,8 +107,10 @@ The most heavily tested module in the system, and cheap to test because it is pu
 - Consecutive holidays, holidays adjacent to Sundays
 - Month, quarter and year crossings; leap years
 - A full 100-day schedule verified against a hand-computed calendar
-- Business-date conversion across the IST/UTC day boundary in both directions
+- Business-date conversion across the IST/UTC day boundary in both directions — **run under a foreign `TZ`**, because on a machine set to IST a conversion that ignores the timezone passes by accident
 - Property test: `countWorkingDays(d, addWorkingDays(d, n)) === n` for all `n`
+
+`countWorkingDays` is computed in closed form and `addWorkingDays` by stepping, so the property test checks two independent algorithms against each other rather than one against itself. The properties run under fast-check over 1990–2100; an exhaustive pass also checks every start date from 2024 to 2028 against a holiday set with runs, Sunday neighbours and year-end dates.
 
 ---
 

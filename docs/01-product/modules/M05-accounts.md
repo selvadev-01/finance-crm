@@ -55,9 +55,13 @@ An account created this way must behave **identically** to one created from day 
 
 ## Schedule
 
-`N` slots on consecutive working days from the first collection day (BR-03, BR-04). Each slot expects `D`, except the last, which expects `A − D × (N − 1)` so the schedule sums exactly to `A`.
+`ceil(A ÷ D)` slots on consecutive working days from the first collection day (BR-03, BR-04) — the count comes from the balance, not from `N`. Each slot expects `min(D, remaining)`, so every slot expects `D` except the last, which takes the remainder, and the schedule sums exactly to `A`.
 
-> **Uneven example:** `A = 10,000`, `D = 150`, `N = 67`. Slots 1–66 expect ₹150 (₹9,900); slot 67 expects ₹100. The customer pays ₹100 on the final day, not ₹150.
+> **Uneven example:** `A = 10,000`, `D = 150`. Slots 1–66 expect ₹150 (₹9,900); slot 67 expects ₹100. The customer pays ₹100 on the final day, not ₹150.
+
+> ⚠️ **Corrected during implementation.** This section previously said `N` slots with the last expecting `A − D × (N − 1)`, which BR-04 had already replaced: with `N = 100` and `D = 150` it gives a final slot of −₹4,850.
+
+**Implemented in `packages/domain`** (`src/schedule/`). One function, `generateSchedule({ outstanding, dailyAmount, after, holidays, firstSequence })`, produces both the initial schedule (`outstanding = A`, `after = disbursementDate`, `firstSequence = 1`) and every regenerated tail. `targetCompletionDate` is the last slot's due date, or `null` when nothing is outstanding. Amounts are `Decimal` in and out; the slot count is integer division on paise, so no decimal precision setting is involved.
 
 ### The schedule is a plan, and its tail is regenerable
 

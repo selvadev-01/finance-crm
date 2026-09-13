@@ -10,12 +10,13 @@ The `docs/` set fully specifies the system (16 modules, 10 ADRs, 97 stories). **
 
 - `apps/web` — Next.js 16, Tailwind v4, a design-system preview at `/`, runs on :3000 and proxies `/api` to the API in development
 - `apps/api` — NestJS 12 with Better Auth mounted at `/api/auth/*`; the create-nest-app scaffold has been deleted
-- `packages/db` — Prisma 7, the full 28-table schema, two applied migrations
-- `packages/domain`, `packages/contracts` — created and boundary-enforced, deliberately empty until Phase 1
+- `packages/db` — Prisma 7, the full 28-table schema, nine applied migrations; every data-dictionary invariant is a database constraint (CHECKs, triggers, partial uniques)
+- `packages/domain` — boundary-enforced; holds the pure money maths: M06 working calendar (`CalendarDate`, working-day arithmetic, `toBusinessDate`), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment on the running total (BR-18) and `toMoney`. Nothing consumes it yet
+- `packages/contracts` — created and boundary-enforced, deliberately empty until the first endpoint
 - `packages/ui` — Tailwind v4 tokens and a small component base
-- PostgreSQL 17 — one database `rasi_dev`, `public` for development and `test` for the harness
+- PostgreSQL 17 — one database `rasi_dev`, one schema `public`, shared by development and tests
 
-No domain logic, no scoping layer, no M01–M16. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
+No scoping layer, no M01–M16 services. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
 
 ## Commands
 
@@ -26,13 +27,15 @@ pnpm install
 pnpm dev           # web :3000, api :3001
 pnpm lint          # ESLint in web/ui, oxlint in api
 pnpm check-types   # NOT "typecheck" — this is the real script name
-pnpm test          # Vitest in api; nothing else has tests yet
+pnpm test          # Vitest in api and domain
 pnpm format        # Prettier over ts, tsx, md
 ```
 
-`pnpm test` runs the Tier 1 suite; `pnpm --filter api test:e2e` runs the HTTP tier. Both need PostgreSQL running and a `.env` — copy `.env.example`. `packages/db` adds `db:migrate`, `db:deploy`, `db:reset`, `db:generate` and `db:studio`.
+`pnpm test` runs the Tier 1 suite; `pnpm --filter api test:e2e` runs the HTTP tier. Both need PostgreSQL running, a `.env` (copy `.env.example`) and migrations applied — the suite refuses to run with pending migrations; apply them with `pnpm --filter @repo/db db:deploy`.
 
-Node >=24, pnpm 11.25.0 pinned via `packageManager`. PostgreSQL 17 is installed **natively, no Docker** — one database `rasi_dev`, with `public` for development and `test` owned by the harness. Setup is in [packages/db/README.md](packages/db/README.md).
+**Tests share the development schema, so never truncate or bulk-delete.** Tier 1 tests run inside `withRollback`; Tier 2 tests tag what they create with `testEmail()` / `testRunTag` and clean up with `deleteTestRunData`. **Never `DROP SCHEMA`** — the `rasi` role cannot create one again. `packages/db` adds `db:migrate`, `db:deploy`, `db:reset`, `db:generate` and `db:studio`.
+
+Node >=24, pnpm 11.25.0 pinned via `packageManager`. PostgreSQL 17 is installed **natively, no Docker** — one database `rasi_dev`, one schema `public`. Setup, and the rules for writing new database constraints, are in [packages/db/README.md](packages/db/README.md).
 
 **Never install Prisma with `@latest`.** `prisma`'s `latest` dist-tag currently points at an 8.0 release candidate while `@prisma/client`'s points at stable 7.10.0, so the obvious command installs mismatched majors. Both are pinned to exactly `7.10.0`.
 

@@ -4,34 +4,42 @@ import { fileURLToPath } from 'node:url';
 
 import { config } from 'dotenv';
 
-import { resolveTestDatabaseUrl } from './database.js';
+import { resolveDatabaseUrl } from './database.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../..');
 
 /**
- * Applies migrations to the `test` schema once per run, before any test file
- * executes.
+ * Refuses to run the suite against a database with pending migrations.
  *
- * `migrate deploy` rather than `migrate dev`: deploy only applies existing
- * migrations and never prompts, generates or resets. A harness that could
- * author migrations, or reset a database on drift, is a harness that can
- * destroy data on a bad day.
+ * Tests share the development schema, so applying migrations here would change
+ * the development database as a side effect of running tests. Instead the
+ * harness checks, and the developer applies them deliberately with
+ * `pnpm --filter @repo/db db:deploy`. `migrate status` exits non-zero when a
+ * migration is pending or the history has diverged.
  */
 export default function setup(): void {
   config({ path: path.join(repoRoot, '.env') });
 
-  // Throws unless the URL resolves to the `test` schema.
-  const testDatabaseUrl = resolveTestDatabaseUrl();
+  const databaseUrl = resolveDatabaseUrl();
 
-  execFileSync(
-    'pnpm',
-    ['--filter', '@repo/db', 'exec', 'prisma', 'migrate', 'deploy'],
-    {
-      cwd: repoRoot,
-      stdio: 'inherit',
-      shell: true,
-      env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-    },
-  );
+  try {
+    execFileSync(
+      'pnpm',
+      ['--filter', '@repo/db', 'exec', 'prisma', 'migrate', 'status'],
+      {
+        cwd: repoRoot,
+        stdio: 'pipe',
+        shell: true,
+        env: { ...process.env, DATABASE_URL: databaseUrl },
+      },
+    );
+  } catch (error) {
+    const output = String((error as { stdout?: Buffer }).stdout ?? '');
+    throw new Error(
+      'The database is not up to date with prisma/migrations. Run ' +
+        '`pnpm --filter @repo/db db:deploy` and try again.\n\n' +
+        output,
+    );
+  }
 }

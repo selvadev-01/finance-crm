@@ -89,7 +89,7 @@ Stated plainly, because these are the ways work gets called finished when it is 
 | Claim                                | Reality                                                                          |
 | ------------------------------------ | -------------------------------------------------------------------------------- |
 | "Works on my machine"                | The only machine there is — so run the full suite on it, not just the unit tests |
-| "Unit tests pass"                    | Not run against the `test` schema                                                |
+| "Unit tests pass"                    | Not `pnpm test` from the root, or it left rows behind in the development schema  |
 | "I'll add tests after"               | Not done                                                                         |
 | "The button is hidden for that role" | Not an access control — the API must refuse it                                   |
 | "It works online"                    | The offline path is the requirement, not the fallback                            |

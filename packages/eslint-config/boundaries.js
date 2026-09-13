@@ -51,7 +51,12 @@ const tsLanguageOptions = {
   parser: babelParser,
   parserOptions: {
     requireConfigFile: false,
-    babelOptions: { presets: ["@babel/preset-typescript"] },
+    babelOptions: {
+      presets: ["@babel/preset-typescript"],
+      // JSX only for .tsx — enabling it on .ts would misparse `<T>value` casts.
+      // Without this, every .tsx file in apps/web is a parsing error.
+      overrides: [{ test: /\.tsx$/, presets: ["@babel/preset-react"] }],
+    },
   },
 };
 

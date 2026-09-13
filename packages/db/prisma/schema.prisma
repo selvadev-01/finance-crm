@@ -23,12 +23,20 @@
 //     default for DateTime is timestamp WITHOUT time zone, so the annotation
 //     is required rather than decorative — ADR-0009 depends on it.
 //   - Every foreign key carries an index; Postgres does not create one.
+//
+// Invariants live in the database (coding-guidelines.md#database). Partial
+// unique indexes are declared here through the `partialIndexes` preview, so
+// Prisma manages them and `migrate dev` does not see them as drift. CHECK
+// constraints and triggers cannot be expressed in this file; they live in the
+// `constraints_*` migrations, and Prisma neither diffs nor drops them. Each
+// model below names the constraints that guard it.
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated"
-  moduleFormat = "esm"
-  runtime      = "nodejs"
+  provider        = "prisma-client"
+  output          = "../src/generated"
+  moduleFormat    = "esm"
+  runtime         = "nodejs"
+  previewFeatures = ["partialIndexes"]
 }
 
 // Prisma 7 removed `url` from the datasource block. The migration connection
@@ -350,6 +358,7 @@ model Line {
 }
 
 /// Temporal staffing record. Who worked which line, and when (BR-15).
+/// CHECK: effectiveTo >= effectiveFrom (migration constraints_line_assignment).
 model LineAssignment {
   id             String         @id @default(cuid())
   lineId         String
@@ -370,6 +379,10 @@ model LineAssignment {
   // Serves the current-staffing lookup (erd.md).
   @@index([lineId, effectiveTo])
   @@index([staffProfileId])
+  // One current Senior per line.
+  @@unique([lineId], map: "line_assignment_current_senior_key", where: raw("(\"assignmentRole\" = 'SENIOR'::\"AssignmentRole\") AND (\"effectiveTo\" IS NULL)"))
+  // A staff member works one line at a time.
+  @@unique([staffProfileId], map: "line_assignment_current_staff_key", where: raw("(\"effectiveTo\" IS NULL)"))
   @@map("line_assignment")
 }
 
@@ -691,11 +704,11 @@ model CashDenomination {
 // ---------------------------------------------------------------------------
 
 /// One CASH_IN_HAND per staff member, one LOAN_RECEIVABLE per account, both
-/// created automatically.
+/// created automatically. CHECKs tie ownerUserId / accountLoanId to the type
+/// and normalBalance to the account's nature (migration constraints_ledger).
 ///
-/// NOTE: data-dictionary.md calls all three ledger tables append-only with no
-/// updatedAt, but `balance` here is a mutable cache rebuilt nightly. The spec
-/// is followed literally for now; revisit when M09 is built in Phase 2.
+/// Unlike ledger_transaction and ledger_entry this table is NOT append-only:
+/// `balance` is a cache rebuilt by the nightly reconciliation job.
 model LedgerAccount {
   id            String            @id @default(cuid())
   accountType   LedgerAccountType
@@ -715,6 +728,8 @@ model LedgerAccount {
   @@index([accountType])
   @@index([ownerUserId])
   @@index([accountLoanId])
+  @@unique([ownerUserId], map: "ledger_account_cash_in_hand_owner_key", where: raw("(\"accountType\" = 'CASH_IN_HAND'::\"LedgerAccountType\")"))
+  @@unique([accountLoanId], map: "ledger_account_loan_receivable_key", where: raw("(\"accountType\" = 'LOAN_RECEIVABLE'::\"LedgerAccountType\")"))
   @@map("ledger_account")
 }
 
@@ -853,9 +868,9 @@ model Holiday {
   organization Organization @relation(fields: [organizationId], references: [id])
   sector       Sector?      @relation(fields: [sectorId], references: [id])
 
-  /// NOTE: Postgres treats NULLs as distinct in a unique index, so this does
-  /// not prevent duplicate business-wide holidays on the same date. It needs
-  /// NULLS NOT DISTINCT, added with M15 in Phase 5.
+  /// Rebuilt as NULLS NOT DISTINCT by migration constraints_platform, so one
+  /// business-wide (NULL sector) holiday per date. Prisma cannot express the
+  /// clause; the index keeps its name and columns, so it does not diff.
   @@unique([date, sectorId])
   @@index([organizationId])
   @@index([sectorId])

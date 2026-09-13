@@ -18,11 +18,11 @@ Six phases to a live v1, then Phase 2. Sequencing follows dependency and risk, n
 
 ## Phase 0 — Foundations · ~1 week · **complete**
 
-Turborepo + pnpm workspace, with `apps/web` (Next.js 16, React 19, Tailwind v4) and `apps/api` (NestJS 12, ESM, Vitest) both booting. PostgreSQL 17 — one database, `rasi_dev`, with `public` for development and `test` for the harness. `packages/db` on Prisma 7 carrying the full 28-table schema across two migrations. Better Auth mounted and verified by a real sign-in. `packages/domain` and `packages/contracts` created empty with their boundaries enforced and proven. A two-tier test harness. Tokens and a component base in `@repo/ui`.
+Turborepo + pnpm workspace, with `apps/web` (Next.js 16, React 19, Tailwind v4) and `apps/api` (NestJS 12, ESM, Vitest) both booting. PostgreSQL 17 — one database, `rasi_dev`, one schema, `public`, shared by development and tests. `packages/db` on Prisma 7 carrying the full 28-table schema with every data-dictionary invariant enforced as a database constraint, across nine migrations. Better Auth mounted and verified by a real sign-in. `packages/domain` and `packages/contracts` created empty with their boundaries enforced and proven. A two-tier test harness. Tokens and a component base in `@repo/ui`.
 
 The seed dataset is **not** a Phase 0 item — it is a size-L Phase 1 story ([backlog](backlog.md)), and per-story state lives there.
 
-**Exit:** `pnpm dev` runs everything; a user can sign in; `pnpm test` passes against the `test` schema.
+**Exit:** `pnpm dev` runs everything; a user can sign in; `pnpm test` passes and leaves the development data exactly as it found it.
 
 > "A user can sign in" means the authentication plumbing works — a Better Auth user gets a session cookie. It does not mean US-001, which additionally requires `staff_profile`, the `ACTIVE` status gate and a `LOGIN` audit entry. Those are Phase 1 and Phase 2.
 

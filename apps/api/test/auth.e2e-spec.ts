@@ -7,7 +7,11 @@ import type { Server } from 'node:http';
 import request from 'supertest';
 
 import { AppModule } from '../src/app.module.js';
-import { createTestPrismaClient, truncateTestSchema } from './database.js';
+import {
+  createTestPrismaClient,
+  deleteTestRunData,
+  testEmail,
+} from './database.js';
 
 /**
  * The auth smoke test.
@@ -28,17 +32,21 @@ describe('authentication (e2e)', () => {
   let app: INestApplication<Server>;
   let prisma: PrismaClient;
 
-  const credentials = {
-    name: 'Harness User',
-    email: 'harness@rasi.test',
-    password: 'a-sufficiently-long-password',
-  };
+  // A fresh, run-tagged email per test, so cleanup can find it and no test
+  // collides with a real account in the development schema.
+  let credentials: { name: string; email: string; password: string };
 
   beforeAll(async () => {
     prisma = createTestPrismaClient();
   });
 
   beforeEach(async () => {
+    credentials = {
+      name: 'Harness User',
+      email: testEmail('auth'),
+      password: 'a-sufficiently-long-password',
+    };
+
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -61,7 +69,7 @@ describe('authentication (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
-    await truncateTestSchema(prisma);
+    await deleteTestRunData(prisma);
   });
 
   afterAll(async () => {
@@ -117,16 +125,18 @@ describe('authentication (e2e)', () => {
       .expect(401);
   });
 
-  it('writes to the test schema and truncation clears it', async () => {
+  it('cleanup removes the user and session this run created through HTTP', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/sign-up/email')
       .send(credentials)
       .expect(200);
 
-    expect(await prisma.user.count()).toBe(1);
+    const where = { email: credentials.email };
+    expect(await prisma.user.count({ where })).toBe(1);
 
-    await truncateTestSchema(prisma);
+    await deleteTestRunData(prisma);
 
-    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.user.count({ where })).toBe(0);
+    expect(await prisma.session.count({ where: { user: where } })).toBe(0);
   });
 });

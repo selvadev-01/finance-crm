@@ -18,11 +18,29 @@
  *      what dependency hygiene cannot: deep paths, re-exports and transitive
  *      leakage.
  *
- * Phase 0 creates this package empty on purpose, so the boundary exists before
- * there is code to misplace. The contents arrive in Phase 1, starting with the
- * working calendar (M06) — the single highest-leverage piece in the schedule,
- * because an off-by-one in working-day counting produces no error, just wrong
- * completion dates discovered weeks later.
+ * The working calendar (M06) came first — the single highest-leverage piece in
+ * the schedule, because an off-by-one in working-day counting produces no
+ * error, just wrong completion dates discovered weeks later.
  */
 
-export const DOMAIN_PACKAGE_NAME = "@repo/domain";
+export * from "./calendar/index.js";
+export {
+  type Classification,
+  type ClassifiedCollection,
+  classifyCollection,
+} from "./collection/variance.js";
+export {
+  type AccountProfitTerms,
+  profitForCollection,
+  recognisedProfit,
+  unearnedProfit,
+} from "./ledger/profit.js";
+export { MAX_MONEY, type MoneyInput, toMoney } from "./money/money.js";
+export {
+  capExpectedAmount,
+  generateSchedule,
+  type ScheduleInput,
+  type ScheduleSlot,
+  scheduleSlotCount,
+  targetCompletionDate,
+} from "./schedule/schedule.js";

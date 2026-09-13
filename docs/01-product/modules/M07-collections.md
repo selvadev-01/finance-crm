@@ -47,11 +47,15 @@ A collection always targets **one specific account** (BR-01a). `accountLoanId` i
 
 | Condition                    | Class                      | Senior notified |
 | ---------------------------- | -------------------------- | --------------- |
-| `variance = 0`               | `CORRECT`                  | No              |
-| `variance < 0`, `amount > 0` | `LOW`                      | Alert           |
-| `variance > 0`               | `EXTRA`                    | Warning         |
 | `amount = 0`, visited        | `NO_PAYMENT`               | Alert           |
+| `variance = 0`, `amount > 0` | `CORRECT`                  | No              |
+| `variance < 0`, `amount > 0` | `LOW`                      | Alert           |
+| `variance > 0`, `amount > 0` | `EXTRA`                    | Warning         |
 | No record on a due day       | `MISSED` (schedule status) | Alert           |
+
+**`amount = 0` is decided first.** Otherwise a ₹0 visit against a ₹0 expectation would match both `CORRECT` and `NO_PAYMENT`. It is `NO_PAYMENT` — nothing was paid — which is also the only value `collection_classification_check` accepts. Adjustments are not classified.
+
+Implemented as `classifyCollection({ amount, expectedAmount })` in `packages/domain` (`src/collection/variance.ts`), which returns the `variance` and `classification` to store.
 
 Classification is **computed and stored at write time**, not derived on read — the expected amount moves as the account progresses, so a later computation would not reproduce the value true on the day.
 

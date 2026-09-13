@@ -27,9 +27,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // One database, two schemas. DATABASE_URL carries `?schema=public` for
-    // development; the test harness passes TEST_DATABASE_URL with
-    // `?schema=test`. See .env.example.
+    // One database, one schema: `?schema=public`, shared by development and
+    // the test suite. See .env.example.
     url: process.env["DATABASE_URL"],
   },
 });

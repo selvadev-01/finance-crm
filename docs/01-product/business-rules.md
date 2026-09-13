@@ -125,7 +125,10 @@ A shortfall pushes the date out; an overpayment pulls it in. The schedule tail i
 >
 > - Collected = ₹5,120, Outstanding = ₹4,880
 > - Variance = `+20` → classified **EXTRA**, Senior notified
-> - `remainingDays = ceil(4880 / 100) = 49` → **100 days total**, no change to the end date yet. A second ₹120 day would pull it in to 99.
+> - `remainingDays = ceil(4880 / 100) = 49` → **100 days total**, no change to the end date yet.
+> - The date moves in only once the surplus reaches a whole daily amount. A second ₹120 day leaves outstanding ₹4,760 → `ceil(47.6) = 48` more days after day 52 → still day 100. Five ₹120 days (₹100 surplus) leave ₹4,400 → 44 more days after day 55 → **day 99**.
+>
+> ⚠️ **Corrected during implementation.** This example previously said a second ₹120 day would pull the end date in to 99. It does not: ₹40 of surplus is not a whole day.
 
 ---
 
@@ -154,6 +157,8 @@ For each collection: `variance = collected − expected`.
 | `variance > 0`                     | `EXTRA`        | Yes — Warning                          |
 | `collected = 0`, visit recorded    | `NO_PAYMENT`   | Yes — Alert                            |
 | No record on a due collection day  | `MISSED`       | Yes — Alert, raised by a scheduled job |
+
+The `collected = 0` row is decided first: a ₹0 visit against a ₹0 expectation is `NO_PAYMENT`, not `CORRECT`.
 
 Classification is computed and stored at write time, not derived at read time — the expected amount changes as the account progresses, so a variance computed later would not reproduce the value that was true on the day.
 
@@ -313,7 +318,17 @@ The customer owes ₹10,000; ₹8,500 of cash left the business; ₹1,500 of pro
 
 > Proportional profit recognition means `EARNED_PROFIT` at any moment reflects profit on money actually received — so a half-collected account shows roughly half its profit, not all of it. This is what makes the Super Admin's profit figure meaningful rather than optimistic.
 >
-> **Note on rounding:** 15% of a ₹100 collection is exactly ₹15.00, but uneven amounts will not divide cleanly. The final collection on an account absorbs any accumulated rounding difference, so `UNEARNED_PROFIT` for a completed account always lands at exactly zero.
+> **Rounding is on the running total ⚠ RESOLVES AMBIGUITY.** 15% of a ₹100 collection is exactly ₹15.00, but uneven amounts do not divide cleanly. Profit earned to date is `round(collected × P / A)`, half-up to the paisa, and each collection or adjustment posts the change in that figure:
+>
+> ```
+> profit = round(collectedAfter × P/A) − round(collectedBefore × P/A)
+> ```
+>
+> The ledger is never more than half a paisa from the exact figure, and when `collected = A` earned profit is exactly `P` — so `UNEARNED_PROFIT` for a completed account always lands at zero without anyone needing to identify "the final collection", which late offline syncs and corrections would make unreliable.
+>
+> **Worked example (uneven):** `A = 9,999`, `I = 8,500`, `P = 1,499`, ₹100 a day. Collections 1–3 post ₹14.99; collection 4 posts ₹15.00, bringing earned profit to ₹59.97. Fifteen of the 100 collections post ₹15.00, and the final ₹99 posts ₹14.84 — total exactly ₹1,499.
+>
+> The accepted cost: a full reversal can differ from its original's profit by ₹0.01. The ledger balances either way. The rejected alternative — rounding each collection alone and having the final one absorb the residue — drifts by up to half a paisa per collection and depends on correctly spotting the final collection.
 
 ---
 

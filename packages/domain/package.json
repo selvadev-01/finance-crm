@@ -10,10 +10,10 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
     "@date-fns/tz": "1.5.0",
@@ -24,6 +24,7 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "eslint": "10.9.1",
+    "fast-check": "4.10.0",
     "typescript": "7.0.2",
     "vitest": "^4.1.2"
   }

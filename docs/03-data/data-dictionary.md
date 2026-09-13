@@ -4,6 +4,8 @@ Column-level reference. Structure and reasoning are in [`erd.md`](erd.md); rules
 
 **Types** are Prisma types with the PostgreSQL mapping where it differs. `Decimal` is always `@db.Decimal(14,2)` (BR-11). `DateTime @db.Date` is a calendar date with no time component; plain `DateTime` is `timestamptz`.
 
+**Constraints** listed under a table are enforced by PostgreSQL, not only by the application (coding-guidelines.md#database). Their SQL is in the `packages/db/prisma/migrations/*_constraints_*` migrations, each proven by a spec in `apps/api/test/db-constraints/`. A rule marked _service-enforced_ needs a count or another table and lives in application code.
+
 **Common columns** — present on every domain table unless noted, omitted from the tables below to avoid repetition:
 
 | Column            | Type                          | Notes                             |
@@ -66,7 +68,7 @@ Role is single-valued — a person is a Senior or a Junior, not both. Multi-role
 | `name`     | `String`  | No   |                                                |
 | `isActive` | `Boolean` | No   | Default `true`                                 |
 
-A line cannot be deactivated while it has `ACTIVE` accounts — enforced in the service layer, since it needs a count.
+A line cannot be deactivated while it has `ACTIVE` accounts — _service-enforced_, since it needs a count.
 
 ### `line_assignment`
 
@@ -83,9 +85,11 @@ Temporal staffing record (BR-15 rationale).
 
 Constraints:
 
-- Partial unique on `(lineId)` where `assignmentRole = 'SENIOR' AND effectiveTo IS NULL` — one current Senior per line
-- Partial unique on `(staffProfileId)` where `effectiveTo IS NULL` — a staff member works one line at a time
+- Partial unique `line_assignment_current_senior_key` on `(lineId)` where `assignmentRole = 'SENIOR' AND effectiveTo IS NULL` — one current Senior per line
+- Partial unique `line_assignment_current_staff_key` on `(staffProfileId)` where `effectiveTo IS NULL` — a staff member works one line at a time
 - Check `effectiveTo IS NULL OR effectiveTo >= effectiveFrom`
+
+The partial uniques are declared in `schema.prisma` (`partialIndexes` preview), so Prisma manages them.
 
 ---
 
@@ -142,7 +146,17 @@ The loan. Called "Account" everywhere in the UI.
 | `isOverdue`            | `Boolean`           | No   | Flag on `ACTIVE`, not a status (BR-05). Set by scheduled job         |
 | `closureNote`          | `String`            | Yes  | Required for `DEFAULTED` / `WRITTEN_OFF`                             |
 
-Check constraints: `investedAmount < accountAmount`, `dailyAmount <= accountAmount`, `dailyAmount * termDays >= accountAmount`, `collectedAmount >= 0`.
+Constraints:
+
+- BR-01: `accountAmount`, `investedAmount`, `dailyAmount`, `termDays` all `> 0`; `investedAmount < accountAmount`; `profitAmount = accountAmount - investedAmount`; `dailyAmount <= accountAmount`; `dailyAmount * termDays >= accountAmount`
+- `collectedAmount >= 0`
+- BR-03: `firstCollectionDate > disbursementDate`
+- `status = COMPLETED` requires `actualCompletionDate`, which is after `disbursementDate` when set
+- `status IN (DEFAULTED, WRITTEN_OFF)` requires a non-blank `closureNote`
+- BR-05: `isOverdue` only when `status = ACTIVE` — whatever moves an account out of `ACTIVE` clears the flag in the same write
+- Trigger: `accountAmount` and `investedAmount` cannot change once `status` has left `PENDING`
+
+`outstandingAmount` is deliberately not checked against `accountAmount - collectedAmount`: it is a cache, and reconciling it is the nightly job's work.
 
 **No constraint limits concurrent `ACTIVE` accounts per customer** (BR-01a). This is intentional, and noted here because its absence is a decision rather than an oversight.
 
@@ -157,6 +171,8 @@ The plan. Regenerable tail, immutable head (BR-04, BR-06).
 | `dueDate`        | `DateTime @db.Date` | No   | Always a working day (BR-02)                                     |
 | `expectedAmount` | `Decimal`           | No   | `min(D, outstanding at generation)` (BR-07)                      |
 | `status`         | `ScheduleStatus`    | No   | `PENDING` \| `COLLECTED` \| `PARTIAL` \| `MISSED` \| `CANCELLED` |
+
+Constraints: `sequence >= 1`; `expectedAmount > 0`.
 
 `CANCELLED` covers slots dropped when an account completes early. `MISSED` is set by the scheduled job after day close (BR-09) — note this is a _schedule_ status, since a missed visit creates no collection row.
 
@@ -189,6 +205,16 @@ The plan. Regenerable tail, immutable head (BR-04, BR-06).
 
 No `updatedAt` — nothing updates. `status` transitions are the sole exception and are themselves audited.
 
+Constraints:
+
+- Trigger `collection_append_only`: DELETE is rejected, and so is any UPDATE that changes a column other than `status`. The comparison is the whole row minus `status`, so a column added later is frozen by default. Which transitions `status` may make is not specified and not constrained
+- `variance = amount - expectedAmount`; `expectedAmount >= 0`
+- `amount >= 0` unless `entryType = ADJUSTMENT`
+- `entryType = ADJUSTMENT` if and only if `adjustsCollectionId` is set, which never equals the row's own `id`; an `ADJUSTMENT` has no `accountScheduleId`
+- BR-08, `ORIGINAL` rows only: `NO_PAYMENT` ⇔ `amount = 0`; otherwise `amount > 0` and `CORRECT` / `LOW` / `EXTRA` follow the sign of `variance` exactly. **Relax this constraint in the same change if `collection.varianceTolerance` is ever built**
+
+`capturedAt <= syncedAt` is deliberately not enforced — a device with a fast clock would have genuine offline records rejected.
+
 ### `collection_approval`
 
 | Column              | Type               | Null | Notes                                 |
@@ -200,6 +226,8 @@ No `updatedAt` — nothing updates. `status` transitions are the sole exception 
 | `reason`            | `String`           | No   | Required from the requester           |
 | `decisionNote`      | `String`           | Yes  |                                       |
 | `decidedAt`         | `DateTime`         | Yes  |                                       |
+
+Constraints: `decidedByUserId` and `decidedAt` are both null exactly when `decision = PENDING`; `reason` is non-blank. That the decider is a Senior on the collection's own line, or an Admin, is _service-enforced_.
 
 ### `day_close`
 
@@ -218,6 +246,8 @@ No `updatedAt` — nothing updates. `status` transitions are the sole exception 
 
 `TALLIED` is `CLOSED` with `discrepancy = 0` and every handover acknowledged.
 
+Constraints: `discrepancy = cashReceivedTotal - collectedTotal`; `expectedTotal >= 0`; `cashReceivedTotal >= 0`; `CLOSED` and `TALLIED` require `closedAt`; `TALLIED` requires `discrepancy = 0`. "Every handover acknowledged" spans tables and is _service-enforced_. `collectedTotal` has no floor: a negative adjustment dated today for an earlier collection can take it below zero.
+
 ### `cash_handover`
 
 | Column           | Type             | Null | Notes                                        |
@@ -232,6 +262,8 @@ No `updatedAt` — nothing updates. `status` transitions are the sole exception 
 | `acknowledgedAt` | `DateTime`       | Yes  | Cash has not moved until this is set (BR-17) |
 | `disputeNote`    | `String`         | Yes  |                                              |
 
+Constraints: `discrepancy = declaredAmount - systemAmount`; `declaredAmount >= 0`; `fromUserId <> toUserId`; BR-17 `status = ACKNOWLEDGED` if and only if `acknowledgedAt` is set.
+
 ### `cash_denomination`
 
 | Column           | Type      | Null | Notes                                                                |
@@ -241,13 +273,15 @@ No `updatedAt` — nothing updates. `status` transitions are the sole exception 
 | `count`          | `Int`     | No   | `>= 0`                                                               |
 | `subtotal`       | `Decimal` | No   | `denomination × count`                                               |
 
-Unique on `(cashHandoverId, denomination)`. Σ `subtotal` must equal `declaredAmount`.
+Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the nine values; `count >= 0`; `subtotal = denomination × count`.
+
+Σ `subtotal` must equal the handover's `declaredAmount` — a **deferred** constraint trigger checks it at commit, after any insert, update or delete of a denomination and any change to `declaredAmount`.
 
 ---
 
 ## Ledger
 
-All three tables are append-only with no `updatedAt`.
+`ledger_transaction` and `ledger_entry` are append-only with no `updatedAt`, enforced by triggers that reject UPDATE and DELETE — a correction is a new `ADJUSTMENT` transaction. `ledger_account` is append-only for its identity but its `balance` is a mutable cache rebuilt nightly, so it carries no such trigger.
 
 ### `ledger_account`
 
@@ -260,6 +294,8 @@ All three tables are append-only with no `updatedAt`.
 | `balance`       | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                          |
 
 One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically.
+
+Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE` and `LOAN_RECEIVABLE` and `CREDIT` for the rest; partial uniques make the two per-owner accounts one each.
 
 ### `ledger_transaction`
 
@@ -282,7 +318,7 @@ One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created 
 | `amount`              | `Decimal`   | No   | **Always positive.** Direction carries the sign |
 | `sequence`            | `Int`       | No   | Ordering within the transaction                 |
 
-A deferred constraint trigger enforces Σ debits = Σ credits per transaction at commit (BR-18).
+A **deferred** constraint trigger enforces Σ debits = Σ credits per transaction at commit, with at least two entries (BR-18, ADR-0006). It fires on each entry insert and on each transaction insert, so a transaction committed with no entries is caught too. Check: `amount > 0`.
 
 ---
 
@@ -314,7 +350,7 @@ A deferred constraint trigger enforces Σ debits = Σ credits per transaction at
 | `lastSeenAt`  | `DateTime`     | No   |                                                   |
 | `isActive`    | `Boolean`      | No   | Set `false` on a `410 Gone` from the push service |
 
-Check constraint: `WEB_PUSH` requires `endpoint`/`p256dh`/`auth`; `FCM` requires `fcmToken`.
+Check constraint: `WEB_PUSH` requires `endpoint`/`p256dh`/`auth` and no `fcmToken`; `FCM` requires `fcmToken` and none of the Web Push fields.
 
 ### `notification_outbox`
 
@@ -328,6 +364,8 @@ Check constraint: `WEB_PUSH` requires `endpoint`/`p256dh`/`auth`; `FCM` requires
 | `nextAttemptAt`      | `DateTime`     | Yes  | Exponential backoff                          |
 | `sentAt`             | `DateTime`     | Yes  |                                              |
 
+Constraints: `attempts >= 0`; `status = SENT` requires `sentAt`.
+
 ### `holiday`
 
 | Column     | Type                | Null | Notes                          |
@@ -336,11 +374,11 @@ Check constraint: `WEB_PUSH` requires `endpoint`/`p256dh`/`auth`; `FCM` requires
 | `name`     | `String`            | No   |                                |
 | `sectorId` | `String`            | Yes  | `NULL` = business-wide (BR-02) |
 
-Unique on `(date, sectorId)`. Sundays are **not** stored here — they are excluded by rule, not by data.
+Unique on `(date, sectorId)` **`NULLS NOT DISTINCT`**, so there is at most one business-wide holiday per date. Sundays are **not** stored here — they are excluded by rule, not by data.
 
 ### `audit_log`
 
-Append-only, no `updatedAt`.
+Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 
 | Column        | Type          | Null | Notes                                                                                |
 | ------------- | ------------- | ---- | ------------------------------------------------------------------------------------ |

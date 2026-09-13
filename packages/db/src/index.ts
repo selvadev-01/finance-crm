@@ -38,9 +38,8 @@ export function getPrismaClient(): PrismaClient {
   // but `pg` silently ignores unknown parameters, so under Prisma 7's driver
   // adapters it does NOT set search_path at runtime. Left unhandled, that
   // means migrations apply to one schema while queries read and write another.
-  //
-  // This is how the test harness writes to `test` instead of `public`, so
-  // getting it wrong is not a broken test, it is deleted development data.
+  // Rasi uses only `public` today; passing the schema through keeps the URL
+  // the single source of truth if that ever changes.
   const schema = new URL(connectionString).searchParams.get("schema");
 
   client = new PrismaClient({

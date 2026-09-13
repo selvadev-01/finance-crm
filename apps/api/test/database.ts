@@ -1,75 +1,65 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@repo/db';
+import { randomUUID } from 'node:crypto';
 
 /**
  * The test database connection.
  *
- * Rasi uses ONE database with two schemas: `public` holds development data,
- * `test` belongs to the harness and is truncated between tests. The two URLs
- * differ only by `?schema=`.
+ * Rasi uses ONE database with ONE schema: tests run against `public` in
+ * `rasi_dev`, the same schema `pnpm dev` reads and writes. There is no separate
+ * test schema, so nothing here may ever delete rows it did not create.
  *
- * The guard below is the entire safety mechanism. Truncation is indiscriminate
- * — it deletes every row in every table it is pointed at — so if
- * TEST_DATABASE_URL ever resolves to `public`, a test run destroys the
- * development data and the seed dataset with no warning. Rather than trust
- * configuration, the harness refuses to start unless it can prove it is
- * pointed at the `test` schema.
+ * That rules out truncation. Isolation comes from two narrower mechanisms:
+ *
+ *   - **Tier 1** (service and repository tests) — `withRollback`. Every write
+ *     happens inside a transaction that is rolled back, so nothing persists.
+ *   - **Tier 2** (HTTP tests) — the request crosses a socket into the app's own
+ *     Prisma client, so it cannot be rolled back. Every row such a test creates
+ *     is tagged with this run's `testRunTag`, and `deleteTestRunData` removes
+ *     exactly those rows and nothing else.
  */
-const TEST_SCHEMA = 'test';
-
-export function resolveTestDatabaseUrl(): string {
-  const url = process.env['TEST_DATABASE_URL'];
+export function resolveDatabaseUrl(): string {
+  const url = process.env['DATABASE_URL'];
   if (!url) {
     throw new Error(
-      'TEST_DATABASE_URL is not set. Copy .env.example to .env and fill it in.',
+      'DATABASE_URL is not set. Copy .env.example to .env and fill it in.',
     );
   }
-
-  const schema = new URL(url).searchParams.get('schema');
-  if (schema !== TEST_SCHEMA) {
-    throw new Error(
-      `Refusing to run tests: TEST_DATABASE_URL resolves to schema ` +
-        `"${schema ?? '(none)'}", not "${TEST_SCHEMA}". The harness truncates ` +
-        `every table it can see, which would destroy development data.`,
-    );
-  }
-
   return url;
 }
 
 export function createTestPrismaClient(): PrismaClient {
+  const connectionString = resolveDatabaseUrl();
+  const schema = new URL(connectionString).searchParams.get('schema');
+
   return new PrismaClient({
     adapter: new PrismaPg(
-      { connectionString: resolveTestDatabaseUrl() },
-      { schema: TEST_SCHEMA },
+      { connectionString },
+      schema ? { schema } : undefined,
     ),
   });
 }
 
 /**
- * Empty every table in the `test` schema.
- *
- * Used by the HTTP tier, which cannot roll back: a supertest request travels
- * over a socket into a different async context, so the Nest handler uses the
- * application's Prisma client rather than any transaction the test opened.
- *
- * The `table_schema` filter is what keeps this away from `public`.
+ * A tag unique to this test process. Tier 2 tests put it in every identifying
+ * value they create — an email domain, a code — so cleanup can match on it.
  */
-export async function truncateTestSchema(prisma: PrismaClient): Promise<void> {
-  const tables = await prisma.$queryRaw<{ tablename: string }[]>`
-    SELECT tablename
-    FROM pg_tables
-    WHERE schemaname = ${TEST_SCHEMA}
-      AND tablename <> '_prisma_migrations'
-  `;
+export const testRunTag = `run-${randomUUID()}`;
 
-  if (tables.length === 0) return;
+/** An email address that `deleteTestRunData` will clean up. */
+export function testEmail(label: string): string {
+  return `${label}-${randomUUID()}@${testRunTag}.rasi.test`;
+}
 
-  const list = tables
-    .map(({ tablename }) => `"${TEST_SCHEMA}"."${tablename}"`)
-    .join(', ');
-
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`,
-  );
+/**
+ * Delete the rows this test run created through HTTP, and only those.
+ *
+ * Deleting the user cascades to Better Auth's `session` and `account` rows.
+ * When Tier 2 tests start creating domain rows, extend this with a delete per
+ * table, matched on `testRunTag` — never a bulk delete.
+ */
+export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
+  await prisma.user.deleteMany({
+    where: { email: { endsWith: `@${testRunTag}.rasi.test` } },
+  });
 }

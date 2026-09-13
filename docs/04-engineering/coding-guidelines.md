@@ -91,6 +91,8 @@ Enforced by **two independent mechanisms**, strongest first — and ADR-0001's r
 
 Both were verified by adding a deliberate `@prisma/client` import to `packages/domain`, watching `pnpm lint` **and** `pnpm check-types` fail, and reverting. A rule nobody has seen fail is indistinguishable from no rule.
 
+The rules are wired in per package: `packages/domain` applies `domainBoundaries`, `packages/contracts` applies `contractsBoundaries`, and `apps/web` applies `webBoundaries`. The web block was verified the same way, with a `@repo/db` import in a `.ts` file and an `@nestjs/common` import in a `.tsx` file. The boundary parser enables JSX for `.tsx` only, through a Babel `overrides` entry. Without it every `.tsx` file is a parsing error, and enabling JSX on `.ts` would misparse `<T>value` casts.
+
 > **Flat config does not lint TypeScript unless a block says so.** A config object with no `files` key applies to `**/*.{js,mjs,cjs}` and nothing else. `base.js` sets no `files` anywhere, so despite configuring a TypeScript-capable parser it lints **no `.ts` file in this repository** — ESLint reports _"File ignored because no matching configuration was supplied"_ and exits 0. The boundary blocks therefore carry their own `files` glob and parser. Everything else in `base.js` — including `js.configs.recommended` — is still not reaching any TypeScript, which is worth fixing separately.
 
 `apps/api` uses oxlint rather than ESLint, so a boundary rule added for one needs adding to the other. Its one boundary (must not import `apps/web`) is covered by dependency hygiene regardless, since `web` is not and will never be a dependency of `api`.
