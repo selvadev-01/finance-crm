@@ -11,8 +11,8 @@ What is actually in the repository right now, as opposed to the target shape des
 ```
 rasi/
 ├─ apps/
-│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M01 staff and password-reset, and M04 customer endpoints, seed dataset (src/seed, dry run by default), Better Auth, /health/*
-│  └─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard placeholder, /customers list + onboarding form + profile (US-020), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003); /route placeholder; /design-system preview. Console data is read in the browser through the contract client
+│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M01 staff and password-reset, M04 customer and M05 account endpoints, M07 collection recording and route, M09 LedgerService (disbursement, mid-term catch-up and collection postings), seed dataset (src/seed, dry run by default), Better Auth, /health/*
+│  └─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard placeholder, /customers list + onboarding form + profile (US-020), /accounts/new with live schedule preview and /accounts/:id with disbursement (US-030, US-032), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003); /route placeholder; /design-system preview. Console data is read in the browser through the contract client
 ├─ packages/
 │  ├─ contracts/         @repo/contracts — Zod 4.6.2; in-house route contract and fetch client (ADR-0011), M03 routes
 │  ├─ db/                @repo/db — Prisma 7.10.0, schema, migrations, client
@@ -136,7 +136,12 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
-**Eleven migrations** — `add_better_auth`, `rasi_core`, seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes, `staff_must_change_password` (US-003) and `customer_code_sequence` (US-020). The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
+**Thirteen migrations**:
+- `add_better_auth` and `rasi_core`.
+- Seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes.
+- `staff_must_change_password` (US-003).
+- `customer_code_sequence` (US-020).
+- `ledger_account_organization` and `account_code_sequence` (US-030, US-032). The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
 
 `.env.example` exists at the repository root. `apps/api` validates every variable at startup and refuses to boot, listing every problem, if one is missing or malformed; `apps/api/src/platform/config/config.ts` is its only reader of `process.env` ([M16](../01-product/modules/M16-platform.md#as-built)). `apps/api` does not load `.env` itself — the environment must provide the variables.
 

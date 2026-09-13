@@ -74,6 +74,11 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.lineAssignment.deleteMany({
     where: { staffProfile: { user: { email: taggedEmail } } },
   });
+  // PENDING accounts only: a disbursed account has ledger rows, which reject
+  // DELETE, so Tier 2 never disburses (schedules cascade with the account).
+  await prisma.accountLoan.deleteMany({
+    where: { organization: { name: taggedCode }, status: 'PENDING' },
+  });
   // Customers inserted directly by a test carry a tagged code; customers
   // created over HTTP get an API-issued `CUS-…` code (US-020) and are matched
   // by their tagged organization instead.

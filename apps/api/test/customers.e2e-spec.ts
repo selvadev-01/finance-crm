@@ -65,8 +65,18 @@ describe('customers (M04, US-020, e2e)', () => {
     }
     await prisma.lineAssignment.createMany({
       data: [
-        { staffProfileId: staff.SENIOR.staffProfileId, lineId: lineA, assignmentRole: 'SENIOR', effectiveFrom: new Date('2026-01-01') },
-        { staffProfileId: staff.JUNIOR.staffProfileId, lineId: lineA, assignmentRole: 'JUNIOR', effectiveFrom: new Date('2026-01-01') },
+        {
+          staffProfileId: staff.SENIOR.staffProfileId,
+          lineId: lineA,
+          assignmentRole: 'SENIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
+        {
+          staffProfileId: staff.JUNIOR.staffProfileId,
+          lineId: lineA,
+          assignmentRole: 'JUNIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
       ],
     });
   });
@@ -93,7 +103,12 @@ describe('customers (M04, US-020, e2e)', () => {
       sectorId,
       status: 'ACTIVE',
       references: [
-        { name: 'Ravi', mobile: '+919123456780', relation: 'brother', address: null },
+        {
+          name: 'Ravi',
+          mobile: '+919123456780',
+          relation: 'brother',
+          address: null,
+        },
       ],
     });
     expect(response.body.customerCode).toMatch(/^CUS-\d{5,}$/);
@@ -104,8 +119,12 @@ describe('customers (M04, US-020, e2e)', () => {
   });
 
   it('issues a new code for every customer', async () => {
-    const first = await as('ADMIN').post('/api/customers', onboarding()).expect(201);
-    const second = await as('ADMIN').post('/api/customers', onboarding()).expect(201);
+    const first = await as('ADMIN')
+      .post('/api/customers', onboarding())
+      .expect(201);
+    const second = await as('ADMIN')
+      .post('/api/customers', onboarding())
+      .expect(201);
     const number = (code: string) => Number(code.slice(4));
     expect(number(second.body.customerCode)).toBeGreaterThan(
       number(first.body.customerCode),
@@ -117,7 +136,9 @@ describe('customers (M04, US-020, e2e)', () => {
       .post('/api/customers', onboarding({ references: [] }))
       .expect(400);
     expect(response.body.details).toEqual(
-      expect.arrayContaining([expect.objectContaining({ field: 'references' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'references' }),
+      ]),
     );
   });
 
@@ -133,7 +154,10 @@ describe('customers (M04, US-020, e2e)', () => {
     expect(warned.body.code).toBe('DUPLICATE_MOBILE');
 
     const confirmed = await as('ADMIN')
-      .post('/api/customers', onboarding({ mobile, name: 'Second', confirmDuplicateMobile: true }))
+      .post(
+        '/api/customers',
+        onboarding({ mobile, name: 'Second', confirmDuplicateMobile: true }),
+      )
       .expect(201);
 
     // The form finds who already has the number by listing on it.
@@ -147,7 +171,13 @@ describe('customers (M04, US-020, e2e)', () => {
 
   it('an inactive line is 422; a line in another organization is 404', async () => {
     const closed = await prisma.line.create({
-      data: { organizationId, sectorId, code: testCode('LN'), name: 'Closed', isActive: false },
+      data: {
+        organizationId,
+        sectorId,
+        code: testCode('LN'),
+        name: 'Closed',
+        isActive: false,
+      },
     });
     const inactive = await as('ADMIN')
       .post('/api/customers', onboarding({ lineId: closed.id }))
@@ -162,13 +192,17 @@ describe('customers (M04, US-020, e2e)', () => {
 
   it('a Senior or Junior cannot onboard a customer', async () => {
     for (const role of ['SENIOR', 'JUNIOR'] as const) {
-      const response = await as(role).post('/api/customers', onboarding()).expect(403);
+      const response = await as(role)
+        .post('/api/customers', onboarding())
+        .expect(403);
       expect(response.body.code).toBe('PERMISSION_DENIED');
     }
   });
 
   it('Seniors and Juniors see only their line’s customers; another line’s customer is 404, identical to a missing one', async () => {
-    const onA = await as('ADMIN').post('/api/customers', onboarding({ name: 'On A' })).expect(201);
+    const onA = await as('ADMIN')
+      .post('/api/customers', onboarding({ name: 'On A' }))
+      .expect(201);
     const onB = await as('ADMIN')
       .post('/api/customers', onboarding({ name: 'On B', lineId: lineB }))
       .expect(201);
@@ -178,15 +212,28 @@ describe('customers (M04, US-020, e2e)', () => {
       const ids = listed.body.data.map((c: { id: string }) => c.id);
       expect(ids).toContain(onA.body.id);
       expect(ids).not.toContain(onB.body.id);
-      expect(new Set(listed.body.data.map((c: { lineId: string }) => c.lineId))).toEqual(new Set([lineA]));
+      expect(
+        new Set(listed.body.data.map((c: { lineId: string }) => c.lineId)),
+      ).toEqual(new Set([lineA]));
 
       await as(role).get(`/api/customers/${onA.body.id}`).expect(200);
-      const hidden = await as(role).get(`/api/customers/${onB.body.id}`).expect(404);
-      const missing = await as(role).get('/api/customers/does-not-exist').expect(404);
-      expect(hidden.body).toMatchObject({ code: missing.body.code, message: missing.body.message });
+      const hidden = await as(role)
+        .get(`/api/customers/${onB.body.id}`)
+        .expect(404);
+      const missing = await as(role)
+        .get('/api/customers/does-not-exist')
+        .expect(404);
+      expect(hidden.body).toMatchObject({
+        code: missing.body.code,
+        message: missing.body.message,
+      });
     }
 
-    const admin = await as('SUPER_ADMIN').get(`/api/customers?lineId=${lineB}&limit=200`).expect(200);
-    expect(admin.body.data.map((c: { id: string }) => c.id)).toContain(onB.body.id);
+    const admin = await as('SUPER_ADMIN')
+      .get(`/api/customers?lineId=${lineB}&limit=200`)
+      .expect(200);
+    expect(admin.body.data.map((c: { id: string }) => c.id)).toContain(
+      onB.body.id,
+    );
   });
 });

@@ -399,30 +399,30 @@ export async function seedDataset(
 
   // ------------------------------------------------------------------- ledger
   const ledgerAccounts: Prisma.LedgerAccountCreateManyInput[] = [];
-  const singleton = async (
+  // The seed organization is new, so its business-wide accounts are too: one
+  // of each per organization (ledger_account_organization_singleton_key).
+  const singleton = (
     accountType: 'CASH_AT_OFFICE' | 'UNEARNED_PROFIT' | 'EARNED_PROFIT',
   ) => {
-    const existing = await tx.ledgerAccount.findFirst({
-      where: { accountType },
-    });
-    if (existing) return existing.id;
     const id = randomUUID();
     ledgerAccounts.push({
       id,
+      organizationId: orgId,
       accountType,
       normalBalance: accountType === 'CASH_AT_OFFICE' ? 'DEBIT' : 'CREDIT',
     });
     return id;
   };
-  const officeCash = await singleton('CASH_AT_OFFICE');
-  const unearnedProfit = await singleton('UNEARNED_PROFIT');
-  const earnedProfit = await singleton('EARNED_PROFIT');
+  const officeCash = singleton('CASH_AT_OFFICE');
+  const unearnedProfit = singleton('UNEARNED_PROFIT');
+  const earnedProfit = singleton('EARNED_PROFIT');
   const cashInHand: Record<string, string> = {};
   for (const { key, role } of staffRows) {
     if (role !== 'SENIOR' && role !== 'JUNIOR') continue;
     cashInHand[key] = randomUUID();
     ledgerAccounts.push({
       id: cashInHand[key],
+      organizationId: orgId,
       accountType: 'CASH_IN_HAND',
       ownerUserId: userIds[key]!,
       normalBalance: 'DEBIT',
@@ -502,6 +502,7 @@ export async function seedDataset(
     const receivable = randomUUID();
     ledgerAccounts.push({
       id: receivable,
+      organizationId: orgId,
       accountType: 'LOAN_RECEIVABLE',
       accountLoanId: plan.id,
       normalBalance: 'DEBIT',

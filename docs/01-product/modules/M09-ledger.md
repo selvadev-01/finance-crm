@@ -127,6 +127,24 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 
 ---
 
+## As built
+
+`apps/api/src/ledger/ledger.service.ts` is the only writer of ledger rows. It has no controller, because postings are system-only.
+
+- **`post(context, posting)`** refuses to run outside a `Database.transaction`. It drops zero lines, refuses negative ones, writes the transaction and its entries, and moves each account's `balance` cache, signed by its normal balance. Balancing is left to the deferred trigger (ADR-0006).
+- **`organizationAccount(organizationId, type)`** returns the organization's `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` or `EARNED_PROFIT` account. It creates one with `INSERT … ON CONFLICT DO NOTHING` against the one-per-organization partial index, so concurrent first uses neither fail nor abort the caller's transaction.
+- **`createReceivable(organizationId, accountLoanId)`** creates an account's `LOAN_RECEIVABLE`.
+
+**Decided 2026-09-13: ledger accounts carry `organizationId`** (migration `ledger_account_organization`). Before this, the business-wide accounts had no owner at all.
+
+Posting so far:
+- **Disbursement** (M05, US-032).
+- **The mid-term catch-up** (US-030a): one COLLECTION transaction sourced to the `account_loan`, debiting `CASH_AT_OFFICE`, with no collection row behind it. Collection, adjustment, handover and write-off postings arrive with their modules.
+
+`CASH_AT_OFFICE` has no funding posting yet, so its balance goes negative as accounts are disbursed. A `CAPITAL` posting that funds the office has no story yet.
+
+---
+
 ## Risks
 
 | Risk                                            | Mitigation                                                             |

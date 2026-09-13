@@ -85,7 +85,13 @@ describe('staff directory (S-14, e2e)', () => {
         label: who,
       });
     }
-    for (const who of ['superAdmin', 'admin', 'seniorA', 'seniorB', 'juniorA']) {
+    for (const who of [
+      'superAdmin',
+      'admin',
+      'seniorA',
+      'seniorB',
+      'juniorA',
+    ]) {
       cookies[who] = await signIn(app, staff[who]!);
     }
 
@@ -123,7 +129,16 @@ describe('staff directory (S-14, e2e)', () => {
     const response = await as('admin').get('/api/staff?limit=200').expect(200);
     const listed = ids(response.body);
 
-    for (const who of ['superAdmin', 'admin', 'seniorA', 'seniorB', 'juniorA', 'moved', 'upcoming', 'suspended']) {
+    for (const who of [
+      'superAdmin',
+      'admin',
+      'seniorA',
+      'seniorB',
+      'juniorA',
+      'moved',
+      'upcoming',
+      'suspended',
+    ]) {
       expect(listed).toContain(staff[who]!.staffProfileId);
     }
     expect(listed).not.toContain(staff.deleted!.staffProfileId);
@@ -132,8 +147,12 @@ describe('staff directory (S-14, e2e)', () => {
     const byId = new Map<string, Row>(
       response.body.data.map((row: Row) => [row.staffProfileId, row]),
     );
-    expect(byId.get(staff.moved!.staffProfileId)!.currentAssignment).toMatchObject({ lineId: lineB, lineName: 'Line B' });
-    expect(byId.get(staff.upcoming!.staffProfileId)!.currentAssignment).toBeNull();
+    expect(
+      byId.get(staff.moved!.staffProfileId)!.currentAssignment,
+    ).toMatchObject({ lineId: lineB, lineName: 'Line B' });
+    expect(
+      byId.get(staff.upcoming!.staffProfileId)!.currentAssignment,
+    ).toBeNull();
     expect(byId.get(staff.suspended!.staffProfileId)!.status).toBe('SUSPENDED');
   });
 
@@ -142,15 +161,21 @@ describe('staff directory (S-14, e2e)', () => {
       .get('/api/staff?limit=200&role=JUNIOR&status=ACTIVE')
       .expect(200);
     expect(ids(juniors.body).sort()).toEqual(
-      ['juniorA', 'moved', 'upcoming'].map((w) => staff[w]!.staffProfileId).sort(),
+      ['juniorA', 'moved', 'upcoming']
+        .map((w) => staff[w]!.staffProfileId)
+        .sort(),
     );
     await as('admin').get('/api/staff?role=OWNER').expect(400);
   });
 
   it('a Senior lists only the staff on their own line today', async () => {
-    const response = await as('seniorA').get('/api/staff?limit=200').expect(200);
+    const response = await as('seniorA')
+      .get('/api/staff?limit=200')
+      .expect(200);
     expect(ids(response.body).sort()).toEqual(
-      ['seniorA', 'juniorA', 'suspended'].map((w) => staff[w]!.staffProfileId).sort(),
+      ['seniorA', 'juniorA', 'suspended']
+        .map((w) => staff[w]!.staffProfileId)
+        .sort(),
     );
   });
 
@@ -163,8 +188,14 @@ describe('staff directory (S-14, e2e)', () => {
     const moved = await as('admin')
       .get(`/api/staff/${staff.moved!.staffProfileId}`)
       .expect(200);
-    expect(moved.body.assignments.map((a: { lineId: string }) => a.lineId)).toEqual([lineB, lineA]);
-    expect(moved.body.assignments[1]).toMatchObject({ effectiveFrom: '2026-01-01', effectiveTo: '2026-03-31', upcoming: false });
+    expect(
+      moved.body.assignments.map((a: { lineId: string }) => a.lineId),
+    ).toEqual([lineB, lineA]);
+    expect(moved.body.assignments[1]).toMatchObject({
+      effectiveFrom: '2026-01-01',
+      effectiveTo: '2026-03-31',
+      upcoming: false,
+    });
 
     const upcoming = await as('admin')
       .get(`/api/staff/${staff.upcoming!.staffProfileId}`)
@@ -179,11 +210,15 @@ describe('staff directory (S-14, e2e)', () => {
     const response = await as('seniorB')
       .get(`/api/staff/${staff.moved!.staffProfileId}`)
       .expect(200);
-    expect(response.body.assignments.map((a: { lineId: string }) => a.lineId)).toEqual([lineB]);
+    expect(
+      response.body.assignments.map((a: { lineId: string }) => a.lineId),
+    ).toEqual([lineB]);
   });
 
   it('someone off the Senior’s line, soft-deleted, or in another organization is 404, identical to a missing id', async () => {
-    const missing = await as('admin').get('/api/staff/does-not-exist').expect(404);
+    const missing = await as('admin')
+      .get('/api/staff/does-not-exist')
+      .expect(404);
     const cases: [string, string][] = [
       ['seniorA', staff.moved!.staffProfileId],
       ['seniorA', staff.upcoming!.staffProfileId],

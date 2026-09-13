@@ -18,7 +18,9 @@
  *     only timezone conversion in the system is `toBusinessDate` in
  *     @repo/domain (BR-12).
  */
+export * from "./account.contract.js";
 export * from "./client.js";
+export * from "./collection.contract.js";
 export * from "./customer.contract.js";
 export * from "./organisation.contract.js";
 export * from "./route.js";

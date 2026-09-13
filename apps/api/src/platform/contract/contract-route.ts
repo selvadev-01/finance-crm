@@ -78,13 +78,38 @@ export const ContractInput = createParamDecorator(
   },
 );
 
+/**
+ * What a handler returns for an idempotent replay (BR-13): the original body,
+ * answered with the route's `replayStatus` (200) instead of its success
+ * status. Only a route that declares `replayStatus` may return one.
+ */
+export class Replayed<Body> {
+  constructor(readonly body: Body) {}
+}
+
 @Injectable()
 export class ContractResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const definition = routeOf(context);
     const schema = definition.responses[successStatus(definition)];
     return next.handle().pipe(
-      map((body: unknown) => {
+      map((result: unknown) => {
+        let body = result;
+        if (result instanceof Replayed) {
+          if (definition.replayStatus === undefined) {
+            throw new InternalError(
+              'REPLAY_NOT_DECLARED',
+              `${definition.method} ${definition.path} returned a replay but declares no replayStatus`,
+            );
+          }
+          // Nest set the success status before the handler ran and does not
+          // set it again, so this is the status the client receives.
+          context
+            .switchToHttp()
+            .getResponse<{ status(code: number): unknown }>()
+            .status(definition.replayStatus);
+          body = result.body;
+        }
         if (!schema) return body;
         try {
           return schema.parse(body);

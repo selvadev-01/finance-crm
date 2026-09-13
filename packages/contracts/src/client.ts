@@ -76,8 +76,13 @@ export function createApiClient(options: ApiClientOptions) {
     const text = await response.text();
     const json: unknown = text ? JSON.parse(text) : null;
 
-    if (response.status === successStatus(definition)) {
-      const schema = definition.responses[response.status];
+    const success = successStatus(definition);
+    if (
+      response.status === success ||
+      (definition.replayStatus !== undefined &&
+        response.status === definition.replayStatus)
+    ) {
+      const schema = definition.responses[success];
       return {
         ok: true,
         status: response.status,

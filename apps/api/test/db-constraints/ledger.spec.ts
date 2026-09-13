@@ -29,12 +29,21 @@ describe('ledger constraints (BR-18, ADR-0006)', () => {
     amount: string;
   };
 
+  const createOrganization = (tx: PrismaClient) =>
+    tx.organization.create({
+      data: { name: 'Ledger Probe', timezone: 'Asia/Kolkata', currency: 'INR' },
+    });
+
   async function createLedgerAccounts(tx: PrismaClient) {
+    const { id: organizationId } = await createOrganization(tx);
     const create = (
       accountType:
         'CASH_AT_OFFICE' | 'CAPITAL' | 'UNEARNED_PROFIT' | 'EARNED_PROFIT',
       normalBalance: 'DEBIT' | 'CREDIT',
-    ) => tx.ledgerAccount.create({ data: { accountType, normalBalance } });
+    ) =>
+      tx.ledgerAccount.create({
+        data: { organizationId, accountType, normalBalance },
+      });
 
     return {
       cash: await create('CASH_AT_OFFICE', 'DEBIT'),
@@ -165,9 +174,13 @@ describe('ledger constraints (BR-18, ADR-0006)', () => {
   describe('ledger_account shape', () => {
     it('rejects CASH_IN_HAND with no owning staff member', async () => {
       await expect(
-        withRollback(prisma, (tx) =>
+        withRollback(prisma, async (tx) =>
           tx.ledgerAccount.create({
-            data: { accountType: 'CASH_IN_HAND', normalBalance: 'DEBIT' },
+            data: {
+              organizationId: (await createOrganization(tx)).id,
+              accountType: 'CASH_IN_HAND',
+              normalBalance: 'DEBIT',
+            },
           }),
         ),
       ).rejects.toThrow('ledger_account_owner_matches_type_check');
@@ -175,9 +188,13 @@ describe('ledger constraints (BR-18, ADR-0006)', () => {
 
     it('rejects a credit-normal cash account', async () => {
       await expect(
-        withRollback(prisma, (tx) =>
+        withRollback(prisma, async (tx) =>
           tx.ledgerAccount.create({
-            data: { accountType: 'CASH_AT_OFFICE', normalBalance: 'CREDIT' },
+            data: {
+              organizationId: (await createOrganization(tx)).id,
+              accountType: 'CASH_AT_OFFICE',
+              normalBalance: 'CREDIT',
+            },
           }),
         ),
       ).rejects.toThrow('ledger_account_normal_balance_check');
@@ -187,6 +204,7 @@ describe('ledger constraints (BR-18, ADR-0006)', () => {
       await expect(
         withRollback(prisma, async (tx) => {
           const data = {
+            organizationId: (await createOrganization(tx)).id,
             accountType: 'CASH_IN_HAND' as const,
             normalBalance: 'DEBIT' as const,
             ownerUserId: 'staff-user-1',
@@ -196,6 +214,28 @@ describe('ledger constraints (BR-18, ADR-0006)', () => {
         }),
       ).rejects.toThrow(
         /Unique constraint failed on the (fields: \(`ownerUserId`\)|constraint: `ledger_account_cash_in_hand_owner_key`)/,
+      );
+    });
+
+    it('allows one of each business-wide account per organization, and one more in another organization', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const first = await createOrganization(tx);
+          const second = await createOrganization(tx);
+          const office = (organizationId: string) =>
+            tx.ledgerAccount.create({
+              data: {
+                organizationId,
+                accountType: 'CASH_AT_OFFICE',
+                normalBalance: 'DEBIT',
+              },
+            });
+          await office(first.id);
+          await office(second.id);
+          await office(first.id);
+        }),
+      ).rejects.toThrow(
+        /Unique constraint failed on the (fields: \(`organizationId`,`accountType`\)|constraint: `ledger_account_organization_singleton_key`)/,
       );
     });
   });

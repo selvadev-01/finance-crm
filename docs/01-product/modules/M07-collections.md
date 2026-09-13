@@ -148,6 +148,35 @@ The most important screen in the application (see [personas](../../00-overview/p
 
 ---
 
+## As built
+
+In `apps/api/src/collections/`, through `packages/contracts/src/collection.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
+
+| Endpoint                | Permission          | Answers                                                                                                   |
+| ----------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST /api/collections` | `collection.record` | `201` recorded; **`200` replay** with the stored body; `409 IDEMPOTENCY_KEY_REUSED`; `422 AMOUNT_EXCEEDS_OUTSTANDING`, `422 ACCOUNT_NOT_ACTIVE`; `404` off the Junior's line |
+| `GET /api/route`        | `collection.record` | Today's route for the Junior: day kind (WORKING / SUNDAY / HOLIDAY + name) and accounts due today by customer |
+
+**One transaction per collection** (BR-18), after a `SELECT … FOR UPDATE` on the account row so collections on one account are serialised:
+- The collection is written with `lineId` from the customer's line, `collectedByUserId` from the session, `expectedAmount = min(D, outstanding)` and `businessDate = toBusinessDate(capturedAt)`, all frozen at write.
+- The slot it answers becomes `COLLECTED` when the amount meets the expected, else `PARTIAL`, which includes `NO_PAYMENT`.
+- The account completes at zero outstanding: `COMPLETED`, `actualCompletionDate`, remaining slots `CANCELLED`. Otherwise every `PENDING` slot is replaced by a regenerated tail from the business date (BR-06).
+- Balances update, then the ledger posting: debit the collector's `CASH_IN_HAND`, created on first use; credit the receivable; move profit via `profitForCollection` on the running total. ₹0 posts nothing.
+- The audit entry is written, and the `idempotency_key` row holding the response.
+
+**Decided 2026-09-13:**
+- **Which slot is answered.** The earliest pending slot due on or before the business date, else the next pending slot. Cash is never refused for want of a slot.
+- **Device clocks.** A `capturedAt` more than 15 minutes ahead of the server is replaced by server time for the business date and logged. The original `capturedAt` is stored. Old dates (late syncs) are accepted.
+- **The route's permission.** `GET /api/route` reuses `collection.record`, because the route is the data a Junior records against. The RBAC matrix has no separate row for it.
+
+**Replay** (BR-13): a replay returns the stored body with `200` when the user, account, amount and `capturedAt` match, and `409` otherwise. The contract marks such a route with `replayStatus: 200`; the Nest interceptor answers a `Replayed` result with it, and the client treats it as success. A concurrent duplicate that loses the unique-key race is answered as a replay.
+
+**Tests:** successful writes are proven in Tier 1 only, because collection and ledger rows reject DELETE. The HTTP tier covers roles, validation and refusals that write nothing. The account row lock has no test: exercising it needs two committed collections.
+
+**Not built:** corrections and approvals, missed detection, the late-sync day-close reopen, notifications, the `idempotency_key` purge job, visiting order, and the whole offline client (outbox, service worker, S-01/S-02/S-03).
+
+---
+
 ## Risks
 
 | Risk                                      | Mitigation                                                                                                                                                                     |

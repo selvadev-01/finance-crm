@@ -6,6 +6,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { useApiQuery } from "../../../../lib/use-api-query";
+import { useSignedIn } from "../../../../lib/use-me";
+import { CustomerAccounts } from "../../accounts/account-parts";
 import {
   LoadFailed,
   RecordNotFound,
@@ -18,6 +20,7 @@ import { CustomerStatusBadge, formatMobile } from "../customer-list";
  * rather than showing an empty balance.
  */
 export function CustomerDetailView({ customerId }: { customerId: string }) {
+  const me = useSignedIn();
   const customer = useApiQuery(customerContract.getCustomer, {
     params: { customerId },
   });
@@ -104,12 +107,11 @@ export function CustomerDetailView({ customerId }: { customerId: string }) {
 
       <section aria-labelledby="customer-accounts" className="flex flex-col gap-3">
         <h2 id="customer-accounts" className="text-base font-semibold text-ink">
-          Accounts and collections
+          Accounts
         </h2>
+        <CustomerAccounts customerId={record.id} role={me.role} />
         <p className="text-sm text-ink-muted">
-          Accounts, outstanding amounts and collection history appear here once
-          accounts are recorded. Nothing is shown until then, rather than a zero
-          balance.
+          Collection history appears here once collections are recorded.
         </p>
       </section>
     </>

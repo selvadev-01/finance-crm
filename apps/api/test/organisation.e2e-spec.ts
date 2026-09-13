@@ -218,8 +218,15 @@ describe('organisation (M03, e2e)', () => {
 
   describe('detail reads (S-12, S-13)', () => {
     it('every role reads its own sector and line, including after deactivation', async () => {
-      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
-        const sector = await as(role).get(`/api/sectors/${sectorId}`).expect(200);
+      for (const role of [
+        'SUPER_ADMIN',
+        'ADMIN',
+        'SENIOR',
+        'JUNIOR',
+      ] as const) {
+        const sector = await as(role)
+          .get(`/api/sectors/${sectorId}`)
+          .expect(200);
         expect(sector.body).toMatchObject({ id: sectorId, isActive: true });
         const line = await as(role).get(`/api/lines/${lineId}`).expect(200);
         expect(line.body).toMatchObject({ id: lineId, sectorId });

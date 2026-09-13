@@ -131,7 +131,7 @@ The loan. Called "Account" everywhere in the UI.
 
 | Column                 | Type                | Null | Notes                                                                |
 | ---------------------- | ------------------- | ---- | -------------------------------------------------------------------- |
-| `accountCode`          | `String`            | No   | Unique (`ACC-2026-00892`)                                            |
+| `accountCode`          | `String`            | No   | Unique (`ACC-2026-00892`). API-issued: creation year + `account_code_seq`, which never restarts |
 | `customerId`           | `String`            | No   | FK → `customer.id`                                                   |
 | `lineId`               | `String`            | No   | FK → `line.id`. Line at creation                                     |
 | `accountAmount`        | `Decimal`           | No   | `A`. Immutable after disbursement                                    |
@@ -290,13 +290,14 @@ Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the
 
 | Column          | Type                | Null | Notes                                                                                                        |
 | --------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `organizationId` | `String`           | No   | FK → `organization.id` (added 2026-09-13)                                                                    |
 | `accountType`   | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` |
 | `ownerUserId`   | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                  |
 | `accountLoanId` | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                               |
 | `normalBalance` | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                          |
 | `balance`       | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                          |
 
-One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically.
+One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` and `EARNED_PROFIT` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
 
 Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE` and `LOAN_RECEIVABLE` and `CREDIT` for the rest; partial uniques make the two per-owner accounts one each.
 

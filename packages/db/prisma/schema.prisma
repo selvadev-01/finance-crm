@@ -274,31 +274,32 @@ model Organization {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  sectors       Sector[]
-  lines         Line[]
-  customers     Customer[]
-  accountLoans  AccountLoan[]
-  staffProfiles StaffProfile[]
-  holidays      Holiday[]
-  settings      Setting[]
+  sectors        Sector[]
+  lines          Line[]
+  customers      Customer[]
+  accountLoans   AccountLoan[]
+  staffProfiles  StaffProfile[]
+  holidays       Holiday[]
+  settings       Setting[]
+  ledgerAccounts LedgerAccount[]
 
   @@map("organization")
 }
 
 model StaffProfile {
-  id             String      @id @default(cuid())
-  organizationId String
-  userId         String      @unique
-  staffCode      String      @unique
-  role           StaffRole
-  phone          String      @unique
-  status         StaffStatus @default(ACTIVE)
+  id                 String      @id @default(cuid())
+  organizationId     String
+  userId             String      @unique
+  staffCode          String      @unique
+  role               StaffRole
+  phone              String      @unique
+  status             StaffStatus @default(ACTIVE)
   /// Set by an Admin password reset (US-003); cleared when the staff member
   /// changes their password. While set, only the password change is allowed.
-  mustChangePassword Boolean  @default(false)
-  joinedAt       DateTime    @db.Date
+  mustChangePassword Boolean     @default(false)
+  joinedAt           DateTime    @db.Date
   /// Soft delete. Excluded from every query when set.
-  deletedAt      DateTime?   @db.Timestamptz(3)
+  deletedAt          DateTime?   @db.Timestamptz(3)
 
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
@@ -379,13 +380,13 @@ model LineAssignment {
   line         Line         @relation(fields: [lineId], references: [id])
   staffProfile StaffProfile @relation(fields: [staffProfileId], references: [id])
 
-  // Serves the current-staffing lookup (erd.md).
-  @@index([lineId, effectiveTo])
-  @@index([staffProfileId])
   // One current Senior per line.
   @@unique([lineId], map: "line_assignment_current_senior_key", where: raw("(\"assignmentRole\" = 'SENIOR'::\"AssignmentRole\") AND (\"effectiveTo\" IS NULL)"))
   // A staff member works one line at a time.
   @@unique([staffProfileId], map: "line_assignment_current_staff_key", where: raw("(\"effectiveTo\" IS NULL)"))
+  // Serves the current-staffing lookup (erd.md).
+  @@index([lineId, effectiveTo])
+  @@index([staffProfileId])
   @@map("line_assignment")
 }
 
@@ -713,26 +714,33 @@ model CashDenomination {
 /// Unlike ledger_transaction and ledger_entry this table is NOT append-only:
 /// `balance` is a cache rebuilt by the nightly reconciliation job.
 model LedgerAccount {
-  id            String            @id @default(cuid())
-  accountType   LedgerAccountType
+  id             String            @id @default(cuid())
+  /// Every ledger account belongs to one organization; the business-wide
+  /// types (CASH_AT_OFFICE, CAPITAL, UNEARNED_PROFIT, EARNED_PROFIT) exist once
+  /// per organization (decided 2026-09-13).
+  organizationId String
+  accountType    LedgerAccountType
   /// Required for CASH_IN_HAND.
-  ownerUserId   String?
+  ownerUserId    String?
   /// Required for LOAN_RECEIVABLE.
-  accountLoanId String?
-  normalBalance Direction
+  accountLoanId  String?
+  normalBalance  Direction
   /// Cache. Rebuilt and verified by the nightly reconciliation job.
-  balance       Decimal           @default(0) @db.Decimal(14, 2)
+  balance        Decimal           @default(0) @db.Decimal(14, 2)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
-  accountLoan AccountLoan?  @relation(fields: [accountLoanId], references: [id])
-  entries     LedgerEntry[]
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  accountLoan  AccountLoan?  @relation(fields: [accountLoanId], references: [id])
+  entries      LedgerEntry[]
 
+  @@unique([ownerUserId], map: "ledger_account_cash_in_hand_owner_key", where: raw("(\"accountType\" = 'CASH_IN_HAND'::\"LedgerAccountType\")"))
+  @@unique([organizationId, accountType], map: "ledger_account_organization_singleton_key", where: raw("(\"accountType\" = ANY (ARRAY['CASH_AT_OFFICE'::\"LedgerAccountType\", 'CAPITAL'::\"LedgerAccountType\", 'UNEARNED_PROFIT'::\"LedgerAccountType\", 'EARNED_PROFIT'::\"LedgerAccountType\"]))"))
+  @@unique([accountLoanId], map: "ledger_account_loan_receivable_key", where: raw("(\"accountType\" = 'LOAN_RECEIVABLE'::\"LedgerAccountType\")"))
+  @@index([organizationId])
   @@index([accountType])
   @@index([ownerUserId])
   @@index([accountLoanId])
-  @@unique([ownerUserId], map: "ledger_account_cash_in_hand_owner_key", where: raw("(\"accountType\" = 'CASH_IN_HAND'::\"LedgerAccountType\")"))
-  @@unique([accountLoanId], map: "ledger_account_loan_receivable_key", where: raw("(\"accountType\" = 'LOAN_RECEIVABLE'::\"LedgerAccountType\")"))
   @@map("ledger_account")
 }
 

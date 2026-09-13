@@ -25,6 +25,12 @@ export interface RouteDefinition {
   body?: z.ZodType;
   /** Keyed by HTTP status. Exactly one 2xx status — the one the handler returns. */
   responses: Record<number, z.ZodType>;
+  /**
+   * An idempotent write (BR-13) answers a replayed key with this status and
+   * the **same body schema** as its success status: `201` when it created the
+   * record, `200` when it had already. The client treats both as success.
+   */
+  replayStatus?: 200;
 }
 
 /** Declares a route, keeping its literal types for both server and client. */

@@ -117,6 +117,19 @@ export function customerScope(
 }
 
 /**
+ * Accounts follow their customer's **current** line, like the customer does —
+ * after a transfer (US-023) the new line collects the account. Historical money
+ * is attributed by `collection.lineId`, not by this (BR-15).
+ */
+export function accountScope(
+  context: RequestContext,
+): Prisma.AccountLoanWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  return { customer: customerScope(context) };
+}
+
+/**
  * The single definition of "customers assigned to this Junior".
  *
  * **Decided 2026-09-13: every customer on the Junior's current line.** The
