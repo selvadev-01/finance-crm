@@ -1,17 +1,27 @@
 import { Module } from '@nestjs/common';
+
+import { AccessModule } from './access/access.module.js';
+import { AuditModule } from './audit/audit.module.js';
 import { RasiAuthModule } from './auth/auth.module.js';
+import { IdentityModule } from './identity/identity.module.js';
+import { OrganisationModule } from './organisation/organisation.module.js';
+import { PlatformModule } from './platform/platform.module.js';
 
 /**
  * The application root.
  *
- * The create-nest-app scaffold (AppController / AppService and its "Hello
- * World!" tests) has been removed — it was placeholder, not foundation.
- *
- * Modules arrive here one directory per M01–M16 as they are built. The health
- * and readiness endpoints belong to M16 (Phase 1); until then the only routes
- * served are Better Auth's `/api/auth/*`.
+ * Modules arrive here one directory per M01–M16 as they are built. So far:
+ * M16 Platform (config, logging, errors, database access, `/health/*`), M02
+ * Access Control (the global `PolicyGuard`), and Better Auth's `/api/auth/*`.
  */
 @Module({
-  imports: [RasiAuthModule],
+  imports: [
+    PlatformModule,
+    AuditModule,
+    RasiAuthModule,
+    AccessModule,
+    IdentityModule,
+    OrganisationModule,
+  ],
 })
 export class AppModule {}

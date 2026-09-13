@@ -21,7 +21,7 @@ Roles are single-valued: a person is a Senior or a Junior, never both.
 
 ## Data scoping
 
-Scoping is applied before any action check, as a mandatory predicate on every query.
+Scoping is applied before any action check, as a mandatory predicate on every query. "none" for Admins means no line restriction — they are still bounded by their own `organizationId`.
 
 | Role          | Predicate                                                                |
 | ------------- | ------------------------------------------------------------------------ |
@@ -30,7 +30,9 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | `SENIOR`      | `lineId = (current assignment of this staff member)`                     |
 | `JUNIOR`      | `lineId = (current assignment)` **and** customer assigned to this Junior |
 
-**"Current assignment" means `line_assignment` where `effectiveTo IS NULL`.** Not a field on the staff record — the assignment table is the authority (M03).
+**"Current assignment" means the `line_assignment` in effect today** — `effectiveFrom ≤ today ≤ effectiveTo`, with a null `effectiveTo` open-ended, and today the business date in Asia/Kolkata. (Corrected 2026-09-13 from "`effectiveTo IS NULL`", which switched a Junior moved "effective tomorrow" to the new line a day early.) Not a field on the staff record — the assignment table is the authority (M03).
+
+> **Open question — "customer assigned to this Junior".** The data model has no customer-to-Junior assignment, and a line may have several current Juniors. **Decided 2026-09-13, for now:** a Junior's customers are every customer on their current line. That is exact while a line has one Junior at a time; if lines share Juniors, add a temporal `customer_assignment` table (which is also where route visiting order belongs) and change the single predicate that encodes this ([M02 as built](modules/M02-access-control.md#as-built)).
 
 > **Scoping applies to historical rows by the row's own attribution, not the viewer's current line.** A Senior moved from Line 3 to Line 7 sees Line 7's data — including collections recorded on Line 7 before they arrived, and _not_ including the Line 3 history they used to supervise. The line is the unit of responsibility; the person is not.
 >

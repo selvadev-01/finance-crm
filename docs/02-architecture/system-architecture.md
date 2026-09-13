@@ -205,7 +205,7 @@ localhost
 └─ PostgreSQL    :5432    rasi_dev — schemas: public (dev), test (harness)
 ```
 
-`pnpm dev` starts both apps today. The api reads `process.env.PORT` and falls back to 3001; there is no other configuration in the scaffold.
+`pnpm dev` starts both apps today. The api validates its configuration at startup and listens on `PORT` (default 3001); see [M16](../01-product/modules/M16-platform.md#as-built).
 
 The architecture deliberately does not assume a deployment shape. API and worker are **separate processes from one codebase** ([ADR-0003](adr/0003-worker-in-api-process.md)), which runs equally well as two PM2 processes, two systemd units, or two containers. Nothing here needs revisiting when the hosting decision is made.
 

@@ -51,15 +51,32 @@ export function testEmail(label: string): string {
   return `${label}-${randomUUID()}@${testRunTag}.rasi.test`;
 }
 
+/** A code or name that `deleteTestRunData` will clean up — e.g. a line code. */
+export function testCode(label: string): string {
+  return `${label}-${testRunTag}-${randomUUID().slice(0, 8)}`;
+}
+
 /**
  * Delete the rows this test run created through HTTP, and only those.
  *
- * Deleting the user cascades to Better Auth's `session` and `account` rows.
- * When Tier 2 tests start creating domain rows, extend this with a delete per
- * table, matched on `testRunTag` — never a bulk delete.
+ * Every delete is matched on `testRunTag` — never a bulk delete. The order
+ * follows foreign keys: assignments and customers before the staff and lines
+ * they reference; staff (through their user, which cascades to
+ * `staff_profile`, `session` and `account`) before their organization.
+ *
+ * Collections are append-only and cannot be deleted (BR-14), so Tier 2 tests
+ * must not create them; collection scope is proven in Tier 1.
  */
 export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
-  await prisma.user.deleteMany({
-    where: { email: { endsWith: `@${testRunTag}.rasi.test` } },
+  const taggedEmail = { endsWith: `@${testRunTag}.rasi.test` };
+  const taggedCode = { contains: testRunTag };
+
+  await prisma.lineAssignment.deleteMany({
+    where: { staffProfile: { user: { email: taggedEmail } } },
   });
+  await prisma.customer.deleteMany({ where: { customerCode: taggedCode } });
+  await prisma.user.deleteMany({ where: { email: taggedEmail } });
+  await prisma.line.deleteMany({ where: { code: taggedCode } });
+  await prisma.sector.deleteMany({ where: { code: taggedCode } });
+  await prisma.organization.deleteMany({ where: { name: taggedCode } });
 }

@@ -6,17 +6,33 @@ REST over a shared typed contract. Decision in [ADR-0002](adr/0002-ts-rest-api-c
 
 ## The contract
 
-`packages/contracts` holds Zod schemas and a ts-rest contract consumed by **both** NestJS and Next.js.
+`packages/contracts` holds Zod schemas and route definitions consumed by **both** NestJS and Next.js — an in-house contract, not ts-rest ([ADR-0011](adr/0011-in-house-api-contract.md)).
 
 ```
 packages/contracts/src/
-├─ collections.contract.ts
-├─ accounts.contract.ts
-├─ shared/money.ts        Decimal-as-string schema
+├─ route.ts                  route(), RouteInput / RouteRequest / RouteSuccess types
+├─ client.ts                 createApiClient — typed fetch, parses success bodies
+├─ shared.ts                 calendar date, id, code, pagination, error schemas
+├─ organisation.contract.ts  M03 — the first contract
 └─ index.ts
 ```
 
-One definition produces server-side validation, client types and runtime parsing. Changing a response shape surfaces as a TypeScript error in both applications immediately.
+```ts
+// packages/contracts — one object per endpoint
+createLine: route({
+  method: "POST",
+  path: "/api/lines",
+  body: z.object({ sectorId: idSchema, code: codeSchema, name: nameSchema }),
+  responses: { 201: lineSchema, 409: errorSchema, 422: errorSchema },
+}),
+
+// apps/api — the handler
+@RequirePermission("line.manage")
+@ContractRoute(api.createLine)
+createLine(@CurrentContext() context, @ContractInput() { body }: RouteInput<typeof api.createLine>) { … }
+```
+
+One definition produces server-side validation, response shaping, client types and client-side parsing. Changing a response shape surfaces as a TypeScript error in both applications immediately. **Responses are parsed through their schema on the way out**, so a field the contract does not declare never reaches a client.
 
 > Chosen over OpenAPI codegen (a build step that drifts between regenerations) and tRPC (no plain REST surface). The offline outbox replays stored HTTP requests from a service worker, so the API must be ordinary REST — a request that can be serialised, stored for hours and replayed without a client runtime.
 

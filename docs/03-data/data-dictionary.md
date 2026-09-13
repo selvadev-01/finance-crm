@@ -38,15 +38,16 @@ Column-level reference. Structure and reasoning are in [`erd.md`](erd.md); rules
 
 ### `staff_profile`
 
-| Column      | Type                | Null | Notes                                                   |
-| ----------- | ------------------- | ---- | ------------------------------------------------------- |
-| `userId`    | `String`            | No   | Unique. FK → `user.id`, cascade delete                  |
-| `staffCode` | `String`            | No   | Unique, human-readable (`JR-0042`)                      |
-| `role`      | `StaffRole`         | No   | `SUPER_ADMIN` \| `ADMIN` \| `SENIOR` \| `JUNIOR`        |
-| `phone`     | `String`            | No   | E.164. Unique                                           |
-| `status`    | `StaffStatus`       | No   | `ACTIVE` \| `SUSPENDED` \| `INACTIVE`. Default `ACTIVE` |
-| `joinedAt`  | `DateTime @db.Date` | No   |                                                         |
-| `deletedAt` | `DateTime`          | Yes  | Soft delete; excluded from all queries when set         |
+| Column               | Type                | Null | Notes                                                                                                  |
+| -------------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
+| `userId`             | `String`            | No   | Unique. FK → `user.id`, cascade delete                                                                 |
+| `staffCode`          | `String`            | No   | Unique, human-readable (`JR-0042`)                                                                     |
+| `role`               | `StaffRole`         | No   | `SUPER_ADMIN` \| `ADMIN` \| `SENIOR` \| `JUNIOR`                                                       |
+| `phone`              | `String`            | No   | E.164. Unique                                                                                          |
+| `status`             | `StaffStatus`       | No   | `ACTIVE` \| `SUSPENDED` \| `INACTIVE`. Default `ACTIVE`                                                |
+| `mustChangePassword` | `Boolean`           | No   | Default `false`. Set by an Admin password reset (US-003); while set, only a password change is allowed |
+| `joinedAt`           | `DateTime @db.Date` | No   |                                                                                                        |
+| `deletedAt`          | `DateTime`          | Yes  | Soft delete; excluded from all queries when set                                                        |
 
 Role is single-valued — a person is a Senior or a Junior, not both. Multi-role would complicate every scoping query for a case the business does not have.
 
@@ -80,7 +81,7 @@ Temporal staffing record (BR-15 rationale).
 | `staffProfileId` | `String`            | No   | FK → `staff_profile.id`        |
 | `assignmentRole` | `AssignmentRole`    | No   | `SENIOR` \| `JUNIOR`           |
 | `effectiveFrom`  | `DateTime @db.Date` | No   |                                |
-| `effectiveTo`    | `DateTime @db.Date` | Yes  | `NULL` = current assignment    |
+| `effectiveTo`    | `DateTime @db.Date` | Yes  | `NULL` = open-ended            |
 | `reason`         | `String`            | Yes  | Free text for the reassignment |
 
 Constraints:
@@ -90,6 +91,8 @@ Constraints:
 - Check `effectiveTo IS NULL OR effectiveTo >= effectiveFrom`
 
 The partial uniques are declared in `schema.prisma` (`partialIndexes` preview), so Prisma manages them.
+
+**Open is not the same as current.** The row in effect on a business date is the one with `effectiveFrom ≤ date ≤ effectiveTo` (null `effectiveTo` open-ended). A move made "effective tomorrow" closes the old row today and opens the new one — which is open, but not yet in effect.
 
 ---
 

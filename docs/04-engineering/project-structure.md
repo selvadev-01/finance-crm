@@ -2,7 +2,7 @@
 
 What is actually in the repository right now, as opposed to the target shape described in [`system-architecture.md`](../02-architecture/system-architecture.md#repository-shape).
 
-**Read this before starting work.** The specification set is complete; the code is a Turborepo scaffold with two runnable apps, and `packages/domain` holds the Phase 1 money maths — working calendar, schedule generation, variance classification and profit apportionment — but nothing consumes it yet. Every module spec (M01–M16) is still unimplemented.
+**Read this before starting work.** The specification set is complete; the code is a Turborepo scaffold with two runnable apps, and `packages/domain` holds the Phase 1 money maths — working calendar, schedule generation, variance classification and profit apportionment — but nothing consumes it yet. In `apps/api`, M16 Platform, M02 Access Control, M13 Audit and M03 Organisation are partly built (API only); the other modules are unimplemented.
 
 ---
 
@@ -11,10 +11,10 @@ What is actually in the repository right now, as opposed to the target shape des
 ```
 rasi/
 ├─ apps/
-│  ├─ api/               NestJS 12 — scaffold only (AppController / AppService)
+│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation and M01 password-reset endpoints, seed dataset (src/seed, dry run by default), Better Auth, /health/*
 │  └─ web/               Next.js 16 App Router — starter page only
 ├─ packages/
-│  ├─ contracts/         @repo/contracts — Zod 4.6.2, empty until the first endpoint
+│  ├─ contracts/         @repo/contracts — Zod 4.6.2; in-house route contract and fetch client (ADR-0011), M03 routes
 │  ├─ db/                @repo/db — Prisma 7.10.0, schema, migrations, client
 │  ├─ domain/            @repo/domain — working calendar (M06), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment (BR-18); decimal.js 10.6.0, date-fns 4.4.0, @date-fns/tz 1.5.0, fast-check 4.10.0 (dev)
 │  ├─ ui/                @repo/ui — Tailwind v4 theme, Button, Badge, empty states
@@ -41,14 +41,14 @@ rasi/
 
 ### Per app
 
-|               | `apps/web`                                  | `apps/api`                             |
-| ------------- | ------------------------------------------- | -------------------------------------- |
-| Framework     | Next.js `16.3.4`, React `19.2.8`            | NestJS `12`, Express platform          |
-| Module system | ESM                                         | ESM (`"type": "module"`)               |
-| Lint          | ESLint `10` flat config, `--max-warnings 0` | oxlint `1.58` over `src/` and `test/`  |
-| Tests         | none yet                                    | Vitest `4`, plus a separate e2e config |
-| Styling       | `globals.css` + CSS Modules                 | —                                      |
-| Dev port      | `3000`                                      | `3001` (`PORT` env overrides)          |
+|               | `apps/web`                                  | `apps/api`                                         |
+| ------------- | ------------------------------------------- | -------------------------------------------------- |
+| Framework     | Next.js `16.3.4`, React `19.2.8`            | NestJS `12`, Express platform                      |
+| Module system | ESM                                         | ESM (`"type": "module"`)                           |
+| Lint          | ESLint `10` flat config, `--max-warnings 0` | oxlint `1.58` over `src/` and `test/`              |
+| Tests         | none yet                                    | Vitest `4` — unit + Tier 1, and an HTTP e2e config |
+| Styling       | `globals.css` + CSS Modules                 | —                                                  |
+| Dev port      | `3000`                                      | `3001` (`PORT` env overrides)                      |
 
 **`apps/api` is pinned to TypeScript 6 deliberately.** TypeScript 7.0 is the native port and ships the `tsc` executable only — it does not expose the programmatic compiler API, which the Nest CLI needs to build. Raising the api to `7.0.2` type-checks fine (`check-types` is plain `tsc --noEmit`) and then fails at `nest build` with _"The installed TypeScript version does not expose the programmatic compiler API"_. The API is expected back in TypeScript 7.1; until then the api stays on `^6.0.2` and the version split is correct, not technical debt.
 
@@ -70,7 +70,7 @@ Run from the repository root; Turborepo fans them out.
 | `pnpm build`       | `next build` + `nest build`, topologically ordered |
 | `pnpm lint`        | ESLint in web/ui, oxlint in api                    |
 | `pnpm check-types` | `tsc --noEmit` across the workspace                |
-| `pnpm test`        | Vitest in api and domain                           |
+| `pnpm test`        | Vitest in api, domain and contracts                |
 | `pnpm format`      | Prettier write across `ts`, `tsx`, `md`            |
 
 `packages/db` adds its own, run with `pnpm --filter @repo/db <script>`:
@@ -111,16 +111,15 @@ Everything in this list is specified but unbuilt. The [roadmap](../06-delivery/r
 
 **This table is maintained.** When one of these lands, delete its row and add it to the workspace tree above with its real version. Per-story progress is not tracked here — it lives in [`backlog.md`](../06-delivery/backlog.md).
 
-| Missing                                                                          | Specified in                                                                                                                    |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| The 24 Rasi models — only Better Auth's four tables exist so far                 | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
-| `packages/db` seed                                                               | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
-| `packages/contracts` contents — the ts-rest contract (the package exists, empty) | [ADR-0002](../02-architecture/adr/0002-ts-rest-api-contract.md)                                                                 |
-| `packages/notifications` — Web Push + FCM adapters                               | [notifications.md](../02-architecture/notifications.md)                                                                         |
-| pg-boss queues and the `--worker` boot mode                                      | [ADR-0003](../02-architecture/adr/0003-worker-in-api-process.md), [ADR-0004](../02-architecture/adr/0004-pg-boss-over-redis.md) |
-| Service worker, IndexedDB outbox                                                 | [offline-sync.md](../02-architecture/offline-sync.md)                                                                           |
-| The scoped repository layer and `RequestContext`                                 | [M02](../01-product/modules/M02-access-control.md)                                                                              |
-| Any of M01–M16                                                                   | [prd.md](../01-product/prd.md)                                                                                                  |
+| Missing                                                          | Specified in                                                                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| The 24 Rasi models — only Better Auth's four tables exist so far | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
+| OpenAPI generated from the contract, served at `/api/docs`       | [ADR-0011](../02-architecture/adr/0011-in-house-api-contract.md)                                                                |
+| `packages/notifications` — Web Push + FCM adapters               | [notifications.md](../02-architecture/notifications.md)                                                                         |
+| pg-boss queues and the `--worker` boot mode                      | [ADR-0003](../02-architecture/adr/0003-worker-in-api-process.md), [ADR-0004](../02-architecture/adr/0004-pg-boss-over-redis.md) |
+| Service worker, IndexedDB outbox                                 | [offline-sync.md](../02-architecture/offline-sync.md)                                                                           |
+| Scope predicates beyond customers and collections                | [M02](../01-product/modules/M02-access-control.md)                                                                              |
+| Any of M01–M16                                                   | [prd.md](../01-product/prd.md)                                                                                                  |
 
 The `app.controller` / `app.service` pair in `apps/api` and the starter page in `apps/web` are scaffold, not foundations — expect to delete them rather than grow them.
 
@@ -137,9 +136,9 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
-**Database constraints** are in nine migrations — `add_better_auth`, `rasi_core`, then seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes. The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
+**Ten migrations** — `add_better_auth`, `rasi_core`, seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes, and `staff_must_change_password` (US-003). The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
 
-`.env.example` exists at the repository root. Validation of those variables is still an M16 item ([M16 Platform](../01-product/modules/M16-platform.md)); `apps/api` reads `process.env` directly until the config module lands.
+`.env.example` exists at the repository root. `apps/api` validates every variable at startup and refuses to boot, listing every problem, if one is missing or malformed; `apps/api/src/platform/config/config.ts` is its only reader of `process.env` ([M16](../01-product/modules/M16-platform.md#as-built)). `apps/api` does not load `.env` itself — the environment must provide the variables.
 
 ### Prisma 7 differs from most Prisma documentation
 

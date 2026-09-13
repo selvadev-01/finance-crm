@@ -75,6 +75,21 @@ Seniors and Juniors have no access. The audit log records their actions; exposin
 
 ---
 
+## As built
+
+**`AuditWriter`** (`apps/api/src/audit/`) records `CREATE` and `UPDATE` for sectors, lines and line assignments (M03), with before/after snapshots of the changed fields, the actor from the request context, and IP address and user agent from the request. **It refuses to write outside a transaction** (`AUDIT_OUTSIDE_TRANSACTION`), so an entry always commits or rolls back with its change — the same-transaction rule, enforced rather than remembered.
+
+**`LOGIN`** is written by the sign-in hooks in `apps/api/src/auth/` ([M01 as built](M01-identity.md#as-built--sign-in)). Two departures from the design above, both deliberate:
+
+- **Written directly, not from an event.** No event bus exists yet. When one does, the sign-in hook becomes an event emitter and this module the writer.
+- **Not in the same transaction as the session.** Better Auth creates the session in its own write. The equivalent guarantee is kept by undoing the session when the audit write fails.
+
+Rows carry `after: { outcome, reason }`, IP address and user agent. For an attempt matching no user, `actorUserId` is null and `entityId` is `unknown`; the typed email is not stored.
+
+**Testing.** `audit_log` rejects DELETE, so HTTP tests cannot leave real audit rows in the shared development schema. They record attempts and `AuditWriter` entries in memory (`test/app.ts` subclasses the real writer, so its transaction check still runs), and rolled-back Tier 1 tests prove the real rows. Every future audited action needs the same split.
+
+---
+
 ## Events consumed
 
 All modules emit domain events; this module subscribes broadly rather than each module writing its own audit rows.

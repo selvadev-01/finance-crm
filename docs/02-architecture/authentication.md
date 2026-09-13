@@ -33,7 +33,10 @@ import { prisma } from "@repo/db";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
-  emailAndPassword: { enabled: true },
+  // No public sign-up: staff are created by an Admin (M01).
+  emailAndPassword: { enabled: true, disableSignUp: true },
+  // Only ACTIVE staff sign in; every attempt writes a LOGIN audit entry.
+  hooks: createSignInHooks(prisma),
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days — see below
     updateAge: 60 * 60 * 24, // rolling renewal
@@ -61,20 +64,21 @@ AuthModule.forRoot({ auth });
 Two details that fail quietly if missed:
 
 - **`bodyParser: false` is mandatory.** Better Auth needs the raw request body; leaving Nest's parser enabled breaks every auth route with no obvious cause.
-- **It is global, so every other endpoint loses JSON parsing too.** The API design assumes parsed JSON bodies everywhere else, so `main.ts` re-adds `express.json()` for all paths that do _not_ start with `/api/auth`. Removing that middleware breaks every non-auth `POST` instead.
+- **It is global, so every other endpoint loses JSON parsing too.** The API design assumes parsed JSON bodies everywhere else, so `configureApp` (`apps/api/src/platform/configure-app.ts`, called by `main.ts` and every HTTP test) re-adds `express.json()` for all paths that do _not_ start with `/api/auth`. Removing that middleware breaks every non-auth `POST` instead.
 - **`forRoot({ auth })` takes an object** in v2.x. The older `forRoot(auth)` signature is wrong and will not work.
 
 ### Guards and decorators
 
-`AuthGuard` registers globally. Available decorators:
+The library's own global `AuthGuard` is disabled (`disableGlobalAuthGuard`). **M02's `PolicyGuard` is the only global guard**: it lets `@AllowAnonymous()` routes through without touching the session, then runs the library's session check through `RasiAuthGuard` (`apps/api/src/auth/rasi-auth.guard.ts`), then staff status, permission and — in repositories — scope ([M02 as built](../01-product/modules/M02-access-control.md#as-built)). The library guard on its own resolves the session — a database query — _before_ checking whether a route is public, which would make `/health/live` fail whenever the database is down.
 
-| Decorator           | Purpose                                   |
-| ------------------- | ----------------------------------------- |
-| `@AllowAnonymous()` | Public route                              |
-| `@OptionalAuth()`   | Session provided if present, not required |
-| `@Session()`        | Inject the session into a handler         |
+| Decorator                     | Purpose                                                  |
+| ----------------------------- | -------------------------------------------------------- |
+| `@AllowAnonymous()`           | Public route                                             |
+| `@RequirePermission(p)` (M02) | Session, `ACTIVE` staff and a role holding `p`           |
+| `@CurrentContext()` (M02)     | The resolved `RequestContext`, for repository calls      |
+| `@Session()`                  | The Better Auth session, on a `@RequirePermission` route |
 
-**Rasi's `PolicyGuard` (M02) runs after `AuthGuard`** and performs role and line-scope enforcement. Better Auth answers _who you are_; it never answers _what you may do_.
+Every route carries `@AllowAnonymous()` or `@RequirePermission`; the application will not start otherwise. `@OptionalAuth()` is not supported — a route that works without a session is public. Better Auth answers _who you are_; it never answers _what you may do_.
 
 ---
 

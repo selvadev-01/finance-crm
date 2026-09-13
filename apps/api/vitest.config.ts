@@ -25,6 +25,7 @@ export default defineConfig({
       WEB_ORIGIN: process.env['WEB_ORIGIN'] ?? 'http://localhost:3000',
       BETTER_AUTH_SECRET:
         process.env['BETTER_AUTH_SECRET'] ?? 'test-secret-not-for-production',
+      LOG_LEVEL: 'silent',
     },
     // Fails the run if migrations are pending; never applies them.
     globalSetup: ['./test/global-setup.ts'],

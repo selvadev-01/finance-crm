@@ -41,7 +41,7 @@ A Junior calling the collection endpoint for another line's customer passes chec
 | `SENIOR`      | `lineId = current assignment`                                          |
 | `JUNIOR`      | `lineId = current assignment` **and** customer assigned to this Junior |
 
-**"Current assignment" is resolved from `line_assignment` where `effectiveTo IS NULL`** — never from a field on the staff record (M03).
+**"Current assignment" is the `line_assignment` in effect on today's business date** (`effectiveFrom ≤ today`, `effectiveTo` null or `≥ today` — corrected 2026-09-13 from "`effectiveTo IS NULL`"; see As built) — never from a field on the staff record (M03).
 
 ### Historical rows scope by their own attribution
 
@@ -97,6 +97,37 @@ This module exposes no endpoints of its own. It provides:
 ## Testing requirement
 
 **Every cell in the RBAC matrix is an API-level test asserting the actual HTTP status.** Verifying that a button is hidden does not count. PRD release gate 5 depends on this module and is verified here, not in the UI.
+
+---
+
+## As built
+
+In `apps/api/src/access/`. Story status is in the [backlog](../../06-delivery/backlog.md); this records how the design above was realised and where it differs.
+
+**One global guard, fixed order.** `PolicyGuard` is the only `APP_GUARD`; Better Auth's global guard is disabled and its session check runs inside `PolicyGuard` through `RasiAuthGuard`, because the order of several global guards depends on module import order. Each step has a fixed response:
+
+| Step                                     | Failure                        |
+| ---------------------------------------- | ------------------------------ |
+| `@AllowAnonymous()`                      | — (allowed, nothing resolved)  |
+| Valid session                            | `401 UNAUTHENTICATED`          |
+| Route declares `@RequirePermission`      | `403 ROUTE_PERMISSION_MISSING` |
+| `ACTIVE`, undeleted `staff_profile`      | `401 STAFF_NOT_ACTIVE`         |
+| Role holds the permission                | `403 PERMISSION_DENIED`        |
+| Row in scope (repository, not the guard) | `404 <ENTITY>_NOT_FOUND`       |
+
+A suspended, inactive, soft-deleted or profile-less user gets the same `STAFF_NOT_ACTIVE`, whatever the reason. `RouteAccessAudit` refuses to **start** an application containing a route with neither decorator, naming it.
+
+**Permissions** — `permissions.ts` maps each action in the [RBAC matrix](../rbac-matrix.md) to the roles allowed it. `permissions.spec.ts` parses the matrix document and fails when the map and the document disagree, when a matrix row is unmapped, or when a permission has no row.
+
+**Request context** — resolved on every request from `staff_profile` and the `line_assignment` row with `effectiveTo IS NULL`: `requestId`, `userId`, `staffProfileId`, `organizationId`, `role`, `currentLineId`. **"Current" is date-aware** — the assignment with `effectiveFrom ≤ today ≤ effectiveTo` on today's business date, not merely the one with no end date (decided 2026-09-13 with M03, because a move made "effective tomorrow" opens its row today). **It is not cached**, so the "events consumed" above need no invalidation: a suspension, role change or reassignment takes effect on the next request, proven over HTTP with the session unchanged. Controllers take it with `@CurrentContext()` and pass it explicitly to repository methods.
+
+**Scope** — `scope.ts`: `sectorScope`, `lineScope`, `customerScope` and `collectionScope` return Prisma filters. Admins and Super Admins are bounded by their `organizationId` (added with M03) — "all" never means another organization's rows; `inScope(scope, where)` combines one with a query's own filter; `foundInScope(row, entity)` turns a missing row into the `404`. A Senior or Junior with no current assignment matches no rows. A Junior's collections are their own entries (`collectedByUserId`) on their current line. Historical rows scope by their frozen `lineId`, proven against real collections in a rolled-back test.
+
+**"Customer assigned to this Junior" — decided 2026-09-13: every customer on the Junior's current line.** The data model has no customer-to-Junior assignment. The rule lives in one function (`juniorCustomers`), so a future `customer_assignment` table changes it without touching callers. Recorded as an open question in the [RBAC matrix](../rbac-matrix.md#data-scoping).
+
+**The RBAC matrix harness** (`apps/api/test/rbac-matrix.e2e-spec.ts`) is generated from `RouteAccessAudit.routes()` — the routes the app actually serves. Every route × role is a test asserting the real status (`403 PERMISSION_DENIED` without the permission, neither `401` nor `403` with it), plus `401` with no session; a pinned table of route → permission makes a new, removed or re-permissioned route fail until the table is edited. The chain is complete for the action half: matrix document → `permissions.ts` (`permissions.spec.ts`) → every served route (the harness). Row scope is asserted per module.
+
+**Not enforced mechanically:** `Database.client` remains reachable, so a service could still write an unscoped query. The protection is that repository methods require a `RequestContext` and scope through `inScope`, and review — not a type or a runtime check. Predicates for accounts, schedules, day close and cash arrive with the modules that own those tables.
 
 ---
 

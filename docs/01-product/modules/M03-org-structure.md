@@ -22,7 +22,7 @@
 
 ## Assignment is temporal, not a field
 
-`line_assignment` records `(lineId, staffProfileId, assignmentRole, effectiveFrom, effectiveTo)`. `effectiveTo IS NULL` means current.
+`line_assignment` records `(lineId, staffProfileId, assignmentRole, effectiveFrom, effectiveTo)`. `effectiveTo IS NULL` means open-ended; the **current** assignment is the one in effect on a date — `effectiveFrom ≤ date ≤ effectiveTo` (corrected 2026-09-13, see As built).
 
 > A `currentLineId` column on the staff record would be simpler and wrong. Juniors move between lines often (§16), and the question asked when a discrepancy surfaces months later is _"who was responsible for Line 3 on 14 March"_. A mutable field cannot answer it. History is the requirement, not an enhancement.
 
@@ -95,6 +95,46 @@ The line detail view aggregates from other modules — this module owns the stru
 | Account value, invested, profit    | M09      |
 | Expected / actual daily collection | M07      |
 | Pending, extra, completed          | M07, M05 |
+
+---
+
+## As built
+
+In `apps/api/src/organisation/`, served through the contract in `packages/contracts/src/organisation.contract.ts` ([ADR-0011](../../02-architecture/adr/0011-in-house-api-contract.md)). Status is in the [backlog](../../06-delivery/backlog.md).
+
+| Endpoint                                    | Permission                | Refusals                                                                       |
+| ------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `GET /api/sectors`                          | `organisation.view`       | — (scoped: Admins their organization, Seniors and Juniors their line's sector) |
+| `POST /api/sectors`                         | `sector.manage`           | `409 SECTOR_CODE_TAKEN`                                                        |
+| `PATCH /api/sectors/:sectorId`              | `sector.manage`           | `404` (rename only)                                                            |
+| `POST /api/sectors/:sectorId/deactivation`  | `sector.manage`           | `422 SECTOR_HAS_ACTIVE_LINES`                                                  |
+| `GET /api/lines`                            | `organisation.view`       | — (scoped; `?sectorId=`, `?includeInactive=true`)                              |
+| `POST /api/lines`                           | `line.manage`             | `404` sector, `422 SECTOR_INACTIVE`, `409 LINE_CODE_TAKEN`                     |
+| `PATCH /api/lines/:lineId`                  | `line.manage`             | `404` (rename only)                                                            |
+| `POST /api/lines/:lineId/deactivation`      | `line.manage`             | `422 LINE_HAS_ACTIVE_ACCOUNTS`                                                 |
+| `POST /api/lines/:lineId/senior-assignment` | `assignment.assignSenior` | see below                                                                      |
+| `POST /api/lines/:lineId/junior-assignment` | `assignment.moveJunior`   | see below                                                                      |
+
+Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit entry in the same transaction (M13). Deactivating something already inactive changes and audits nothing. Codes are entered by the Admin and immutable; only names change.
+
+**Assignments.** `effectiveFrom` is required. The outgoing rows — the staff member's own open assignment, and for a Senior assignment the line's open Senior — are closed with `effectiveTo = effectiveFrom − 1 day` and the new row opened, in one transaction, with nothing deleted. So "effective today" closes the incumbent yesterday (US-012), and "effective tomorrow" closes the old line today (US-013). Collections are never touched; a test moves a Junior with 400 collections and proves Line 3's count and total unchanged.
+
+| Refusal                             | Status | When                                                                            |
+| ----------------------------------- | ------ | ------------------------------------------------------------------------------- |
+| `LINE_NOT_FOUND`, `STAFF_NOT_FOUND` | `404`  | Outside the caller's organization, or missing                                   |
+| `LINE_INACTIVE`                     | `422`  |                                                                                 |
+| `STAFF_NOT_ACTIVE`                  | `422`  | Suspended or inactive staff                                                     |
+| `STAFF_ROLE_MISMATCH`               | `422`  | A Junior into the Senior assignment, or the reverse                             |
+| `EFFECTIVE_BEFORE_JOINING`          | `422`  | `effectiveFrom` before `joinedAt` (the risk below)                              |
+| `EFFECTIVE_NOT_AFTER_CURRENT`       | `422`  | A row being closed starts on or after `effectiveFrom`; checked before any write |
+| `ALREADY_ASSIGNED`                  | `409`  | Already on this line                                                            |
+| `ASSIGNMENT_CONFLICT`               | `409`  | A concurrent change tripped a partial unique index                              |
+
+**A Senior who already runs another line may be moved — decided 2026-09-13.** Their old line is left without a Senior and returned in `linesWithoutSenior`, and recorded on the audit entry. The alternative, refusing, would make swapping two Seniors impossible without a gap. This relaxes "a line always has a Senior" to "assigning a Senior never leaves the _target_ line without one".
+
+**"Current" is date-aware** (M02): a row opened "effective tomorrow" does not change anyone's scope until tomorrow.
+
+**Not built:** notifications to the staff and Seniors involved (M10), `assignment.changed` and the other events (no event bus yet), current-staffing and history views (US-014, US-015), reactivation, and the backdating-past-a-closed-day rule (day close is M08). Deactivating a line does not close its open assignments.
 
 ---
 

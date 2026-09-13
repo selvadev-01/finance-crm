@@ -293,6 +293,9 @@ model StaffProfile {
   role           StaffRole
   phone          String      @unique
   status         StaffStatus @default(ACTIVE)
+  /// Set by an Admin password reset (US-003); cleared when the staff member
+  /// changes their password. While set, only the password change is allowed.
+  mustChangePassword Boolean  @default(false)
   joinedAt       DateTime    @db.Date
   /// Soft delete. Excluded from every query when set.
   deletedAt      DateTime?   @db.Timestamptz(3)

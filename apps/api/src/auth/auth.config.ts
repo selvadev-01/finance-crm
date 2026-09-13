@@ -2,6 +2,11 @@ import { prisma } from '@repo/db';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 
+import { loadConfig } from '../platform/config/config.js';
+import { completePasswordChange, passwordChange } from './password-change.js';
+import { signInAudit, writeSignInAudit } from './sign-in-audit.js';
+import { createSignInHooks } from './sign-in-policy.js';
+
 /**
  * Better Auth answers *who you are*. It never answers *what you may do* —
  * roles and line scoping live in `staff_profile` and M02's PolicyGuard
@@ -12,17 +17,19 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
  * no DI seam to hand it. Everything else receives Prisma through DI so the
  * test harness can substitute a transaction-bound client.
  */
-const webOrigin = process.env['WEB_ORIGIN'];
-if (!webOrigin) {
-  throw new Error(
-    'WEB_ORIGIN is not set. Copy .env.example to .env and fill it in.',
-  );
-}
+const config = loadConfig();
+const webOrigin = config.WEB_ORIGIN;
+const isProduction = config.NODE_ENV === 'production';
 
-const isProduction = process.env['NODE_ENV'] === 'production';
+signInAudit.write = (attempt) => writeSignInAudit(prisma, attempt);
+passwordChange.complete = (userId) => completePasswordChange(prisma, userId);
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
+
+  // Passed explicitly rather than left for Better Auth to read from the
+  // environment: config.ts is the only reader of process.env (M16).
+  secret: config.BETTER_AUTH_SECRET,
 
   // The origin the browser reaches Better Auth on. Same-origin in both
   // environments, so this is the web origin rather than the API port: in
@@ -33,9 +40,15 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    // security.md — staff accounts are Admin-created, never self-registered.
+    // M01, security.md — staff accounts are Admin-created, never
+    // self-registered. `/api/auth/sign-up/email` refuses every request; staff
+    // creation (US-092) creates the user and credential server-side.
+    disableSignUp: true,
     minPasswordLength: 10,
   },
+
+  // US-001: only ACTIVE staff sign in, and every attempt is audited.
+  hooks: createSignInHooks(prisma),
 
   session: {
     // 30 days, rolling. Deliberately far longer than a typical web app: a

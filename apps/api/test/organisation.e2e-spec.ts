@@ -1,0 +1,403 @@
+import type { INestApplication } from '@nestjs/common';
+import { organisationContract, type RouteDefinition } from '@repo/contracts';
+import type { PrismaClient, StaffRole } from '@repo/db';
+import { toBusinessDate } from '@repo/domain';
+import type { Server } from 'node:http';
+import request from 'supertest';
+
+import { createTestApp, recordedAudit } from './app.js';
+import {
+  createTestPrismaClient,
+  deleteTestRunData,
+  testCode,
+} from './database.js';
+import {
+  createTestOrganization,
+  createTestStaff,
+  signIn,
+  type TestStaff,
+} from './staff.js';
+
+/**
+ * M03 Organisation over HTTP (US-010…US-013): every route for every role, the
+ * error shapes, pagination, and the contract's response shaping.
+ */
+describe('organisation (M03, e2e)', () => {
+  let app: INestApplication<Server>;
+  let prisma: PrismaClient;
+  let organizationId: string;
+  let sectorId: string;
+  let lineId: string;
+  const cookies = {} as Record<StaffRole, string>;
+  const staff = {} as Record<StaffRole, TestStaff>;
+  const today = toBusinessDate(new Date());
+
+  const http = () => request(app.getHttpServer());
+  const as = (role: StaffRole) => ({
+    get: (path: string) => http().get(path).set('Cookie', cookies[role]),
+    post: (path: string, body?: object) =>
+      http().post(path).set('Cookie', cookies[role]).send(body),
+    patch: (path: string, body?: object) =>
+      http().patch(path).set('Cookie', cookies[role]).send(body),
+  });
+
+  beforeAll(async () => {
+    prisma = createTestPrismaClient();
+    app = await createTestApp();
+    const org = await createTestOrganization(prisma, ['Line A']);
+    organizationId = org.organization.id;
+    sectorId = org.sector.id;
+    lineId = org.lines[0]!.id;
+
+    for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
+      staff[role] = await createTestStaff(prisma, { organizationId, role });
+      cookies[role] = await signIn(app, staff[role]);
+    }
+    // The Senior and Junior work Line A, so "own line" has something to show.
+    await prisma.lineAssignment.createMany({
+      data: [
+        {
+          staffProfileId: staff.SENIOR.staffProfileId,
+          lineId,
+          assignmentRole: 'SENIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
+        {
+          staffProfileId: staff.JUNIOR.staffProfileId,
+          lineId,
+          assignmentRole: 'JUNIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await deleteTestRunData(prisma);
+    await prisma.$disconnect();
+  });
+
+  describe('RBAC: management routes are Admin and Super Admin only', () => {
+    const managementRoutes: [string, RouteDefinition][] = [
+      ['createSector', organisationContract.createSector],
+      ['updateSector', organisationContract.updateSector],
+      ['deactivateSector', organisationContract.deactivateSector],
+      ['createLine', organisationContract.createLine],
+      ['updateLine', organisationContract.updateLine],
+      ['deactivateLine', organisationContract.deactivateLine],
+      ['assignSenior', organisationContract.assignSenior],
+      ['assignJunior', organisationContract.assignJunior],
+    ];
+
+    it.each(
+      managementRoutes.flatMap(([name, route]) =>
+        (['SENIOR', 'JUNIOR'] as const).map(
+          (role) => [name, role, route] as const,
+        ),
+      ),
+    )('%s is 403 for a %s', async (_name, role, route) => {
+      const path = route.path
+        .replace(':sectorId', sectorId)
+        .replace(':lineId', lineId);
+      const method = route.method.toLowerCase() as 'post' | 'patch';
+      const response = await http()
+        [method](path)
+        .set('Cookie', cookies[role])
+        .send({});
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe('PERMISSION_DENIED');
+    });
+
+    it.each(managementRoutes)(
+      '%s is 401 without a session',
+      async (_name, route) => {
+        const path = route.path
+          .replace(':sectorId', sectorId)
+          .replace(':lineId', lineId);
+        const method = route.method.toLowerCase() as 'post' | 'patch';
+        await http()[method](path).send({}).expect(401);
+      },
+    );
+  });
+
+  describe('sectors (US-010)', () => {
+    it.each(['ADMIN', 'SUPER_ADMIN'] as const)(
+      'an %s creates a sector: 201, only contract fields, audited with actor and IP',
+      async (role) => {
+        const code = testCode('SEC');
+        const response = await as(role)
+          .post('/api/sectors', { code, name: 'North' })
+          .expect(201);
+
+        expect(Object.keys(response.body).sort()).toEqual([
+          'code',
+          'id',
+          'isActive',
+          'name',
+        ]);
+        expect(response.body).toMatchObject({
+          code,
+          name: 'North',
+          isActive: true,
+        });
+        expect(recordedAudit.at(-1)).toMatchObject({
+          action: 'CREATE',
+          entityTable: 'sector',
+          entityId: response.body.id,
+          actorUserId: staff[role].userId,
+          ipAddress: expect.any(String),
+        });
+      },
+    );
+
+    it('a duplicate code is 409 SECTOR_CODE_TAKEN', async () => {
+      const code = testCode('SEC');
+      await as('ADMIN').post('/api/sectors', { code, name: 'One' }).expect(201);
+      const response = await as('ADMIN')
+        .post('/api/sectors', { code, name: 'Two' })
+        .expect(409);
+      expect(response.body).toMatchObject({
+        code: 'SECTOR_CODE_TAKEN',
+        details: [{ field: 'code', issue: 'is already in use' }],
+      });
+    });
+
+    it('an invalid body is 400 with a detail per field', async () => {
+      const response = await as('ADMIN')
+        .post('/api/sectors', { code: 'has space', name: '' })
+        .expect(400);
+      expect(response.body.code).toBe('VALIDATION_FAILED');
+      expect(
+        response.body.details.map((d: { field: string }) => d.field).sort(),
+      ).toEqual(['code', 'name']);
+    });
+
+    it('renames, and refuses to deactivate while a line is active (422)', async () => {
+      const renamed = await as('ADMIN')
+        .patch(`/api/sectors/${sectorId}`, { name: 'Renamed' })
+        .expect(200);
+      expect(renamed.body).toMatchObject({
+        id: sectorId,
+        name: 'Renamed',
+        isActive: true,
+      });
+      const refused = await as('ADMIN')
+        .post(`/api/sectors/${sectorId}/deactivation`)
+        .expect(422);
+      expect(refused.body.code).toBe('SECTOR_HAS_ACTIVE_LINES');
+    });
+
+    it('a sector in another organization is 404, identical to one that does not exist', async () => {
+      const elsewhere = await createTestOrganization(prisma);
+      const other = await as('ADMIN')
+        .patch(`/api/sectors/${elsewhere.sector.id}`, { name: 'x' })
+        .expect(404);
+      const missing = await as('ADMIN')
+        .patch('/api/sectors/does-not-exist', { name: 'x' })
+        .expect(404);
+      expect(other.body.code).toBe(missing.body.code);
+      expect(other.body.message).toBe(missing.body.message);
+    });
+
+    it('a Senior lists only the sector of their own line; an Admin lists the organization', async () => {
+      const extra = await as('ADMIN')
+        .post('/api/sectors', { code: testCode('SEC'), name: 'Extra' })
+        .expect(201);
+
+      const senior = await as('SENIOR').get('/api/sectors').expect(200);
+      expect(senior.body.data.map((s: { id: string }) => s.id)).toEqual([
+        sectorId,
+      ]);
+
+      const admin = await as('ADMIN').get('/api/sectors?limit=200').expect(200);
+      const ids = admin.body.data.map((s: { id: string }) => s.id);
+      expect(ids).toEqual(expect.arrayContaining([sectorId, extra.body.id]));
+    });
+  });
+
+  describe('lines (US-011)', () => {
+    it('creates a line, then deactivates it, and inactive lines are hidden unless asked for', async () => {
+      const created = await as('ADMIN')
+        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line B' })
+        .expect(201);
+      const id = created.body.id as string;
+
+      await as('ADMIN').post(`/api/lines/${id}/deactivation`).expect(200);
+
+      const active = await as('ADMIN')
+        .get(`/api/lines?sectorId=${sectorId}&limit=200`)
+        .expect(200);
+      const all = await as('ADMIN')
+        .get(`/api/lines?sectorId=${sectorId}&limit=200&includeInactive=true`)
+        .expect(200);
+      expect(active.body.data.map((l: { id: string }) => l.id)).not.toContain(
+        id,
+      );
+      expect(all.body.data.map((l: { id: string }) => l.id)).toContain(id);
+    });
+
+    it('a Junior lists only their own line', async () => {
+      const response = await as('JUNIOR').get('/api/lines').expect(200);
+      expect(response.body.data.map((l: { id: string }) => l.id)).toEqual([
+        lineId,
+      ]);
+    });
+
+    it('pages with a cursor, and refuses a cursor it did not issue', async () => {
+      const org = await createTestOrganization(prisma, ['P1', 'P2', 'P3']);
+      const admin = await createTestStaff(prisma, {
+        organizationId: org.organization.id,
+        role: 'ADMIN',
+      });
+      const cookie = await signIn(app, admin);
+
+      const first = await http()
+        .get('/api/lines?limit=2')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(first.body).toMatchObject({
+        hasMore: true,
+        nextCursor: expect.any(String),
+      });
+      expect(first.body.data).toHaveLength(2);
+
+      const second = await http()
+        .get(`/api/lines?limit=2&cursor=${first.body.nextCursor}`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(second.body).toMatchObject({ hasMore: false, nextCursor: null });
+      expect(second.body.data).toHaveLength(1);
+
+      const ids = [...first.body.data, ...second.body.data].map(
+        (l: { id: string }) => l.id,
+      );
+      expect(new Set(ids)).toEqual(new Set(org.lines.map((l) => l.id)));
+
+      const invalid = await http()
+        .get('/api/lines?cursor=not-a-cursor!')
+        .set('Cookie', cookie)
+        .expect(400);
+      expect(invalid.body.code).toBe('INVALID_CURSOR');
+    });
+
+    it('a line in an inactive sector is 422 SECTOR_INACTIVE', async () => {
+      const sector = await as('ADMIN')
+        .post('/api/sectors', { code: testCode('SEC'), name: 'Closing' })
+        .expect(201);
+      await as('ADMIN')
+        .post(`/api/sectors/${sector.body.id}/deactivation`)
+        .expect(200);
+      const response = await as('ADMIN')
+        .post('/api/lines', {
+          sectorId: sector.body.id,
+          code: testCode('LN'),
+          name: 'Nope',
+        })
+        .expect(422);
+      expect(response.body.code).toBe('SECTOR_INACTIVE');
+    });
+  });
+
+  describe('assignments (US-012, US-013)', () => {
+    it('assigning a Junior effective today changes their scope on their next request', async () => {
+      const line = await as('ADMIN')
+        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line C' })
+        .expect(201);
+      const junior = await createTestStaff(prisma, {
+        organizationId,
+        role: 'JUNIOR',
+      });
+      const juniorCookie = await signIn(app, junior);
+
+      await http()
+        .get('/api/lines')
+        .set('Cookie', juniorCookie)
+        .expect(200, { data: [], nextCursor: null, hasMore: false });
+
+      const response = await as('ADMIN')
+        .post(`/api/lines/${line.body.id}/junior-assignment`, {
+          staffProfileId: junior.staffProfileId,
+          effectiveFrom: today,
+        })
+        .expect(201);
+      expect(response.body).toMatchObject({
+        assignment: {
+          lineId: line.body.id,
+          effectiveFrom: today,
+          effectiveTo: null,
+        },
+        closed: [],
+        linesWithoutSenior: [],
+      });
+
+      const after = await http()
+        .get('/api/lines')
+        .set('Cookie', juniorCookie)
+        .expect(200);
+      expect(after.body.data.map((l: { id: string }) => l.id)).toEqual([
+        line.body.id,
+      ]);
+    });
+
+    it('assigning a new Senior closes the incumbent over HTTP and records both audit entries', async () => {
+      const line = await as('ADMIN')
+        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line D' })
+        .expect(201);
+      const first = await createTestStaff(prisma, {
+        organizationId,
+        role: 'SENIOR',
+      });
+      const second = await createTestStaff(prisma, {
+        organizationId,
+        role: 'SENIOR',
+      });
+      await prisma.lineAssignment.create({
+        data: {
+          staffProfileId: first.staffProfileId,
+          lineId: line.body.id,
+          assignmentRole: 'SENIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
+      });
+      const auditBefore = recordedAudit.length;
+
+      const response = await as('ADMIN')
+        .post(`/api/lines/${line.body.id}/senior-assignment`, {
+          staffProfileId: second.staffProfileId,
+          effectiveFrom: today,
+        })
+        .expect(201);
+
+      expect(response.body.closed).toEqual([
+        expect.objectContaining({
+          staffProfileId: first.staffProfileId,
+          effectiveTo: expect.any(String),
+        }),
+      ]);
+      expect(recordedAudit.slice(auditBefore).map((row) => row.action)).toEqual(
+        ['UPDATE', 'CREATE'],
+      );
+    });
+
+    it('a malformed effective date is 400; a Junior into the Senior assignment is 422', async () => {
+      const bad = await as('ADMIN')
+        .post(`/api/lines/${lineId}/senior-assignment`, {
+          staffProfileId: staff.JUNIOR.staffProfileId,
+          effectiveFrom: '13/09/2026',
+        })
+        .expect(400);
+      expect(bad.body.details).toEqual([
+        expect.objectContaining({ field: 'effectiveFrom' }),
+      ]);
+
+      const mismatch = await as('ADMIN')
+        .post(`/api/lines/${lineId}/senior-assignment`, {
+          staffProfileId: staff.JUNIOR.staffProfileId,
+          effectiveFrom: today,
+        })
+        .expect(422);
+      expect(mismatch.body.code).toBe('STAFF_ROLE_MISMATCH');
+    });
+  });
+});

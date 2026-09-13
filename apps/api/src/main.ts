@@ -1,29 +1,38 @@
 import { NestFactory } from '@nestjs/core';
-import express from 'express';
-import type { NextFunction, Request, Response } from 'express';
-import { AppModule } from './app.module.js';
+
+import {
+  type AppConfig,
+  ConfigValidationError,
+  loadConfig,
+} from './platform/config/config.js';
 
 async function bootstrap() {
-  // `bodyParser: false` is MANDATORY. Better Auth reads the raw request body,
-  // and Nest's built-in parser consumes the stream first — which breaks every
-  // /api/auth/* route with no error that points at the cause.
-  //
-  // Do not remove this. The auth smoke test in the e2e suite exists to fail
-  // loudly if a future refactor drops it (authentication.md).
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
-
-  // Turning the global parser off leaves every *other* endpoint without JSON
-  // body parsing, which the API design assumes it has. Re-add it for
-  // everything except the auth routes.
-  const jsonParser = express.json();
-  app.use((request: Request, response: Response, next: NextFunction) => {
-    if (request.originalUrl.startsWith('/api/auth')) {
-      next();
-      return;
+  // Validate configuration before anything else is constructed, so a bad .env
+  // fails the boot with every problem listed rather than on first use (M16).
+  let config: AppConfig;
+  try {
+    config = loadConfig();
+  } catch (error) {
+    if (error instanceof ConfigValidationError) {
+      process.stderr.write(`${error.message}\n`);
+      process.exit(1);
     }
-    jsonParser(request, response, next);
-  });
+    throw error;
+  }
 
-  await app.listen(process.env.PORT ?? 3001);
+  // Imported only after validation: static imports are evaluated before this
+  // function runs, and auth.config.ts reads configuration while importing —
+  // which would surface a bad .env as a stack trace instead of the list above.
+  const { AppModule } = await import('./app.module.js');
+  const { configureApp } = await import('./platform/configure-app.js');
+
+  // `bodyParser: false` is MANDATORY — see configureApp. Do not remove it.
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
+    bufferLogs: true,
+  });
+  configureApp(app);
+
+  await app.listen(config.PORT);
 }
 await bootstrap();

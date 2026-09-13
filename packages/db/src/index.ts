@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/client.js";
 
 export * from "./generated/client.js";
+export { listMigrationNames } from "./migrations.js";
 
 /**
  * The Prisma client, constructed on first use.

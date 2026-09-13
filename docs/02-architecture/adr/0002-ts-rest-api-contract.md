@@ -1,6 +1,6 @@
 # ADR-0002 — ts-rest + Zod for the API contract
 
-**Status:** Accepted · 2026-09-12
+**Status:** Superseded by [ADR-0011](0011-in-house-api-contract.md) (the library choice) · 2026-09-13 — the goals below still hold
 
 ## Context
 

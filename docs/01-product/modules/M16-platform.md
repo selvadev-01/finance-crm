@@ -109,6 +109,30 @@ One client instance, exported from `packages/db`, injected as a Nest provider. `
 
 ---
 
+## As built
+
+In `apps/api/src/platform/`. Status is in the [backlog](../../06-delivery/backlog.md); this section records how the spec above was realised and where it differs.
+
+**Configuration** — `config/config.ts`, Zod 4. Variables: `NODE_ENV`, `PORT`, `DATABASE_URL`, `BETTER_AUTH_SECRET` (the `CHANGEME` placeholder rejected; 32 characters required in production), `WEB_ORIGIN` (an origin, no path), `LOG_LEVEL`, optional `BUILD_ID`. Messages name the variable and the rule, never the value. `main.ts` validates before importing the application module, because `auth.config.ts` reads configuration at import time and a static import would surface a bad `.env` as a stack trace. `packages/db` still reads `DATABASE_URL` itself — the rule is scoped to `apps/api`.
+
+**Logging** — `nestjs-pino`. Redaction is applied to the finished JSON line (`hooks.streamWrite`), after serializers and child loggers, so nothing can bypass it. Every key at every depth is checked against `SAFE_LOG_KEYS` in `logging/redact.ts`; an unlisted key keeps its name and its value becomes `"[REDACTED]"`. Requests log method, path without query string, status and duration; headers and bodies are never serialized. Adding a key to the allowlist is a security decision. Error messages and stacks are allowlisted, so an error message must never be built from a secret.
+
+**Errors** — `errors/errors.ts` defines `AppError` and the seven categories; one global filter produces `{ code, message, details?, correlationId }`. A `ZodError` becomes `400 VALIDATION_FAILED` with a detail per field path. Nest's own 4xx exceptions (unknown route, the auth guard's 401) are mapped into the same shape. A `5xx` — including an `InternalError` — shows a generic message; an `InternalError` keeps its `code`. JSON body-parser failures happen before Nest's filter and are answered in the same shape by `configureApp`. `/api/auth/*` is served by Better Auth's own handler and keeps Better Auth's error format.
+
+**Transactions** — `database/database.ts`, the `Database` provider. `client` is the open transaction when there is one, otherwise the base client; `transaction(run)` opens one (default `maxWait` 2 s, `timeout` 5 s) or joins the open one. Joining is required, not a nicety: **a Prisma 7 transaction client exposes `$transaction`, and a nested call through it commits independently — its writes survive the outer transaction's rollback.** Verified by test. Modules must write through `Database`, never `$transaction` directly.
+
+**Request context** — `context/request-context.ts`. Every request has a `requestId` (`req_<uuid>`, always server-generated, returned as `X-Request-Id` and as `correlationId`). On a `@RequirePermission` route, M02's `PolicyGuard` adds the full `RequestContext` — `userId`, `staffProfileId`, `organizationId`, `role`, `currentLineId` — and assigns `userId` to the request's logger, so every later line, including request-completed, carries it ([M02 as built](M02-access-control.md#as-built)).
+
+**Health** — `/health/live`, `/health/ready`, `/health/info`, all public and outside `/api`. Readiness returns `503` when the database is unreachable (2 s timeout), a shipped migration is unapplied, or a migration row is unfinished; it reports counts, not migration names. `/health/info` returns `version`, `buildId`, `serverTime`, `serverTimeZone`, `serverUtcOffsetMinutes`, `businessTimeZone` and today's `businessDate` from `toBusinessDate`. **The queue check is not built** — pg-boss arrives with M14.
+
+**Authentication guard** — Better Auth's global `AuthGuard` resolves the session before checking whether a route is public, which would make liveness depend on the database. It is disabled; M02's `PolicyGuard` handles public routes first and only then runs the session check ([authentication.md](../../02-architecture/authentication.md)).
+
+**Tracing is not built.** OpenTelemetry and Sentry need an external account and wait for deployment, which is deferred by decision.
+
+**Testing** — `configureApp` is shared by `main.ts` and every HTTP test through `test/app.ts#createTestApp`. nestjs-pino holds its root logger statically, so a test asserting on logs builds one app per file and filters lines by request id.
+
+---
+
 ## Risks
 
 | Risk                               | Mitigation                                              |

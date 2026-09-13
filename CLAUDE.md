@@ -4,19 +4,19 @@ Daily-collection finance application replacing a manual Google Sheet process —
 
 The repo directory is `finance-crm`; the product and the root package are `rasi`.
 
-## State: Phase 0 complete, no product modules built
+## State: Phase 0 complete, Phase 1 in progress
 
-The `docs/` set fully specifies the system (16 modules, 10 ADRs, 97 stories). **Phase 0 foundations are done; none of M01–M16 is built.** What exists:
+The `docs/` set fully specifies the system (16 modules, 11 ADRs, 97 stories). **Phase 0 foundations are done; Phase 1 is in progress — M01, M02, M03, M13 and M16 are partly built on the API side, the rest are not.** What exists:
 
 - `apps/web` — Next.js 16, Tailwind v4, a design-system preview at `/`, runs on :3000 and proxies `/api` to the API in development
-- `apps/api` — NestJS 12 with Better Auth mounted at `/api/auth/*`; the create-nest-app scaffold has been deleted
-- `packages/db` — Prisma 7, the full 28-table schema, nine applied migrations; every data-dictionary invariant is a database constraint (CHECKs, triggers, partial uniques)
+- `apps/api` — NestJS 12 with Better Auth at `/api/auth/*`, the M16 platform in `src/platform/` (validated config, pino logging, error filter, `Database` transaction helper, `/health/*`; no tracing or queue check), M02 access control in `src/access/` (`PolicyGuard`, permissions, sector/line/customer/collection scope), M13's `AuditWriter` in `src/audit/`, and the M03 sector, line and assignment endpoints in `src/organisation/`
+- `packages/db` — Prisma 7, the full 28-table schema, ten applied migrations; every data-dictionary invariant is a database constraint (CHECKs, triggers, partial uniques)
 - `packages/domain` — boundary-enforced; holds the pure money maths: M06 working calendar (`CalendarDate`, working-day arithmetic, `toBusinessDate`), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment on the running total (BR-18) and `toMoney`. Nothing consumes it yet
-- `packages/contracts` — created and boundary-enforced, deliberately empty until the first endpoint
+- `packages/contracts` — boundary-enforced; the in-house API contract (`route()`, `createApiClient`, shared schemas) and the M03 routes. **Not ts-rest** — [ADR-0011](docs/02-architecture/adr/0011-in-house-api-contract.md) supersedes that part of ADR-0002
 - `packages/ui` — Tailwind v4 tokens and a small component base
 - PostgreSQL 17 — one database `rasi_dev`, one schema `public`, shared by development and tests
 
-No scoping layer, no M01–M16 services. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
+No web screens beyond the design-system preview, and no customers, accounts, collections or ledger endpoints yet. Before assuming a module, table or helper exists, read [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) — it is the authoritative gap list, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) is authoritative for story status.
 
 ## Commands
 
@@ -27,13 +27,16 @@ pnpm install
 pnpm dev           # web :3000, api :3001
 pnpm lint          # ESLint in web/ui, oxlint in api
 pnpm check-types   # NOT "typecheck" — this is the real script name
-pnpm test          # Vitest in api and domain
+pnpm test          # Vitest in api, domain and contracts
 pnpm format        # Prettier over ts, tsx, md
+pnpm --filter api seed   # after `pnpm build`: DRY RUN of the seed dataset; --commit keeps it FOR EVER
 ```
+
+**The seed is permanent once committed.** It writes collections and ledger rows, which reject DELETE, into the only database. Dry-run it freely; never pass `--commit` without being asked. It refuses to run if "Rasi Seed" already exists.
 
 `pnpm test` runs the Tier 1 suite; `pnpm --filter api test:e2e` runs the HTTP tier. Both need PostgreSQL running, a `.env` (copy `.env.example`) and migrations applied — the suite refuses to run with pending migrations; apply them with `pnpm --filter @repo/db db:deploy`.
 
-**Tests share the development schema, so never truncate or bulk-delete.** Tier 1 tests run inside `withRollback`; Tier 2 tests tag what they create with `testEmail()` / `testRunTag` and clean up with `deleteTestRunData`. **Never `DROP SCHEMA`** — the `rasi` role cannot create one again. `packages/db` adds `db:migrate`, `db:deploy`, `db:reset`, `db:generate` and `db:studio`.
+**Tests share the development schema, so never truncate or bulk-delete.** Tier 1 tests run inside `withRollback`; Tier 2 tests tag what they create with `testEmail()` / `testCode()` and clean up with `deleteTestRunData`. **Tier 2 must never write an append-only table** (`collection`, `ledger_*`, `audit_log` reject DELETE) — prove those writes in Tier 1. Public sign-up is disabled: create staff with `test/staff.ts#createTestStaff` and sign in with `signIn`. **Never `DROP SCHEMA`** — the `rasi` role cannot create one again. `packages/db` adds `db:migrate`, `db:deploy`, `db:reset`, `db:generate` and `db:studio`.
 
 Node >=24, pnpm 11.25.0 pinned via `packageManager`. PostgreSQL 17 is installed **natively, no Docker** — one database `rasi_dev`, one schema `public`. Setup, and the rules for writing new database constraints, are in [packages/db/README.md](packages/db/README.md).
 
@@ -64,6 +67,19 @@ Out-of-scope rows return `404`, not `403`. Every RBAC matrix cell is an API-leve
 **`packages/domain` must stay framework-free** — no Prisma, no NestJS. That is what makes the money maths exhaustively testable, and it does not come back once broken.
 
 **Follow the glossary exactly** ([docs/00-overview/glossary.md](docs/00-overview/glossary.md)). "Account" is the trap: a loan is `AccountLoan`, a bookkeeping account is `ledgerAccount`, and bare `account` means Better Auth's table.
+
+**In `apps/api`, go through the platform** ([M16 as built](docs/01-product/modules/M16-platform.md#as-built)):
+
+- Read configuration from `APP_CONFIG` / `loadConfig()`, never `process.env`.
+- Throw an `AppError` subclass (`DomainError`, `NotFoundError`, …) with a stable `code`, never a bare `Error`.
+- Reach Prisma through `Database.client` and write through `Database.transaction`. **Never call `$transaction` directly** — in Prisma 7 a nested `$transaction` commits independently and survives the outer rollback.
+- Every route carries `@AllowAnonymous()` or `@RequirePermission('…')` — the app refuses to start otherwise. A new route also fails `test/rbac-matrix.e2e-spec.ts` until it is added to `EXPECTED_ACCESS` there, with the permission the RBAC matrix gives it. Permissions live in `src/access/permissions.ts` and a test holds them to `docs/01-product/rbac-matrix.md`; change both together.
+- Controllers take `@CurrentContext()` and pass it to repository methods. Repositories filter with `inScope(customerScope(context), where)` and return rows through `foundInScope`, so out-of-scope is a `404` identical to missing ([M02 as built](docs/01-product/modules/M02-access-control.md#as-built)).
+- Define every endpoint in `packages/contracts` first; the handler uses `@ContractRoute(route)` and `@ContractInput()`. Responses are parsed through the contract, so undeclared fields are stripped — never bypass it to return extra data.
+- Audited writes call `AuditWriter.record(context, entry)` **inside** `Database.transaction`; it refuses to run outside one.
+- "Current assignment" is the one in effect on today's business date, not merely `effectiveTo IS NULL`.
+- Log with `PinoLogger.info(fields, message)`. A field not in `SAFE_LOG_KEYS` is logged as `[REDACTED]`; adding one is a security decision.
+- HTTP tests build the app with `test/app.ts#createTestApp`, never by hand.
 
 **Reference rule IDs in code** — `BR-07`, `ADR-0005`. The decisions are written down; connect code to them.
 
