@@ -55,6 +55,8 @@ Recording a collection offline decrements the cached outstanding immediately, so
 
 Local balances are **optimistic and marked as such**. The server's value replaces them on sync.
 
+**Reconciled by key, not by time.** Each route account carries `includedKeys` — the idempotency keys of today's collections its figures already include, read in one repeatable-read snapshot. The device applies a queued or synced entry only when its key is absent. Comparing a sync time with the route's fetch time is not enough: a refresh can land after the server committed but before the device heard back, and the collection would be subtracted twice.
+
 ---
 
 ## Idempotency
@@ -118,7 +120,9 @@ Plus a persistent offline indicator and an **always-visible unsynced count**.
 
 > The Junior must be able to answer "is my day safe" at a glance. An optimistic UI that implies everything is sent is worse than no indicator at all — it hides the exact problem the Junior needs to act on by finding signal.
 
-**Sign-out is blocked while the queue is non-empty**, with a warning. Local data dies with the session.
+**Sign-out is blocked while the queue is non-empty**, with a warning. Local data dies with the session: sign-out clears the route, the cached identity and sent entries, in the same transaction that re-checks the queue is empty.
+
+A **refused** (4xx) entry counts as unsent, because the office does not have the money. The Junior clears it only by confirming they will hand the money in; nothing still on its way can be cleared. Without this, one refusal would block sign-out on that phone for ever.
 
 ---
 
@@ -171,6 +175,19 @@ Highest-risk area in the project; tested accordingly.
 | `401` mid-sync retains the queue            | Session invalidated during drain                          |
 | Ordering per account                        | Multiple collections, verify application order            |
 | Quota exhaustion                            | Fill storage, assert the hard limit fires before eviction |
+
+---
+
+## As built
+
+In `apps/web/lib/offline/` (`db.ts`, `outbox.ts`, `drain.ts`, `client.ts`) and `apps/web/app/sw.ts`. Status is in the [backlog](../06-delivery/backlog.md).
+
+- **Service worker:** Serwist (`@serwist/turbopack`), served by the route handler `/serwist/sw.js` and registered with scope `/route`. It precaches the build and uses Serwist's default runtime caching, except `/api/*`, which is network-only: the route lives in IndexedDB, and a network-first API cache would delay the offline fallback by its timeout. Offline works only in a production build — Serwist's defaults are network-only under `next dev`.
+- **Drain triggers:** the worker drains on `sync`, `activate`, a `drain` message and start-up. The page drains on start-up, `online` and returning to the foreground **ignoring backoff** (something changed, so send now), and every 60 seconds respecting it. Each request times out after 15 seconds, so a hanging connection cannot hold the Web Lock. Before releasing the lock a drain looks again and sends what was saved while it ran (a Junior confirming a customer's second account a second after the first); a drain that finds the lock taken waits for the holder to finish and drains once more, so the screen never refreshes before the running drain has written what it sent.
+- **Reachability, not `navigator.onLine`:** it is true on mobile data with no internet. The indicator shows Offline when the last route refresh could not reach the API.
+- **Browser quirks found:** `navigator.serviceWorker.ready` never resolves for a page reached by client-side navigation from outside the scope (`/sign-in` → `/route`), so the registration is looked up with `getRegistration("/route")`. Next.js rewrites are fixed at build time.
+- **Tests:** Vitest with `fake-indexeddb` for the engine (`pnpm --filter web test`); `apps/offline-e2e` drives Chrome against a production build and the real API, and **writes permanent rows**. Under Playwright's offline emulation a page with a service worker keeps `navigator.onLine` true and receives no `online` event, so the suite dispatches it.
+- **Not yet proven:** Background Sync firing with the app closed, quota exhaustion, concurrent replay from two contexts, and any real device.
 
 ---
 

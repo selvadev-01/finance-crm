@@ -1,3 +1,5 @@
+/* global process */
+import { withSerwist } from "@serwist/turbopack";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
 
 /**
@@ -22,19 +24,25 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
  */
 export default function nextConfig(phase) {
   const isDevServer = phase === PHASE_DEVELOPMENT_SERVER;
+  // A production build run locally — the offline end-to-end suite, where the
+  // service worker only caches in production mode — has no reverse proxy, so
+  // it opts in to the same rewrite by naming the API origin explicitly.
+  const apiOrigin =
+    process.env["RASI_LOCAL_API_ORIGIN"] ??
+    (isDevServer ? "http://localhost:3001" : undefined);
 
-  return {
+  return withSerwist({
     async rewrites() {
-      if (!isDevServer) {
+      if (!apiOrigin) {
         return [];
       }
 
       return [
         {
           source: "/api/:path*",
-          destination: "http://localhost:3001/api/:path*",
+          destination: `${apiOrigin}/api/:path*`,
         },
       ];
     },
-  };
+  });
 }

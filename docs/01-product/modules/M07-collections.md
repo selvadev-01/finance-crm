@@ -106,6 +106,8 @@ stateDiagram-v2
 
 A correction inserts a **new** `ADJUSTMENT` row referencing the original via `adjustsCollectionId`. A reversal is an adjustment for the negative of the original. The balance is the sum of all confirmed rows; both records stay visible.
 
+The states above belong to the `ADJUSTMENT` row; the original stays `CONFIRMED` throughout. `REJECTED` ends a refused correction — nothing moved, and it stays in history.
+
 Approval: Senior for their own line, or Admin. **Self-approval is blocked regardless of role.**
 
 > Append-only removes the risk structurally rather than relying on an audit log to catch it afterwards. In a cash business, the ability to silently change a past figure _is_ the risk.
@@ -156,6 +158,12 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 | ----------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
 | `POST /api/collections` | `collection.record` | `201` recorded; **`200` replay** with the stored body; `409 IDEMPOTENCY_KEY_REUSED`; `422 AMOUNT_EXCEEDS_OUTSTANDING`, `422 ACCOUNT_NOT_ACTIVE`; `404` off the Junior's line |
 | `GET /api/route`        | `collection.record` | Today's route for the Junior: day kind (WORKING / SUNDAY / HOLIDAY + name) and accounts due today by customer |
+| `GET /api/collections`  | `collection.view`   | S-16: history by business date (at most 93 days, else `400 INVALID_DATE_RANGE`), in `collectionScope` |
+| `GET /api/collections/:collectionId` | `collection.view` | S-17: the collection, its adjustments with approvals, the net, and what the caller may start |
+| `POST /api/collections/:collectionId/corrections` | `collection.requestCorrection` | `201` a pending adjustment to `correctedAmount`; `409 CORRECTION_PENDING`; `422 NO_CHANGE`, `AMOUNT_EXCEEDS_OUTSTANDING`, `ACCOUNT_NOT_CORRECTABLE`, `NOT_AN_ORIGINAL_COLLECTION` |
+| `POST /api/collections/:collectionId/reversal` | `collection.reverse` | As above, to ₹0 |
+| `GET /api/collection-approvals` | `collection.approveCorrection` | S-18: corrections by decision, pending by default, each with `canDecide` |
+| `POST /api/collection-approvals/:approvalId/decision` | `collection.approveCorrection` | `200` APPROVED or REJECTED; `403 SELF_APPROVAL`; `409 APPROVAL_ALREADY_DECIDED`; `422` when the outstanding no longer allows it |
 
 **One transaction per collection** (BR-18), after a `SELECT … FOR UPDATE` on the account row so collections on one account are serialised:
 - The collection is written with `lineId` from the customer's line, `collectedByUserId` from the session, `expectedAmount = min(D, outstanding)` and `businessDate = toBusinessDate(capturedAt)`, all frozen at write.
@@ -173,7 +181,15 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 
 **Tests:** successful writes are proven in Tier 1 only, because collection and ledger rows reject DELETE. The HTTP tier covers roles, validation and refusals that write nothing. The account row lock has no test: exercising it needs two committed collections.
 
-**Not built:** corrections and approvals, missed detection, the late-sync day-close reopen, notifications, the `idempotency_key` purge job, visiting order, and the whole offline client (outbox, service worker, S-01/S-02/S-03).
+**Corrections** (`correction.service.ts`, decided 2026-09-14):
+- **Request.** In one transaction under the account row lock: the original must be in scope, an `ORIGINAL`, on an `ACTIVE` or `COMPLETED` account, with no pending correction. The `ADJUSTMENT` is written `PENDING_APPROVAL` for `correctedAmount − net`, with its `collection_approval`, and audited. Nothing else moves.
+- **Approve.** Refused to the requester whatever their role. Under the lock, the decision and the outstanding are read again. `AccountSettlement` moves the balances and either completes the account, regenerates the tail from the approval date, or **reopens** a completed account that a negative correction leaves owing. The ledger posts an `ADJUSTMENT` transaction dated the adjustment's business date: the original collector's `CASH_IN_HAND` against the receivable, and profit via `profitForCollection` on the running total. The status becomes `CONFIRMED`; the approval is recorded and audited.
+- **Reject.** The status becomes `REJECTED`; the approval is recorded and audited; nothing else moves.
+- **Past slot statuses are never changed** by a correction; only the pending tail is regenerated.
+
+`AccountSettlement` (`account-settlement.ts`) is shared with recording, so a collection and an approved correction cannot disagree about the schedule.
+
+**Not built:** missed detection, the late-sync day-close reopen, notifications (so US-044's "my Senior is notified" does not happen), the `idempotency_key` purge job, visiting order, and a correction request from the Junior's field app — the console's S-17 serves Seniors and Admins.
 
 ---
 

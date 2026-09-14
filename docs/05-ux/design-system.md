@@ -58,7 +58,7 @@ The accent is a deep green. This is a cash-handling tool whose recurring semanti
 
 **Status colour is reserved for status.** An accent button is not `positive` because the action is good; positive means a collection reconciled.
 
-Every pairing meets WCAG AA against its own background. Status colours must stay distinguishable from each other **in sunlight on a mid-range screen**, which is a stricter test than a contrast ratio — it is why the warning is amber rather than yellow.
+Every pairing is meant to meet WCAG AA against its own background. **Measured on 2026-09-14, three do not** for small text: `warning` on `warning-subtle` 2.89:1 (and 3.31:1 on white), `info` on `info-subtle` 4.18:1, and `ink-subtle` on white 3.64:1. That makes `Badge tone="warning"` and `tone="info"` text illegible by the standard, product-wide. The Junior's screens work around it without changing tokens: badge words in `ink`, colour carried by the dot or icon, and `ink-muted` instead of `ink-subtle` for text. The token values themselves are an open decision. Status colours must stay distinguishable from each other **in sunlight on a mid-range screen**, which is a stricter test than a contrast ratio — it is why the warning is amber rather than yellow.
 
 No dark mode yet, deliberately. See ADR-0010.
 

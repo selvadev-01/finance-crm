@@ -185,6 +185,14 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /api/accounts/:accountId/schedule': 'account.viewSchedule',
   'POST /api/collections': 'collection.record',
   'GET /api/route': 'collection.record',
+  'GET /api/collections': 'collection.view',
+  'GET /api/collections/:collectionId': 'collection.view',
+  'POST /api/collections/:collectionId/corrections':
+    'collection.requestCorrection',
+  'POST /api/collections/:collectionId/reversal': 'collection.reverse',
+  'GET /api/collection-approvals': 'collection.approveCorrection',
+  'POST /api/collection-approvals/:approvalId/decision':
+    'collection.approveCorrection',
   'GET /api/customers': 'customer.view',
   'GET /api/customers/:customerId': 'customer.view',
   'POST /api/customers': 'customer.create',

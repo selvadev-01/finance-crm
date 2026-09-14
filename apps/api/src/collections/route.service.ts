@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { RouteView } from '@repo/contracts';
+import { Prisma } from '@repo/db';
 import {
   type CalendarDate,
   capExpectedAmount,
@@ -26,11 +27,23 @@ import { Database } from '../platform/database/database.js';
 export class RouteService {
   constructor(private readonly database: Database) {}
 
-  async route(
+  route(
     context: RequestContext,
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<RouteView> {
-    const tx = this.database.client;
+    // Prisma loads the collections in a separate statement from the accounts.
+    // One snapshot keeps `includedKeys` and `outstandingAmount` in agreement
+    // while a collection commits concurrently.
+    return this.database.transaction((tx) => this.read(tx, context, today), {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    });
+  }
+
+  private async read(
+    tx: Prisma.TransactionClient,
+    context: RequestContext,
+    today: CalendarDate,
+  ): Promise<RouteView> {
     const day = toUtcMidnight(today);
 
     let dayKind: RouteView['day'] = { kind: 'WORKING' };
@@ -63,6 +76,9 @@ export class RouteService {
               accountCode: true,
               dailyAmount: true,
               outstandingAmount: true,
+              _count: {
+                select: { schedules: { where: { status: 'PENDING' } } },
+              },
               customer: {
                 select: {
                   id: true,
@@ -74,9 +90,12 @@ export class RouteService {
               },
               collections: {
                 where: { businessDate: day, entryType: 'ORIGINAL' },
-                select: { amount: true, classification: true },
+                select: {
+                  idempotencyKey: true,
+                  amount: true,
+                  classification: true,
+                },
                 orderBy: { createdAt: 'desc' },
-                take: 1,
               },
             },
             orderBy: [
@@ -108,6 +127,7 @@ export class RouteService {
           account.outstandingAmount.toString(),
         ).toFixed(2),
         dailyAmount: toMoney(account.dailyAmount.toString()).toFixed(2),
+        daysRemaining: account._count.schedules,
         collectedToday: collected
           ? {
               amount: toMoney(collected.amount.toString()).toFixed(2),
@@ -119,6 +139,7 @@ export class RouteService {
                   : 'NO_PAYMENT',
             }
           : null,
+        includedKeys: account.collections.map((c) => c.idempotencyKey),
       });
       customers.set(account.customer.id, entry);
     }

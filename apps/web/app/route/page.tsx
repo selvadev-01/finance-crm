@@ -1,8 +1,10 @@
-"use client";
+import type { Metadata } from "next";
 
-import { RoleLanding } from "../../lib/role-landing";
+import { FieldRoute } from "./field-route";
 
-/** Junior landing (US-001). Today's route is S-01 / US-040. */
+export const metadata: Metadata = { title: "Today’s route · Rasi" };
+
+/** The Junior's home (US-040), on the offline engine. */
 export default function RoutePage() {
-  return <RoleLanding screen="Today’s route" role={["JUNIOR"]} />;
+  return <FieldRoute />;
 }

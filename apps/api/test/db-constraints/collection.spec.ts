@@ -29,6 +29,7 @@ describe('collection constraints (BR-08, BR-14)', () => {
     classification: 'CORRECT' | 'LOW' | 'EXTRA' | 'NO_PAYMENT';
     entryType?: 'ORIGINAL' | 'ADJUSTMENT';
     adjustsCollectionId?: string | null;
+    status?: 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED';
   };
 
   async function insertCollection(
@@ -59,6 +60,7 @@ describe('collection constraints (BR-08, BR-14)', () => {
         classification: row.classification,
         entryType: row.entryType ?? 'ORIGINAL',
         adjustsCollectionId: row.adjustsCollectionId ?? null,
+        status: row.status ?? 'CONFIRMED',
       },
     });
     return { collection, context };
@@ -228,7 +230,56 @@ describe('collection constraints (BR-08, BR-14)', () => {
       ).rejects.toThrow('collection_append_only: DELETE');
     });
 
-    it('allows a status transition, the one sanctioned change', async () => {
+    const pendingAdjustment = async (tx: PrismaClient) => {
+      const { collection, context } = await insertCollection(tx, correct);
+      const { collection: adjustment } = await insertCollection(
+        tx,
+        {
+          expectedAmount: '0.00',
+          amount: '-20.00',
+          variance: '-20.00',
+          classification: 'LOW',
+          entryType: 'ADJUSTMENT',
+          adjustsCollectionId: collection.id,
+          status: 'PENDING_APPROVAL',
+        },
+        context,
+      );
+      return { collection, adjustment, context };
+    };
+
+    it.each(['CONFIRMED', 'REJECTED'] as const)(
+      'allows a pending adjustment to be decided %s, the one sanctioned change',
+      async (decision) => {
+        await expect(
+          withRollback(prisma, async (tx) => {
+            const { adjustment } = await pendingAdjustment(tx);
+            await tx.collection.update({
+              where: { id: adjustment.id },
+              data: { status: decision },
+            });
+          }),
+        ).resolves.toBeUndefined();
+      },
+    );
+
+    it('rejects changing a decided adjustment again', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { adjustment } = await pendingAdjustment(tx);
+          await tx.collection.update({
+            where: { id: adjustment.id },
+            data: { status: 'REJECTED' },
+          });
+          await tx.collection.update({
+            where: { id: adjustment.id },
+            data: { status: 'CONFIRMED' },
+          });
+        }),
+      ).rejects.toThrow('collection_status_transition');
+    });
+
+    it('rejects moving an ORIGINAL out of CONFIRMED', async () => {
       await expect(
         withRollback(prisma, async (tx) => {
           const { collection } = await insertCollection(tx, correct);
@@ -237,7 +288,36 @@ describe('collection constraints (BR-08, BR-14)', () => {
             data: { status: 'REVERSED' },
           });
         }),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow('collection_status_transition');
+    });
+
+    it('rejects an ORIGINAL written as anything but CONFIRMED', async () => {
+      await expect(
+        withRollback(prisma, (tx) =>
+          insertCollection(tx, { ...correct, status: 'PENDING_APPROVAL' }),
+        ),
+      ).rejects.toThrow('collection_original_confirmed_check');
+    });
+
+    it('rejects a second pending correction on one collection', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { collection, context } = await pendingAdjustment(tx);
+          await insertCollection(
+            tx,
+            {
+              expectedAmount: '0.00',
+              amount: '-10.00',
+              variance: '-10.00',
+              classification: 'LOW',
+              entryType: 'ADJUSTMENT',
+              adjustsCollectionId: collection.id,
+              status: 'PENDING_APPROVAL',
+            },
+            context,
+          );
+        }),
+      ).rejects.toThrow('collection_one_pending_correction_key');
     });
   });
 

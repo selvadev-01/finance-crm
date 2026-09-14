@@ -208,4 +208,73 @@ describe('collections (M07, e2e)', () => {
       await as(role).get('/api/route').expect(403);
     }
   });
+
+  describe('history and corrections (S-16, S-17, S-18, US-044)', () => {
+    // Nothing here creates a collection, so no correction can succeed over
+    // HTTP: those are proven in Tier 1 (correction.service.spec.ts). Here: who
+    // may call, validation, and refusals that write nothing.
+    const missing = 'col_does_not_exist';
+    const corrections = `/api/collections/${missing}/corrections`;
+    const reversal = `/api/collections/${missing}/reversal`;
+    const post = (role: StaffRole, path: string, body: object) =>
+      as(role).post(path, body);
+
+    it('history is date-bounded and visible to every role in scope', async () => {
+      const bad = await as('SENIOR').get('/api/collections').expect(400);
+      expect(bad.body.details.map((d: { field: string }) => d.field).sort()).toEqual(['from', 'to']);
+      const reversed = await as('ADMIN')
+        .get('/api/collections?from=2026-01-10&to=2026-01-01')
+        .expect(400);
+      expect(reversed.body.code).toBe('INVALID_DATE_RANGE');
+      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
+        const page = await as(role)
+          .get(`/api/collections?from=${today}&to=${today}&accountLoanId=${activeOnA}`)
+          .expect(200);
+        expect(page.body).toMatchObject({ data: [], hasMore: false });
+      }
+      await as('ADMIN').get(`/api/collections/${missing}`).expect(404);
+    });
+
+    it('only a Junior or Senior requests a correction; an Admin reverses instead', async () => {
+      const body = { correctedAmount: '80', reason: 'Counted twice' };
+      for (const role of ['SUPER_ADMIN', 'ADMIN'] as const) {
+        const response = await post(role, corrections, body).expect(403);
+        expect(response.body.code).toBe('PERMISSION_DENIED');
+      }
+      for (const role of ['SENIOR', 'JUNIOR'] as const) {
+        await post(role, reversal, { reason: 'x' }).expect(403);
+        const response = await post(role, corrections, body).expect(404);
+        expect(response.body.code).toBe('COLLECTION_NOT_FOUND');
+      }
+      await post('ADMIN', reversal, { reason: 'x' }).expect(404);
+    });
+
+    it('a correction needs an amount and a reason, checked at the field', async () => {
+      const response = await post('JUNIOR', corrections, {
+        correctedAmount: '-5',
+        reason: '   ',
+      }).expect(400);
+      expect(response.body.details.map((d: { field: string }) => d.field).sort()).toEqual([
+        'correctedAmount',
+        'reason',
+      ]);
+    });
+
+    it('approvals: Seniors and Admins see the queue and decide; a Junior is 403', async () => {
+      await as('JUNIOR').get('/api/collection-approvals').expect(403);
+      await post('JUNIOR', '/api/collection-approvals/apr_missing/decision', {
+        decision: 'APPROVED',
+      }).expect(403);
+      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR'] as const) {
+        await as(role).get('/api/collection-approvals').expect(200);
+        await post(role, '/api/collection-approvals/apr_missing/decision', {
+          decision: 'APPROVED',
+        }).expect(404);
+      }
+      const invalid = await post('ADMIN', '/api/collection-approvals/apr_missing/decision', {
+        decision: 'MAYBE',
+      }).expect(400);
+      expect(invalid.body.details[0].field).toBe('decision');
+    });
+  });
 });

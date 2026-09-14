@@ -7,11 +7,8 @@ import type {
 } from '@repo/contracts';
 import { Prisma } from '@repo/db';
 import {
-  type CalendarDate,
   capExpectedAmount,
   classifyCollection,
-  fromUtcMidnight,
-  generateSchedule,
   profitForCollection,
   toBusinessDate,
   toMoney,
@@ -28,6 +25,7 @@ import {
   DomainError,
   InternalError,
 } from '../platform/errors/errors.js';
+import { AccountSettlement } from './account-settlement.js';
 
 type RecordInput = RouteInput<
   typeof collectionContract.recordCollection
@@ -67,6 +65,7 @@ export class CollectionService {
     private readonly audit: AuditWriter,
     private readonly ledger: LedgerService,
     private readonly logger: PinoLogger,
+    private readonly settlement: AccountSettlement,
   ) {}
 
   async record(
@@ -260,75 +259,16 @@ export class CollectionService {
       },
     });
 
-    const collectedBefore = toMoney(account.collectedAmount.toString());
-    const collectedAfter = collectedBefore.plus(amount);
-    const outstandingAfter = outstanding.minus(amount);
-    let target = fromUtcMidnight(account.targetCompletionDate);
-    let completedOn: CalendarDate | null = null;
-
-    if (outstandingAfter.isZero()) {
-      // BR-05: complete on the balance, cancel what is left.
-      completedOn = businessDate;
-      await tx.accountSchedule.updateMany({
-        where: { accountLoanId: account.id, status: 'PENDING' },
-        data: { status: 'CANCELLED' },
-      });
-    } else {
-      // BR-06: the tail after the answered slot is regenerated from the
-      // outstanding; answered slots are never touched.
-      await tx.accountSchedule.deleteMany({
-        where: { accountLoanId: account.id, status: 'PENDING' },
-      });
-      const last = await tx.accountSchedule.aggregate({
-        where: { accountLoanId: account.id },
-        _max: { sequence: true },
-      });
-      const holidays = await this.holidaysFor(
-        account.organizationId,
-        account.customer.sectorId,
-        businessDate,
-      );
-      const tail = generateSchedule({
-        outstanding: outstandingAfter,
-        dailyAmount: D,
-        after: businessDate,
-        holidays,
-        firstSequence: (last._max.sequence ?? 0) + 1,
-      });
-      await tx.accountSchedule.createMany({
-        data: tail.map((next) => ({
-          accountLoanId: account.id,
-          sequence: next.sequence,
-          dueDate: toUtcMidnight(next.dueDate),
-          expectedAmount: next.expectedAmount.toFixed(2),
-          createdByUserId: context.userId,
-        })),
-      });
-      target = tail.at(-1)!.dueDate;
-    }
-
-    const updated = await tx.accountLoan.update({
-      where: { id: account.id },
-      data: {
-        collectedAmount: collectedAfter.toFixed(2),
-        outstandingAmount: outstandingAfter.toFixed(2),
-        targetCompletionDate: toUtcMidnight(target),
-        ...(completedOn
-          ? {
-              status: 'COMPLETED' as const,
-              actualCompletionDate: toUtcMidnight(completedOn),
-              isOverdue: false,
-            }
-          : {}),
-      },
-      select: {
-        status: true,
-        collectedAmount: true,
-        outstandingAmount: true,
-        targetCompletionDate: true,
-        actualCompletionDate: true,
-      },
-    });
+    // Balances, then completion (US-033, BR-05) or the regenerated tail
+    // (BR-06); answered slots are never touched.
+    const updated = await this.settlement.settle(
+      context,
+      account,
+      amount,
+      businessDate,
+    );
+    const { collectedBefore } = updated;
+    const completedOn = updated.actualCompletionDate;
 
     if (amount.greaterThan(0)) {
       const cash = await this.ledger.cashInHand(
@@ -413,10 +353,8 @@ export class CollectionService {
         status: updated.status === 'COMPLETED' ? 'COMPLETED' : 'ACTIVE',
         collectedAmount: updated.collectedAmount.toFixed(2),
         outstandingAmount: updated.outstandingAmount.toFixed(2),
-        targetCompletionDate: fromUtcMidnight(updated.targetCompletionDate),
-        actualCompletionDate: updated.actualCompletionDate
-          ? fromUtcMidnight(updated.actualCompletionDate)
-          : null,
+        targetCompletionDate: updated.targetCompletionDate,
+        actualCompletionDate: updated.actualCompletionDate,
       },
     };
 
@@ -432,22 +370,5 @@ export class CollectionService {
     });
 
     return { replayed: false, collection: view };
-  }
-
-  /** M06: business-wide and sector holidays after `from`. */
-  private async holidaysFor(
-    organizationId: string,
-    sectorId: string,
-    from: CalendarDate,
-  ): Promise<Set<CalendarDate>> {
-    const rows = await this.database.client.holiday.findMany({
-      where: {
-        organizationId,
-        date: { gt: toUtcMidnight(from) },
-        OR: [{ sectorId: null }, { sectorId }],
-      },
-      select: { date: true },
-    });
-    return new Set(rows.map((row) => fromUtcMidnight(row.date)));
   }
 }

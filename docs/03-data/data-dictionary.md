@@ -203,18 +203,23 @@ Constraints: `sequence >= 1`; `expectedAmount > 0`.
 | `classification`      | `Classification`    | No   | `CORRECT` \| `LOW` \| `EXTRA` \| `NO_PAYMENT` (BR-08)                                                        |
 | `entryType`           | `EntryType`         | No   | `ORIGINAL` \| `ADJUSTMENT`                                                                                   |
 | `adjustsCollectionId` | `String`            | Yes  | Self-FK. Required when `entryType = ADJUSTMENT`                                                              |
-| `status`              | `CollectionStatus`  | No   | `PENDING_APPROVAL` \| `CONFIRMED` \| `REVERSED`                                                              |
+| `status`              | `CollectionStatus`  | No   | `PENDING_APPROVAL` \| `CONFIRMED` \| `REVERSED` \| `REJECTED`. `REVERSED` is unused: a reversal is an adjustment                                                              |
 | `note`                | `String`            | Yes  |                                                                                                              |
 
 No `updatedAt` — nothing updates. `status` transitions are the sole exception and are themselves audited.
 
 Constraints:
 
-- Trigger `collection_append_only`: DELETE is rejected, and so is any UPDATE that changes a column other than `status`. The comparison is the whole row minus `status`, so a column added later is frozen by default. Which transitions `status` may make is not specified and not constrained
+- Trigger `collection_append_only`: DELETE is rejected, and so is any UPDATE that changes a column other than `status`. The comparison is the whole row minus `status`, so a column added later is frozen by default.
+- `collection_status_transition` (same trigger): `status` changes only from `PENDING_APPROVAL` to `CONFIRMED` or `REJECTED` — an adjustment is decided once
+- `collection_original_confirmed_check`: an `ORIGINAL` is always `CONFIRMED`; only an `ADJUSTMENT` waits for approval
+- `collection_one_pending_correction_key`: at most one `PENDING_APPROVAL` adjustment per `adjustsCollectionId`
 - `variance = amount - expectedAmount`; `expectedAmount >= 0`
 - `amount >= 0` unless `entryType = ADJUSTMENT`
 - `entryType = ADJUSTMENT` if and only if `adjustsCollectionId` is set, which never equals the row's own `id`; an `ADJUSTMENT` has no `accountScheduleId`
 - BR-08, `ORIGINAL` rows only: `NO_PAYMENT` ⇔ `amount = 0`; otherwise `amount > 0` and `CORRECT` / `LOW` / `EXTRA` follow the sign of `variance` exactly. **Relax this constraint in the same change if `collection.varianceTolerance` is ever built**
+
+**On an `ADJUSTMENT`** (US-044, as built): `amount` and `variance` are the signed difference, `expectedAmount` is `0`, and `classification` is how the corrected collection reads against the original's `expectedAmount`. `lineId` and `collectedByUserId` are copied from the original, so the correction is attributed to the same line and moves the same Junior's cash; `createdByUserId` is the requester. `businessDate` is the day it was requested — the row is frozen at insert.
 
 `capturedAt <= syncedAt` is deliberately not enforced — a device with a fast clock would have genuine offline records rejected.
 

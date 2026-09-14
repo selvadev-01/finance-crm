@@ -11,6 +11,8 @@ export interface TransactionOptions {
   maxWait?: number;
   /** Longest the transaction may stay open. Money transactions are kept short. */
   timeout?: number;
+  /** For reads that must see one snapshot across several statements. */
+  isolationLevel?: Prisma.TransactionIsolationLevel;
 }
 
 /**

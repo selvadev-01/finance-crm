@@ -179,6 +179,8 @@ enum CollectionStatus {
   PENDING_APPROVAL
   CONFIRMED
   REVERSED
+  /// A correction the approver refused: never applied, still in history (US-044).
+  REJECTED
 }
 
 enum ApprovalDecision {
@@ -594,6 +596,9 @@ model Collection {
   @@index([collectedByUserId, businessDate])
   @@index([accountScheduleId])
   @@index([adjustsCollectionId])
+  /// One correction at a time per collection (US-044): a second request while
+  /// one waits would be decided against a balance the first may change.
+  @@unique([adjustsCollectionId], map: "collection_one_pending_correction_key", where: raw("(\"status\" = 'PENDING_APPROVAL'::\"CollectionStatus\")"))
   @@map("collection")
 }
 

@@ -11,8 +11,9 @@ What is actually in the repository right now, as opposed to the target shape des
 ```
 rasi/
 ├─ apps/
-│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M01 staff and password-reset, M04 customer and M05 account endpoints, M07 collection recording and route, M09 LedgerService (disbursement, mid-term catch-up and collection postings), seed dataset (src/seed, dry run by default), Better Auth, /health/*
-│  └─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard placeholder, /customers list + onboarding form + profile (US-020), /accounts/new with live schedule preview and /accounts/:id with disbursement (US-030, US-032), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003); /route placeholder; /design-system preview. Console data is read in the browser through the contract client
+│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M01 staff and password-reset, M04 customer and M05 account endpoints, M07 collection recording, route, history and corrections with approvals, M09 LedgerService (disbursement, mid-term catch-up, collection and adjustment postings), seed dataset (src/seed, dry run by default), Better Auth, /health/*
+│  ├─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard placeholder, /customers list + onboarding form + profile (US-020), /accounts/new with live schedule preview and /accounts/:id with disbursement (US-030, US-032), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003), /collections list, detail and pending approvals (S-16, S-17, S-18, US-044); /design-system preview. Console data is read in the browser through the contract client. /route is the Junior's field app — S-01 route, S-02 record (#collect/:customerId), S-03 sync (#sync) as hash views of one page — on the offline engine: lib/offline/ (idb 8.0.3 outbox and drain) and app/sw.ts (serwist 9.5.12, @serwist/turbopack 9.5.12 with esbuild 0.28.2, served at /serwist/sw.js, scope /route)
+│  └─ offline-e2e/       Playwright 1.63.0 in Chrome against a production web build and the real API — offline record, sync, replay, 401, restart. WRITES PERMANENT ROWS (an "Offline E2E" organisation per run)
 ├─ packages/
 │  ├─ contracts/         @repo/contracts — Zod 4.6.2; in-house route contract and fetch client (ADR-0011), M03 routes
 │  ├─ db/                @repo/db — Prisma 7.10.0, schema, migrations, client
@@ -46,7 +47,7 @@ rasi/
 | Framework     | Next.js `16.3.4`, React `19.2.8`            | NestJS `12`, Express platform                      |
 | Module system | ESM                                         | ESM (`"type": "module"`)                           |
 | Lint          | ESLint `10` flat config, `--max-warnings 0` | oxlint `1.58` over `src/` and `test/`              |
-| Tests         | none yet                                    | Vitest `4` — unit + Tier 1, and an HTTP e2e config |
+| Tests         | Vitest `4` + fake-indexeddb `6.2.5` (offline engine); Playwright in `apps/offline-e2e` | Vitest `4` — unit + Tier 1, and an HTTP e2e config |
 | Styling       | `globals.css` + CSS Modules                 | —                                                  |
 | Dev port      | `3000`                                      | `3001` (`PORT` env overrides)                      |
 
@@ -70,7 +71,8 @@ Run from the repository root; Turborepo fans them out.
 | `pnpm build`       | `next build` + `nest build`, topologically ordered |
 | `pnpm lint`        | ESLint in web/ui, oxlint in api                    |
 | `pnpm check-types` | `tsc --noEmit` across the workspace                |
-| `pnpm test`        | Vitest in api, domain and contracts                |
+| `pnpm test`        | Vitest in api, web (offline engine), domain and contracts |
+| `pnpm --filter offline-e2e test:offline` | Builds web, starts the built API and web, runs the offline Playwright suite — permanent rows |
 | `pnpm format`      | Prettier write across `ts`, `tsx`, `md`            |
 
 `packages/db` adds its own, run with `pnpm --filter @repo/db <script>`:
@@ -117,7 +119,6 @@ Everything in this list is specified but unbuilt. The [roadmap](../06-delivery/r
 | OpenAPI generated from the contract, served at `/api/docs`       | [ADR-0011](../02-architecture/adr/0011-in-house-api-contract.md)                                                                |
 | `packages/notifications` — Web Push + FCM adapters               | [notifications.md](../02-architecture/notifications.md)                                                                         |
 | pg-boss queues and the `--worker` boot mode                      | [ADR-0003](../02-architecture/adr/0003-worker-in-api-process.md), [ADR-0004](../02-architecture/adr/0004-pg-boss-over-redis.md) |
-| Service worker, IndexedDB outbox                                 | [offline-sync.md](../02-architecture/offline-sync.md)                                                                           |
 | Scope predicates beyond customers and collections                | [M02](../01-product/modules/M02-access-control.md)                                                                              |
 | Any of M01–M16                                                   | [prd.md](../01-product/prd.md)                                                                                                  |
 
@@ -136,12 +137,13 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
-**Thirteen migrations**:
+**Fifteen migrations**:
 - `add_better_auth` and `rasi_core`.
-- Seven `constraints_*` migrations holding CHECKs, triggers and partial unique indexes.
+- Eight `constraints_*` migrations holding CHECKs, triggers and partial unique indexes; `constraints_collection_corrections` (US-044) specifies the collection status transitions and allows one pending correction per collection.
 - `staff_must_change_password` (US-003).
 - `customer_code_sequence` (US-020).
-- `ledger_account_organization` and `account_code_sequence` (US-030, US-032). The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
+- `ledger_account_organization` and `account_code_sequence` (US-030, US-032).
+- `collection_status_rejected` (US-044), alone because PostgreSQL cannot use a new enum value in the transaction that adds it. The generator enables Prisma's `partialIndexes` preview feature. Specs proving each constraint are in `apps/api/test/db-constraints/`.
 
 `.env.example` exists at the repository root. `apps/api` validates every variable at startup and refuses to boot, listing every problem, if one is missing or malformed; `apps/api/src/platform/config/config.ts` is its only reader of `process.env` ([M16](../01-product/modules/M16-platform.md#as-built)). `apps/api` does not load `.env` itself — the environment must provide the variables.
 

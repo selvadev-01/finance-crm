@@ -9,13 +9,16 @@ packages:
 # with no error explaining why. esbuild builds its platform binary for Vitest.
 #
 # msgpackr-extract and workerd are optional native accelerators pulled in
-# transitively; they fall back to pure JS, so they stay off.
+# transitively; they fall back to pure JS, so they stay off. @swc/core arrives
+# with Serwist's build tooling and ships its binary as an optional platform
+# package, so its install script is not needed either.
 allowBuilds:
   "@prisma/engines": true
   esbuild: true
   prisma: true
   msgpackr-extract: false
   workerd: false
+  "@swc/core": false
 
 minimumReleaseAgeExclude:
   - tailwind-merge@3.7.0

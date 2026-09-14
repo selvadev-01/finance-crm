@@ -5,6 +5,7 @@ import {
   List,
   MapTrifold,
   Path,
+  Receipt,
   SignOut,
   SquaresFour,
   UsersThree,
@@ -28,7 +29,7 @@ interface NavItem {
 
 /**
  * navigation-ia.md#navigation-by-role — only the areas that exist so far.
- * Collections, Notifications, Reports and Settings join as
+ * Notifications, Reports and Settings join as
  * their screens are built; a link to an unbuilt page is not added early.
  * Hidden, not disabled: a role without the area does not see the link.
  */
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { href: "/customers", label: "Customers", icon: AddressBook, shownTo: () => true },
   { href: "/sectors", label: "Sectors", icon: MapTrifold, shownTo: canManageOrganisation },
   { href: "/lines", label: "Lines", icon: Path, shownTo: () => true },
+  { href: "/collections", label: "Collections", icon: Receipt, shownTo: () => true },
   { href: "/team", label: "Team", icon: UsersThree, shownTo: () => true },
 ];
 

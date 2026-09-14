@@ -138,12 +138,14 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /reports/line-wise    /reports/overdue
 /settings/holidays    /settings/audit
 
-/route                            Junior home
-/route/collect/:accountLoanId     entry
-/route/sync                       queue status
+/route                            Junior home (S-01)
+/route#collect/:customerId        entry (S-02), every account of that customer
+/route#sync                       queue status (S-03)
 ```
 
 Resource-oriented, bookmarkable, shareable. **The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).
+
+**The Junior's views are hashes of one page, not separate paths** (decision 2026-09-14). The service worker caches a page by its exact URL, so `/route/collect/:id` would open offline only for customers whose page happened to be visited with signal — most customers, at the door, would get a browser error. A hash never reaches the network: every view is the one cached `/route` document, reloads included. The phone's back button returns to the route, and opening one view from another replaces rather than stacks, so the route is never more than one step back. Entry is per customer rather than per account, because a customer with several accounts confirms each on one screen (BR-01a).
 
 ---
 

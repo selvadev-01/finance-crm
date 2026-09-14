@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { AccountService } from '../../src/accounts/account.service.js';
 import { AuditWriter } from '../../src/audit/audit.writer.js';
+import { AccountSettlement } from '../../src/collections/account-settlement.js';
 import { CollectionService } from '../../src/collections/collection.service.js';
 import { RouteService } from '../../src/collections/route.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
@@ -64,7 +65,14 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
     const logger = {
       warn: (_: object, message: string) => warnings.push(message),
     } as unknown as PinoLogger;
-    const collections = new CollectionService(database, audit, ledger, logger);
+    const settlement = new AccountSettlement(database);
+    const collections = new CollectionService(
+      database,
+      audit,
+      ledger,
+      logger,
+      settlement,
+    );
     const routes = new RouteService(database);
 
     const customer = async (name = 'Lakshmi') =>
@@ -233,9 +241,11 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         expect(
           await tx.collection.count({ where: { accountLoanId: account.id } }),
         ).toBe(1);
+        // Scoped to this collection: the shared database holds real
+        // collection postings from the offline end-to-end suite.
         expect(
           await tx.ledgerTransaction.count({
-            where: { sourceTable: 'collection' },
+            where: { sourceTable: 'collection', sourceId: collection.id },
           }),
         ).toBe(0);
         const slot = await tx.accountSchedule.findUniqueOrThrow({
@@ -386,7 +396,10 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         expect(stored.outstandingAmount.toFixed(2)).toBe('9900.00');
         expect(
           await tx.ledgerTransaction.count({
-            where: { sourceTable: 'collection' },
+            where: {
+              sourceTable: 'collection',
+              sourceId: first.collection.id,
+            },
           }),
         ).toBe(1);
       });
@@ -484,7 +497,7 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           },
           both.id,
         );
-        await w.collect(first.id, '100');
+        const taken = await w.collect(first.id, '100');
 
         const route = await w.routes.route(
           w.juniorContext,
@@ -503,6 +516,19 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           amount: '100.00',
           classification: 'CORRECT',
         });
+        // 100 slots, slot 1 collected on 5 January: 99 left for the first account.
+        expect(
+          group.accounts.map((a) => [a.accountLoanId === first.id, a.daysRemaining]),
+        ).toEqual(expect.arrayContaining([[true, 99], [false, 100]]));
+        // The device skips queued entries whose key the figures already include.
+        expect(
+          group.accounts.find((a) => a.accountLoanId === first.id)!
+            .includedKeys,
+        ).toEqual([taken.collection.idempotencyKey]);
+        expect(
+          group.accounts.find((a) => a.accountLoanId !== first.id)!
+            .includedKeys,
+        ).toEqual([]);
         expect(JSON.stringify(route)).not.toMatch(/invested|profit/i);
       });
     });

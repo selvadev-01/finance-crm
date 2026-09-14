@@ -32,6 +32,8 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 
 **Error state.** Offline is **not an error** — the cached route renders with an offline indicator. A cache older than 72 hours shows a stale-data warning and prompts for connectivity. Sign-in expiry retains the queue and prompts to sign in.
 
+**As built.** Rows in customer-code order — there is no visiting-order model yet. Each account row carries its state (Pending shows nothing; amber "Saved on phone"; spinner "Syncing"; green tick "Sent to office"), and a line under the title says when the route was fetched and whether it includes collections not yet sent. No bell: notifications (M10) are not built.
+
 > **Multi-account customers** (BR-01a) render as a group header with the customer name, and one independently-confirmable row per account beneath. The layout is visibly different from the single-account case, not a subtle variation — a Junior in a hurry must not be able to put a combined payment against the first account.
 
 ---
@@ -72,6 +74,8 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 >
 > "Confirm as no payment" is a separate action rather than typing `0`, because `NO_PAYMENT` and `MISSED` must never be conflated (BR-09) — this button is the Junior asserting they were there.
 
+**As built.** Opened per customer (`/route#collect/:customerId`), one form per account. A typed `0` is refused with a pointer to "No payment — I visited", which confirms in a dialog. The amount is checked on the phone before saving (a plain rupee amount, at most the optimistic outstanding) and again by the server. While typing, the hint says in words how the amount compares with expected. Days remaining is the account's pending slot count from the last route fetch; it does not move for collections still on the phone. After the last pending account of a customer is confirmed, the screen returns to the route with "Saved on phone: ₹… from …".
+
 ---
 
 ## S-03 · Sync Status (Junior)
@@ -94,7 +98,9 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 
 **Empty state.** "Everything is synced" with the last sync time — a reassuring state, not a blank screen.
 
-**Error state.** A permanently failed entry (validation rejection) shows the reason and cannot be retried into success; it is surfaced for the Senior to resolve. **Sign-out is blocked while the queue is non-empty.**
+**Error state.** A permanently failed entry (validation rejection) shows the reason and cannot be retried into success. The server never received it, so no Senior can see it: the Junior removes it from the phone only after confirming, in a dialog naming the amount and customer, that they will hand the money to the office (decision 2026-09-14). A Senior-facing record of refused submissions can come with M10. **Sign-out is blocked while the queue is non-empty**, and refused entries count until removed.
+
+**As built.** Sign-out lives at the foot of this screen, reached from the status bar's count. Sent entries stay listed, collapsed, until pruned after a day or cleared at sign-out.
 
 ---
 
@@ -256,9 +262,9 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 | S-13    | Sector list / detail     | As above                                                                                              |
 | S-14    | Team list / staff detail | List + detail with assignment history                                                                 |
 | S-15    | Assign staff to line     | Form with explicit effective date                                                                     |
-| S-16    | Collection list          | Filterable list, date-bounded                                                                         |
-| S-17    | Collection detail        | Detail with adjustments and approval trail                                                            |
-| S-18    | Pending approvals        | Action queue; **self-approval blocked**                                                               |
+| S-16    | Collection list          | Filterable list, date-bounded. **As built** at `/collections`: from/to (default the last 7 days, at most 93), line (Admins), collections and/or corrections; a correction row opens its original                                                                         |
+| S-17    | Collection detail        | Detail with adjustments and approval trail. **As built**: recorded amount, the net that stands, expected, outstanding; corrections with reason, requester, decision and note; "Request correction" (Senior) and "Reverse" (Admin) dialogs                                                            |
+| S-18    | Pending approvals        | Action queue; **self-approval blocked**. **As built** at `/collections/pending-approval`: the recorded net struck through beside what it becomes, the reason and requester; Approve / Reject dialogs naming the consequence; a request of your own says another approver decides instead of offering buttons                                                               |
 | S-19    | Senior line dashboard    | Dashboard, one line                                                                                   |
 | S-20    | Admin dashboard          | Dashboard, §21 figures                                                                                |
 | S-21    | Notification centre      | Grouped list, deep-linking                                                                            |

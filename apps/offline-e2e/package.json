@@ -1,0 +1,21 @@
+{
+  "name": "offline-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:offline": "playwright test",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/db": "workspace:*",
+    "better-auth": "1.7.4",
+    "@repo/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "typescript": "7.0.2"
+  }
+}

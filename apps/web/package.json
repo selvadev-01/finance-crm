@@ -8,18 +8,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
-    "check-types": "next typegen && tsc --noEmit"
+    "check-types": "next typegen && tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
     "@repo/contracts": "workspace:*",
     "@repo/domain": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@serwist/turbopack": "9.5.12",
     "@tailwindcss/postcss": "4.3.3",
     "better-auth": "1.7.4",
+    "idb": "8.0.3",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "serwist": "9.5.12",
     "tailwindcss": "4.3.3"
   },
   "devDependencies": {
@@ -28,7 +32,10 @@
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "esbuild": "0.28.2",
     "eslint": "10.9.1",
-    "typescript": "7.0.2"
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.11"
   }
 }
