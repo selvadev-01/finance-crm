@@ -13,7 +13,11 @@ import {
 } from "@repo/ui";
 import { useRef, useState } from "react";
 
-import { amountProblem, type LocalRoute, subtractMoney } from "../../lib/offline/outbox";
+import {
+  amountProblem,
+  type LocalRoute,
+  subtractMoney,
+} from "../../lib/offline/outbox";
 import { backToRoute } from "./hash-view";
 import { RowStateMark } from "./sync-marks";
 
@@ -52,7 +56,9 @@ export function CollectScreen({
   local: LocalRoute | null;
   onRecord: RecordAtDoor;
 }) {
-  const customer = local?.route.customers.find((candidate) => candidate.customerId === customerId);
+  const customer = local?.route.customers.find(
+    (candidate) => candidate.customerId === customerId,
+  );
 
   return (
     <div className="flex flex-col gap-[var(--stack-gap)]" data-testid="collect">
@@ -65,21 +71,26 @@ export function CollectScreen({
 
       {!customer || !local ? (
         <FormMessage tone="info">
-          This customer is not on today’s route on this phone. Go back and refresh the route.
+          This customer is not on today’s route on this phone. Go back and
+          refresh the route.
         </FormMessage>
       ) : (
         <>
           <div className="flex flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">{customer.name}</h1>
             <p className="text-sm text-ink-muted">{customer.address}</p>
-            <a href={`tel:${customer.mobile}`} className="flex min-h-[var(--control-height)] w-fit items-center gap-1.5 text-sm font-medium text-accent">
+            <a
+              href={`tel:${customer.mobile}`}
+              className="flex min-h-[var(--control-height)] w-fit items-center gap-1.5 text-sm font-medium text-accent"
+            >
               <Phone aria-hidden size={16} weight="regular" />
               {customer.mobile}
             </a>
           </div>
           {customer.accounts.length > 1 ? (
             <FormMessage tone="info">
-              {customer.accounts.length} accounts. Record each one separately — never put a combined payment against one account.
+              {customer.accounts.length} accounts. Record each one separately —
+              never put a combined payment against one account.
             </FormMessage>
           ) : null}
           {customer.accounts.map((account) => (
@@ -140,7 +151,9 @@ function AccountForm({
     if (wrong === "NOT_AN_AMOUNT") {
       setError("Enter the amount in rupees, like 100 or 100.50.");
     } else if (wrong === "EXCEEDS_OUTSTANDING") {
-      setError(`More than the outstanding ${formatCurrency(account.outstandingAmount)}. Collect at most that.`);
+      setError(
+        `More than the outstanding ${formatCurrency(account.outstandingAmount)}. Collect at most that.`,
+      );
     } else if (/^0+(\.0+)?$/.test(typed)) {
       setError("For a visit where nothing was paid, use No payment.");
     } else {
@@ -156,29 +169,54 @@ function AccountForm({
       data-testid={`collect-${account.accountCode}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 id={`${account.accountLoanId}-title`} className="text-sm font-medium text-ink-muted">
+        <h2
+          id={`${account.accountLoanId}-title`}
+          className="text-sm font-medium text-ink-muted"
+        >
           {account.accountCode}
         </h2>
         <RowStateMark state={state} />
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2" data-numeric>
-        <Figure label="Expected today" value={formatCurrency(account.expectedAmount)} size="large" />
-        <Figure label="Outstanding" value={formatCurrency(account.outstandingAmount)} />
-        <Figure label="Daily amount" value={formatCurrency(account.dailyAmount)} />
+        <Figure
+          label="Expected today"
+          value={formatCurrency(account.expectedAmount)}
+          size="large"
+        />
+        <Figure
+          label="Outstanding"
+          value={formatCurrency(account.outstandingAmount)}
+        />
+        <Figure
+          label="Daily amount"
+          value={formatCurrency(account.dailyAmount)}
+        />
         <Figure label="Days remaining" value={String(account.daysRemaining)} />
       </dl>
 
       {account.collectedToday ? (
-        <p className="flex flex-wrap items-center gap-2 text-base text-ink" data-testid="collected-today">
-          Collected <span className="font-semibold" data-numeric>{formatCurrency(account.collectedToday.amount)}</span>
-          <Badge tone={CLASSIFICATION[account.collectedToday.classification].tone}>
+        <p
+          className="flex flex-wrap items-center gap-2 text-base text-ink"
+          data-testid="collected-today"
+        >
+          Collected{" "}
+          <span className="font-semibold" data-numeric>
+            {formatCurrency(account.collectedToday.amount)}
+          </span>
+          <Badge
+            tone={CLASSIFICATION[account.collectedToday.classification].tone}
+          >
             {CLASSIFICATION[account.collectedToday.classification].label}
           </Badge>
         </p>
       ) : (
         <>
-          <Field label="Amount collected (₹)" error={error ?? undefined} hint={varianceHint(typed, account.expectedAmount)}>
+          <Field
+            label="Amount collected (₹)"
+            error={error ?? undefined}
+            hint={varianceHint(typed, account.expectedAmount)}
+          >
             <Input
               inputMode="decimal"
               autoComplete="off"
@@ -193,14 +231,28 @@ function AccountForm({
             />
           </Field>
           <Field label="Note (optional)" hint="Only for something unusual.">
-            <Textarea rows={2} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
+            <Textarea
+              rows={2}
+              maxLength={500}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
           </Field>
-          {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
+          {problem ? (
+            <FormMessage tone="critical">{problem}</FormMessage>
+          ) : null}
           <div className="flex flex-col gap-2">
             <Button tone="primary" onClick={confirm} disabled={saving}>
-              Confirm {amountProblem(typed, account.outstandingAmount) === null ? formatCurrency(typed) : ""}
+              Confirm{" "}
+              {amountProblem(typed, account.outstandingAmount) === null
+                ? formatCurrency(typed)
+                : ""}
             </Button>
-            <Button tone="secondary" onClick={() => setConfirmingNoPayment(true)} disabled={saving}>
+            <Button
+              tone="secondary"
+              onClick={() => setConfirmingNoPayment(true)}
+              disabled={saving}
+            >
               No payment — I visited
             </Button>
           </div>
@@ -214,7 +266,10 @@ function AccountForm({
         description={`${account.accountCode}: you visited today and nothing was paid.`}
       >
         <DialogActions>
-          <Button tone="secondary" onClick={() => setConfirmingNoPayment(false)}>
+          <Button
+            tone="secondary"
+            onClick={() => setConfirmingNoPayment(false)}
+          >
             Cancel
           </Button>
           <Button
@@ -232,11 +287,27 @@ function AccountForm({
   );
 }
 
-function Figure({ label, value, size = "normal" }: { label: string; value: string; size?: "normal" | "large" }) {
+function Figure({
+  label,
+  value,
+  size = "normal",
+}: {
+  label: string;
+  value: string;
+  size?: "normal" | "large";
+}) {
   return (
     <div className="flex flex-col">
       <dt className="text-xs text-ink-muted">{label}</dt>
-      <dd className={size === "large" ? "text-lg font-semibold text-ink" : "text-base text-ink"}>{value}</dd>
+      <dd
+        className={
+          size === "large"
+            ? "text-lg font-semibold text-ink"
+            : "text-base text-ink"
+        }
+      >
+        {value}
+      </dd>
     </div>
   );
 }

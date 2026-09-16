@@ -55,6 +55,13 @@ export interface SeedOptions {
   /** A password hash for every seeded staff member (SEED_PASSWORD). */
   passwordHash: string;
   randomSeed?: number;
+  /**
+   * Four digits woven into every value unique across the whole database —
+   * staff emails, staff codes, staff phones, customer and account codes — so a
+   * rolled-back test run does not collide with a seed already committed to the
+   * shared schema. The real seed leaves it unset and its values are unchanged.
+   */
+  tag?: string;
 }
 
 export interface SeedReport {
@@ -211,9 +218,14 @@ export async function seedDataset(
     })),
   ];
   const historyFloor = workingDaysBack(options.historyWorkingDays + 140);
+  const tag = options.tag ?? '';
+  if (tag !== '' && !/^\d{4}$/.test(tag)) {
+    throw new Error('Seed tag must be four digits');
+  }
+  const tagged = (value: string) => (tag ? `${value}-${tag}` : value);
   for (const [index, { key, role }] of staffRows.entries()) {
     const userId = randomUUID();
-    const email = `seed.${key}@rasi.seed`;
+    const email = `seed.${key}${tag ? `.${tag}` : ''}@rasi.seed`;
     userIds[key] = userId;
     staffIds[key] = randomUUID();
     staffEmails.push(email);
@@ -234,9 +246,10 @@ export async function seedDataset(
         id: staffIds[key],
         organizationId: orgId,
         userId,
-        staffCode: `SEED-${key.toUpperCase()}`,
+        staffCode: tagged(`SEED-${key.toUpperCase()}`),
         role,
-        phone: `+9190000${String(index).padStart(5, '0')}`,
+        // +91 and ten digits either way: `9` + `0000` (or the tag) + the index.
+        phone: `+919${tag || '0000'}${String(index).padStart(5, '0')}`,
         joinedAt: toUtcMidnight(historyFloor),
       },
     });
@@ -322,7 +335,7 @@ export async function seedDataset(
     customers.push({
       id: customerId,
       organizationId: orgId,
-      customerCode: `SEED-CUS-${String(c + 1).padStart(4, '0')}`,
+      customerCode: tagged(`SEED-CUS-${String(c + 1).padStart(4, '0')}`),
       name: `Seed Customer ${c + 1}`,
       mobile: `+9198${String(10_000_000 + c).padStart(8, '0')}`,
       address: `${c + 1} Market Street`,
@@ -341,7 +354,7 @@ export async function seedDataset(
       const terms = random.pick(TERMS);
       plans.push({
         id: randomUUID(),
-        code: `SEED-ACC-${String(accountNumber).padStart(4, '0')}`,
+        code: tagged(`SEED-ACC-${String(accountNumber).padStart(4, '0')}`),
         customerId,
         lineId: lineIds[lineIndex]!,
         ...terms,
@@ -791,6 +804,9 @@ export async function seedDataset(
         dayCloseId,
         fromUserId: userIds[junior]!,
         toUserId: userIds[senior]!,
+        hop: 'JUNIOR_TO_SENIOR',
+        // S-06: a count that differs says why.
+        note: short ? 'Counted one ₹200 note short' : null,
         declaredAmount: declared.toString(),
         systemAmount: system.toString(),
         discrepancy: declared.minus(system).toString(),

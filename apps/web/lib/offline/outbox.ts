@@ -107,6 +107,20 @@ export async function summarise(db: FieldDb): Promise<OutboxSummary> {
   };
 }
 
+/**
+ * What the phone tells the office about its queue (US-060): how many
+ * collections are still unsent and when the oldest was taken, so a Senior
+ * closing the day knows whose phone may still hold that day's money.
+ */
+export async function queueReport(
+  db: FieldDb,
+): Promise<{ unsentCount: number; oldestUnsentAt?: string }> {
+  const unsent = (await listOutbox(db)).filter((entry) => UNSYNCED.includes(entry.status));
+  return unsent.length === 0
+    ? { unsentCount: 0 }
+    : { unsentCount: unsent.length, oldestUnsentAt: unsent[0]!.capturedAt };
+}
+
 /** Sign-out is blocked while anything is still on the phone (US-002). */
 export async function canSignOut(db: FieldDb): Promise<boolean> {
   return (await summarise(db)).unsynced === 0;

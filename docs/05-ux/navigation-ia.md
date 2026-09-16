@@ -141,6 +141,10 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /route                            Junior home (S-01)
 /route#collect/:customerId        entry (S-02), every account of that customer
 /route#sync                       queue status (S-03)
+/route#handover                   hand over cash (S-06, needs signal)
+
+/cash                             handovers to acknowledge, cash for the office, day close picker
+/lines/:lineId/day-closes/:date    day close (S-05)
 ```
 
 Resource-oriented, bookmarkable, shareable. **The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).

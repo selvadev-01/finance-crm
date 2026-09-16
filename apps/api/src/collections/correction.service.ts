@@ -27,6 +27,8 @@ import {
   DomainError,
 } from '../platform/errors/errors.js';
 import { type Page, type PageRequest, toPage } from '../platform/pagination.js';
+import { DayCloseService } from '../cash/day-close.service.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import { AccountSettlement } from './account-settlement.js';
 import {
   CollectionHistoryService,
@@ -35,7 +37,9 @@ import {
 } from './collection-history.service.js';
 
 type DecideInput = {
-  decision: RouteInput<typeof collectionContract.decideApproval>['body']['decision'];
+  decision: RouteInput<
+    typeof collectionContract.decideApproval
+  >['body']['decision'];
   note?: string | undefined;
 };
 
@@ -66,6 +70,8 @@ export class CorrectionService {
     private readonly ledger: LedgerService,
     private readonly settlement: AccountSettlement,
     private readonly history: CollectionHistoryService,
+    private readonly dayCloses: DayCloseService,
+    private readonly notices: EventNotices,
   ) {}
 
   /** US-044: ask for a collection's net to become `correctedAmount`. */
@@ -139,7 +145,12 @@ export class CorrectionService {
         await this.lockAccount(tx, original.accountLoanId);
         const account = await tx.accountLoan.findUniqueOrThrow({
           where: { id: original.accountLoanId },
-          select: { accountCode: true, status: true, outstandingAmount: true },
+          select: {
+            accountCode: true,
+            status: true,
+            outstandingAmount: true,
+            customer: { select: { name: true } },
+          },
         });
         this.assertCorrectable(account);
 
@@ -159,7 +170,12 @@ export class CorrectionService {
             kind === 'REVERSAL'
               ? 'This collection already stands at ₹0; there is nothing to reverse'
               : `This collection already stands at ₹${net.toFixed(2)}`,
-            [{ field: 'correctedAmount', issue: `must differ from ${net.toFixed(2)}` }],
+            [
+              {
+                field: 'correctedAmount',
+                issue: `must differ from ${net.toFixed(2)}`,
+              },
+            ],
           );
         }
         this.assertWithinOutstanding(account, change);
@@ -210,6 +226,16 @@ export class CorrectionService {
             reason: input.reason,
             approvalId: approval.id,
           },
+        });
+        await this.notices.correctionRequested({
+          actorUserId: context.userId,
+          organizationId: context.organizationId,
+          lineId: original.lineId,
+          accountCode: account.accountCode,
+          customerName: account.customer.name,
+          from: net.toFixed(2),
+          to: corrected.toFixed(2),
+          reversal: kind === 'REVERSAL',
         });
         return this.history.queueItem(context, approval.id);
       });
@@ -263,6 +289,7 @@ export class CorrectionService {
               businessDate: true,
               collectedByUserId: true,
               adjustsCollectionId: true,
+              lineId: true,
             },
           },
         },
@@ -280,7 +307,9 @@ export class CorrectionService {
       }
       await tx.collection.update({
         where: { id: adjustment.id },
-        data: { status: input.decision === 'APPROVED' ? 'CONFIRMED' : 'REJECTED' },
+        data: {
+          status: input.decision === 'APPROVED' ? 'CONFIRMED' : 'REJECTED',
+        },
       });
       await tx.collectionApproval.update({
         where: { id: found.id },
@@ -315,6 +344,7 @@ export class CorrectionService {
       businessDate: Date;
       collectedByUserId: string;
       adjustsCollectionId: string | null;
+      lineId: string;
     },
     now: Date,
   ): Promise<void> {
@@ -379,15 +409,40 @@ export class CorrectionService {
       eventAt: now,
       description: `Correction ${account.accountCode}`,
       lines: [
-        { ledgerAccountId: cash, direction: into ? 'DEBIT' : 'CREDIT', amount: change.abs().toFixed(2) },
-        { ledgerAccountId: receivable, direction: into ? 'CREDIT' : 'DEBIT', amount: change.abs().toFixed(2) },
-        { ledgerAccountId: unearned, direction: into ? 'DEBIT' : 'CREDIT', amount: profit.abs().toFixed(2) },
-        { ledgerAccountId: earned, direction: into ? 'CREDIT' : 'DEBIT', amount: profit.abs().toFixed(2) },
+        {
+          ledgerAccountId: cash,
+          direction: into ? 'DEBIT' : 'CREDIT',
+          amount: change.abs().toFixed(2),
+        },
+        {
+          ledgerAccountId: receivable,
+          direction: into ? 'CREDIT' : 'DEBIT',
+          amount: change.abs().toFixed(2),
+        },
+        {
+          ledgerAccountId: unearned,
+          direction: into ? 'DEBIT' : 'CREDIT',
+          amount: profit.abs().toFixed(2),
+        },
+        {
+          ledgerAccountId: earned,
+          direction: into ? 'CREDIT' : 'DEBIT',
+          amount: profit.abs().toFixed(2),
+        },
       ],
     });
+    // BR-16a: the adjustment's day, if closed, reopens with the new figure.
+    await this.dayCloses.moneyWritten(
+      context,
+      adjustment.lineId,
+      fromUtcMidnight(adjustment.businessDate),
+    );
   }
 
-  private async lockAccount(tx: Prisma.TransactionClient, accountLoanId: string) {
+  private async lockAccount(
+    tx: Prisma.TransactionClient,
+    accountLoanId: string,
+  ) {
     await tx.$queryRaw`SELECT id FROM account_loan WHERE id = ${accountLoanId} FOR UPDATE`;
   }
 
@@ -409,7 +464,12 @@ export class CorrectionService {
       throw new DomainError(
         'AMOUNT_EXCEEDS_OUTSTANDING',
         `The outstanding on ${account.accountCode} is ₹${outstanding.toFixed(2)}; a correction cannot add more than that`,
-        [{ field: 'correctedAmount', issue: `adds more than ${outstanding.toFixed(2)}` }],
+        [
+          {
+            field: 'correctedAmount',
+            issue: `adds more than ${outstanding.toFixed(2)}`,
+          },
+        ],
       );
     }
   }

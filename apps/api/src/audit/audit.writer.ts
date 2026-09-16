@@ -5,6 +5,7 @@ import {
   getRequestClient,
   type RequestContext,
 } from '../platform/context/request-context.js';
+import type { SystemContext } from '../platform/context/system-context.js';
 import { Database } from '../platform/database/database.js';
 import { InternalError } from '../platform/errors/errors.js';
 
@@ -27,8 +28,10 @@ export type AuditRow = Prisma.AuditLogUncheckedCreateInput;
  * unaudited. Called from a service's `Database.transaction`, `Database.client`
  * is that transaction.
  *
- * Direct calls stand in for the event subscription M13 describes, until an
- * event bus exists.
+ * Every entry names its organization, so the log is read in scope (US-090).
+ * Services call it directly inside their own transaction (decided 2026-09-15:
+ * no event bus); `test/audit-coverage.e2e-spec.ts` holds each audited write
+ * path to recording an entry.
  */
 @Injectable()
 export class AuditWriter {
@@ -43,6 +46,7 @@ export class AuditWriter {
     }
     const client = getRequestClient();
     await this.write({
+      organizationId: context.organizationId,
       actorUserId: context.userId,
       entityTable: entry.entityTable,
       entityId: entry.entityId,
@@ -51,6 +55,30 @@ export class AuditWriter {
       ...(entry.after ? { after: entry.after } : {}),
       ipAddress: client?.ipAddress ?? null,
       userAgent: client?.userAgent ?? null,
+    });
+  }
+
+  /**
+   * A system action — a scheduled job (M14). Null actor, as M13 specifies;
+   * the job's run id goes in `after.systemRun`. Same transaction rule.
+   */
+  async recordSystem(system: SystemContext, entry: AuditEntry): Promise<void> {
+    if (!this.database.inTransaction) {
+      throw new InternalError(
+        'AUDIT_OUTSIDE_TRANSACTION',
+        `Audit entry for ${entry.entityTable} written outside a transaction`,
+      );
+    }
+    await this.write({
+      organizationId: system.organizationId,
+      actorUserId: null,
+      entityTable: entry.entityTable,
+      entityId: entry.entityId,
+      action: entry.action,
+      ...(entry.before ? { before: entry.before } : {}),
+      after: { ...entry.after, systemRun: system.runId },
+      ipAddress: null,
+      userAgent: null,
     });
   }
 

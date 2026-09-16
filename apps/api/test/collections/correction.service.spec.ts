@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 
 import { AccountService } from '../../src/accounts/account.service.js';
 import { AuditWriter } from '../../src/audit/audit.writer.js';
+import { DayCloseService } from '../../src/cash/day-close.service.js';
+import { HandoverViews } from '../../src/cash/handover-views.js';
 import { AccountSettlement } from '../../src/collections/account-settlement.js';
 import { CollectionHistoryService } from '../../src/collections/collection-history.service.js';
 import { CollectionService } from '../../src/collections/collection.service.js';
@@ -14,6 +16,7 @@ import type { RequestContext } from '../../src/platform/context/request-context.
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
+import { testNotifications } from '../notifications/notices.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -70,6 +73,14 @@ describe('CorrectionService (US-044, BR-14)', () => {
     const audit = new AuditWriter(database);
     const ledger = new LedgerService(database);
     const settlement = new AccountSettlement(database);
+    const { notices } = testNotifications(database);
+    const dayCloses = new DayCloseService(
+      database,
+      audit,
+      settlement,
+      new HandoverViews(),
+      notices,
+    );
     const accounts = new AccountService(database, audit, ledger);
     const collections = new CollectionService(
       database,
@@ -77,6 +88,8 @@ describe('CorrectionService (US-044, BR-14)', () => {
       ledger,
       { warn: () => undefined } as unknown as PinoLogger,
       settlement,
+      dayCloses,
+      notices,
     );
     const history = new CollectionHistoryService(database);
     const corrections = new CorrectionService(
@@ -85,9 +98,14 @@ describe('CorrectionService (US-044, BR-14)', () => {
       ledger,
       settlement,
       history,
+      dayCloses,
+      notices,
     );
 
-    const account = async (accountAmount = '10000', investedAmount = '8500') => {
+    const account = async (
+      accountAmount = '10000',
+      investedAmount = '8500',
+    ) => {
       const customer = await tx.customer.create({
         data: {
           organizationId,
@@ -142,7 +160,8 @@ describe('CorrectionService (US-044, BR-14)', () => {
         ).map((row) => [row.accountType, row.balance.toFixed(2)]),
       );
 
-    const loan = (id: string) => tx.accountLoan.findUniqueOrThrow({ where: { id } });
+    const loan = (id: string) =>
+      tx.accountLoan.findUniqueOrThrow({ where: { id } });
 
     return {
       admin,
@@ -191,13 +210,20 @@ describe('CorrectionService (US-044, BR-14)', () => {
             classification: 'LOW',
           },
         });
-        const stored = await tx.collection.findUniqueOrThrow({ where: { id: original.id } });
+        const stored = await tx.collection.findUniqueOrThrow({
+          where: { id: original.id },
+        });
         expect(stored.amount.toFixed(2)).toBe('100.00');
-        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe('9900.00');
+        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe(
+          '9900.00',
+        );
         expect(await w.balances()).toEqual(before);
         expect(
           await tx.ledgerTransaction.count({
-            where: { sourceTable: 'collection', sourceId: requested.adjustment.id },
+            where: {
+              sourceTable: 'collection',
+              sourceId: requested.adjustment.id,
+            },
           }),
         ).toBe(0);
         // M10 notifications are not built: "my Senior is notified" is not asserted.
@@ -211,31 +237,52 @@ describe('CorrectionService (US-044, BR-14)', () => {
         const original = await w.collect(account.id, '100');
 
         await expect(
-          w.corrections.request(w.junior, original.id, { correctedAmount: '100.00', reason: 'x' }),
+          w.corrections.request(w.junior, original.id, {
+            correctedAmount: '100.00',
+            reason: 'x',
+          }),
         ).rejects.toMatchObject({ code: 'NO_CHANGE', status: 422 });
         // Outstanding is 900: correcting 100 up to 1,001 would add 901.
         await expect(
-          w.corrections.request(w.junior, original.id, { correctedAmount: '1001', reason: 'x' }),
-        ).rejects.toMatchObject({ code: 'AMOUNT_EXCEEDS_OUTSTANDING', status: 422 });
+          w.corrections.request(w.junior, original.id, {
+            correctedAmount: '1001',
+            reason: 'x',
+          }),
+        ).rejects.toMatchObject({
+          code: 'AMOUNT_EXCEEDS_OUTSTANDING',
+          status: 422,
+        });
 
-        await w.corrections.request(w.junior, original.id, { correctedAmount: '90', reason: 'x' });
+        await w.corrections.request(w.junior, original.id, {
+          correctedAmount: '90',
+          reason: 'x',
+        });
         await expect(
-          w.corrections.request(w.senior, original.id, { correctedAmount: '80', reason: 'y' }),
+          w.corrections.request(w.senior, original.id, {
+            correctedAmount: '80',
+            reason: 'y',
+          }),
         ).rejects.toMatchObject({ code: 'CORRECTION_PENDING', status: 409 });
       });
     });
 
-    it('a Junior can correct only their own entries — another Junior\'s is 404, as for a missing one', async () => {
+    it("a Junior can correct only their own entries — another Junior's is 404, as for a missing one", async () => {
       await withRollback(prisma, async (tx) => {
         const w = await world(tx);
         const account = await w.account();
         const original = await w.collect(account.id, '100', w.otherJunior);
 
         await expect(
-          w.corrections.request(w.junior, original.id, { correctedAmount: '80', reason: 'x' }),
+          w.corrections.request(w.junior, original.id, {
+            correctedAmount: '80',
+            reason: 'x',
+          }),
         ).rejects.toMatchObject({ code: 'COLLECTION_NOT_FOUND', status: 404 });
         await expect(
-          w.corrections.request(w.senior, original.id, { correctedAmount: '80', reason: 'x' }),
+          w.corrections.request(w.senior, original.id, {
+            correctedAmount: '80',
+            reason: 'x',
+          }),
         ).resolves.toMatchObject({ decision: 'PENDING' });
       });
     });
@@ -275,7 +322,9 @@ describe('CorrectionService (US-044, BR-14)', () => {
         expect(loan.outstandingAmount.toFixed(2)).toBe('9920.00');
         // 9,920 at 100 a day: 100 slots after Wednesday 7 January.
         expect(
-          await tx.accountSchedule.count({ where: { accountLoanId: account.id, status: 'PENDING' } }),
+          await tx.accountSchedule.count({
+            where: { accountLoanId: account.id, status: 'PENDING' },
+          }),
         ).toBe(100);
 
         // BR-18 on the running total: 80 of 10,000 recognises ₹12.00, not ₹15.00.
@@ -288,14 +337,22 @@ describe('CorrectionService (US-044, BR-14)', () => {
           where: { sourceTable: 'collection', sourceId: adjustment.id },
         });
         expect(posting.transactionType).toBe('ADJUSTMENT');
-        expect(posting.businessDate.toISOString().slice(0, 10)).toBe('2026-01-06');
+        expect(posting.businessDate.toISOString().slice(0, 10)).toBe(
+          '2026-01-06',
+        );
 
         const detail = await w.history.get(w.senior, original.id);
         expect(detail).toMatchObject({
           amount: '100.00',
           netAmount: '80.00',
           canRequestCorrection: true,
-          adjustments: [{ id: adjustment.id, status: 'CONFIRMED', approval: { decision: 'APPROVED' } }],
+          adjustments: [
+            {
+              id: adjustment.id,
+              status: 'CONFIRMED',
+              approval: { decision: 'APPROVED' },
+            },
+          ],
         });
       });
     });
@@ -311,8 +368,13 @@ describe('CorrectionService (US-044, BR-14)', () => {
         });
         await w.corrections.decide(w.admin, id, { decision: 'APPROVED' });
 
-        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe('9900.00');
-        expect(await w.balances()).toMatchObject({ CASH_IN_HAND: '100.00', EARNED_PROFIT: '15.00' });
+        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe(
+          '9900.00',
+        );
+        expect(await w.balances()).toMatchObject({
+          CASH_IN_HAND: '100.00',
+          EARNED_PROFIT: '15.00',
+        });
       });
     });
 
@@ -329,13 +391,23 @@ describe('CorrectionService (US-044, BR-14)', () => {
           { reason: 'Recorded against the wrong customer' },
           at('2026-01-06'),
         );
-        await w.corrections.decide(w.senior, id, { decision: 'APPROVED' }, at('2026-01-07'));
+        await w.corrections.decide(
+          w.senior,
+          id,
+          { decision: 'APPROVED' },
+          at('2026-01-07'),
+        );
 
         const loan = await w.loan(account.id);
-        expect(loan).toMatchObject({ status: 'ACTIVE', actualCompletionDate: null });
+        expect(loan).toMatchObject({
+          status: 'ACTIVE',
+          actualCompletionDate: null,
+        });
         expect(loan.outstandingAmount.toFixed(2)).toBe('1000.00');
         expect(
-          await tx.accountSchedule.count({ where: { accountLoanId: account.id, status: 'PENDING' } }),
+          await tx.accountSchedule.count({
+            where: { accountLoanId: account.id, status: 'PENDING' },
+          }),
         ).toBe(10);
         expect(await w.balances()).toMatchObject({
           CASH_IN_HAND: '0.00',
@@ -363,7 +435,10 @@ describe('CorrectionService (US-044, BR-14)', () => {
         await w.corrections.decide(w.senior, id, { decision: 'REJECTED' });
         await expect(
           w.corrections.decide(w.admin, id, { decision: 'APPROVED' }),
-        ).rejects.toMatchObject({ code: 'APPROVAL_ALREADY_DECIDED', status: 409 });
+        ).rejects.toMatchObject({
+          code: 'APPROVAL_ALREADY_DECIDED',
+          status: 409,
+        });
       });
     });
   });
@@ -388,12 +463,16 @@ describe('CorrectionService (US-044, BR-14)', () => {
         ).rejects.toMatchObject({ code: 'SELF_APPROVAL' });
         await w.corrections.decide(w.admin, own.id, { decision: 'REJECTED' });
 
-        const reversal = await w.corrections.reverse(w.admin, original.id, { reason: 'x' });
+        const reversal = await w.corrections.reverse(w.admin, original.id, {
+          reason: 'x',
+        });
         await expect(
           w.corrections.decide(w.admin, reversal.id, { decision: 'APPROVED' }),
         ).rejects.toMatchObject({ code: 'SELF_APPROVAL' });
         await expect(
-          w.corrections.decide(w.secondAdmin, reversal.id, { decision: 'APPROVED' }),
+          w.corrections.decide(w.secondAdmin, reversal.id, {
+            decision: 'APPROVED',
+          }),
         ).resolves.toMatchObject({ decision: 'APPROVED' });
       });
     });
@@ -406,22 +485,40 @@ describe('CorrectionService (US-044, BR-14)', () => {
         const account = await w.account();
         const original = await w.collect(account.id, '100');
         const before = await w.balances();
-        const { id, adjustment } = await w.corrections.request(w.junior, original.id, {
-          correctedAmount: '0',
-          reason: 'x',
+        const { id, adjustment } = await w.corrections.request(
+          w.junior,
+          original.id,
+          {
+            correctedAmount: '0',
+            reason: 'x',
+          },
+        );
+
+        await w.corrections.decide(w.senior, id, {
+          decision: 'REJECTED',
+          note: 'The customer confirms 100',
         });
 
-        await w.corrections.decide(w.senior, id, { decision: 'REJECTED', note: 'The customer confirms 100' });
-
         expect(await w.balances()).toEqual(before);
-        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe('9900.00');
+        expect((await w.loan(account.id)).outstandingAmount.toFixed(2)).toBe(
+          '9900.00',
+        );
         const detail = await w.history.get(w.junior, original.id);
         expect(detail).toMatchObject({
           netAmount: '100.00',
-          adjustments: [{ id: adjustment.id, status: 'REJECTED', approval: { decision: 'REJECTED' } }],
+          adjustments: [
+            {
+              id: adjustment.id,
+              status: 'REJECTED',
+              approval: { decision: 'REJECTED' },
+            },
+          ],
         });
         await expect(
-          w.corrections.request(w.junior, original.id, { correctedAmount: '90', reason: 'y' }),
+          w.corrections.request(w.junior, original.id, {
+            correctedAmount: '90',
+            reason: 'y',
+          }),
         ).resolves.toMatchObject({ decision: 'PENDING' });
       });
     });
@@ -433,22 +530,39 @@ describe('CorrectionService (US-044, BR-14)', () => {
         const mine = await w.collect(account.id, '100');
         const other = await w.account();
         await w.collect(other.id, '100', w.otherJunior);
-        await w.corrections.request(w.junior, mine.id, { correctedAmount: '80', reason: 'x' }, at('2026-01-06'));
+        await w.corrections.request(
+          w.junior,
+          mine.id,
+          { correctedAmount: '80', reason: 'x' },
+          at('2026-01-06'),
+        );
 
         const range = { from: '2026-01-05', to: '2026-01-06', limit: 50 };
         const juniorSees = await w.history.list(w.junior, range);
-        expect(juniorSees.data.map((row) => [row.entryType, row.amount])).toEqual([
+        expect(
+          juniorSees.data.map((row) => [row.entryType, row.amount]),
+        ).toEqual([
           ['ORIGINAL', '100.00'],
           ['ADJUSTMENT', '-20.00'],
         ]);
         expect((await w.history.list(w.senior, range)).data).toHaveLength(3);
         await expect(
-          w.history.list(w.senior, { from: '2026-01-06', to: '2026-01-05', limit: 50 }),
+          w.history.list(w.senior, {
+            from: '2026-01-06',
+            to: '2026-01-05',
+            limit: 50,
+          }),
         ).rejects.toMatchObject({ code: 'INVALID_DATE_RANGE', status: 400 });
 
-        const queue = await w.corrections.listApprovals(w.senior, { decision: 'PENDING', limit: 50 });
+        const queue = await w.corrections.listApprovals(w.senior, {
+          decision: 'PENDING',
+          limit: 50,
+        });
         expect(queue.data).toHaveLength(1);
-        expect(queue.data[0]).toMatchObject({ canDecide: true, correctedAmount: '80.00' });
+        expect(queue.data[0]).toMatchObject({
+          canDecide: true,
+          correctedAmount: '80.00',
+        });
       });
     });
   });

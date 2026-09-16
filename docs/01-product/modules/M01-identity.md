@@ -27,7 +27,7 @@ The split is deliberate: keeping Rasi data out of the generated tables means `be
 
 ## Key rules
 
-- A staff member is created by an Admin, never self-registered. There is no public sign-up.
+- A staff member is created by an Admin, never self-registered. The one exception is the owner of a new organization, who signs up publicly as its Super Admin ([ADR-0012](../../02-architecture/adr/0012-organization-sign-up.md)).
 - Role is single-valued — Senior or Junior, never both.
 - `status` gates sign-in: only `ACTIVE` may authenticate. `SUSPENDED` and `INACTIVE` are refused with a message that does not reveal whether the password was correct.
 - Soft delete (`deletedAt`) is blocked while the staff member holds an open line assignment or has unacknowledged cash.
@@ -46,6 +46,7 @@ Sessions last **30 days with rolling renewal**, far longer than a typical web ap
 
 | Operation                | Actor                | Notes                                                                                       |
 | ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| Sign up an organization  | Anyone               | Creates the organization, its slug and its owner as Super Admin. Rate-limited. Audited      |
 | Sign in                  | Anyone               | Better Auth. Audited                                                                        |
 | Sign out                 | Self                 | **Blocked with a warning if unsynced collections exist** — local data dies with the session |
 | Request password reset   | Self                 | Email                                                                                       |
@@ -85,13 +86,39 @@ In `apps/api/src/auth/` (`sign-in-policy.ts`, `sign-in-audit.ts`), as Better Aut
 
 **A sign-in that cannot be audited does not happen**: if the `SUCCESS` write fails, the new session is deleted and the request fails with `500 SIGN_IN_AUDIT_FAILED`.
 
-**Public sign-up is disabled** (`disableSignUp`). Users with credentials are created server-side through Better Auth's internal adapter — the path US-092 staff creation will take, and the one the test helpers use.
+**Better Auth's sign-up is disabled** (`disableSignUp`). Users with credentials are created server-side: organization sign-up (below) writes them in its own transaction, and US-092 staff creation will do the same.
 
 Staff who become non-`ACTIVE` after signing in are refused on their next request by M02's `PolicyGuard`; revoking their sessions at suspension is part of US-092.
 
+## As built — organization sign-up (US-006)
+
+**Decided 2026-09-15** ([ADR-0012](../../02-architecture/adr/0012-organization-sign-up.md)). In `apps/api/src/identity/`: `organization-sign-up.service.ts`, `organization-slug.ts` and `sign-up-rate-limiter.ts`. Both routes are public (`@AllowAnonymous`). The web form is `/sign-up`, linked from `/sign-in`.
+
+**`POST /api/organizations`.** Body: `organizationName`, `name`, `email` (stored lower-case), `phone` (an Indian mobile, stored E.164) and `password` (10–128 characters). **No slug is sent.**
+
+1. **Rate limit.** Five attempts an hour per client address, counted once the form has passed validation. Past that, `429 SIGN_UP_RATE_LIMITED`. The counter is in process memory: per process, and reset on restart.
+2. **Availability.** An email that already has a user is `409 EMAIL_TAKEN`; a mobile already on a staff profile is `409 PHONE_TAKEN`. Both are checked before the transaction. A race that reaches the unique index is checked again, so it gets the same answers.
+3. **Slug**, generated from the business name:
+   - Folded to ASCII (NFKD, marks dropped), lowercased, with non-alphanumerics becoming single hyphens, cut to 48 characters. `Śrī Lakshmi Finance & Co.` → `sri-lakshmi-finance-co`.
+   - A taken slug gets `-2`, `-3` and so on, reusing the first gap; past 99, a random suffix.
+   - A reserved word is treated as taken. `RESERVED_SLUGS` lists every top-level web route plus words like `api`, `admin` and `rasi` — **add a new top-level route to it**.
+   - A name leaving fewer than three characters gets `org-` and 8 random hex characters.
+   - Losing a race for the slug retries with a fresh choice, up to three times.
+4. **One transaction** creates:
+   - the `organization` (`slug`, `Asia/Kolkata`, `INR`)
+   - the `user` and its `credential` account, hashed with Better Auth's hasher
+   - a `SUPER_ADMIN` `staff_profile` with staff code `OWNER-xxxxxxxx`, joined today (business date), and `mustChangePassword` clear
+   - `CREATE` audit entries for `organization` (name, slug) and `staff_profile`, with the owner as actor
+
+Returns `201 { organizationId, staffProfileId, slug }`. The web form signs the owner in with the same password, then shows the business's sign-in link to share with staff before going on to `/home`.
+
+Nothing else is created: no sector, line or setting. Ledger accounts appear on first use. Sector and line codes, setting keys and business-wide holidays are unique **per organization** (migration `organization_scoped_uniques`).
+
+**`GET /api/organizations/:slug`** returns `{ slug, name }`, or `404 ORGANIZATION_NOT_FOUND`; a malformed slug is `400`. It backs the business's sign-in link, **`/<slug>/sign-in`**, which names the business above the ordinary form. After sign-in, that page checks `GET /api/me` (which now includes `organization: { name, slug }`) and signs out an account belonging to another business, telling it to use its own link. This keeps people on the right page; it is not access control. The organization always comes from the session's staff profile (M02), and plain `/sign-in` still works for everyone.
+
 ## As built — admin password reset (US-003)
 
-**Decided 2026-09-13: Admin-initiated reset only.** There is no email provider, so self-service "forgot password" waits until one is chosen.
+**Decided 2026-09-13: Admin-initiated reset only.** There was no email provider, so self-service "forgot password" waited until one was chosen. SMTP email now exists (M10, 2026-09-15); self-service reset through it is still unbuilt and needs its own decision, since field staff often have no inbox.
 
 `POST /api/staff/:staffProfileId/password-reset` (permission `staff.resetPassword`) — in `apps/api/src/identity/`:
 
@@ -108,7 +135,7 @@ While `mustChangePassword` is set, the temporary password signs in but **every R
 | `CANNOT_RESET_OWN_PASSWORD` | `422`  | Use change-password instead                 |
 | `NO_PASSWORD_CREDENTIAL`    | `422`  | The user has no password to replace         |
 
-**Who am I — `GET /api/me`** (`profile.viewOwn`, every role) returns `userId`, `staffProfileId`, `name`, `email`, `role` and `currentLineId`. The web client calls it on every signed-in page. `401` sends the user to `/sign-in`, and `403 PASSWORD_CHANGE_REQUIRED` sends them to `/change-password`. Otherwise the client forwards to the role's landing: `/dashboard` in the console for Super Admin, Admin and Senior, and `/route` for Junior. The client only follows the API's answer and decides nothing itself.
+**Who am I — `GET /api/me`** (`profile.viewOwn`, every role) returns `userId`, `staffProfileId`, `name`, `email`, `role`, `currentLineId` and `organization` (`name`, `slug`). The web client calls it on every signed-in page. `401` sends the user to `/sign-in`, and `403 PASSWORD_CHANGE_REQUIRED` sends them to `/change-password`. Otherwise the client forwards to the role's landing: `/dashboard` in the console for Super Admin, Admin and Senior, and `/route` for Junior. The client only follows the API's answer and decides nothing itself.
 
 **Team read model — `GET /api/staff`** (`?role=`, `?status=`) **and `GET /api/staff/:staffProfileId`** (both `staff.list`):
 - Each person comes with the line they work today.

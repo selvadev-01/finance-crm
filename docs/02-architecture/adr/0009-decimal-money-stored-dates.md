@@ -31,6 +31,7 @@ The timezone is fixed in code, not configurable.
 
 - Decimal arithmetic is more verbose than operators. Every calculation goes through a decimal library rather than `+`
 - Money cannot be compared or summed with native operators, which is easy to forget and needs a lint rule
+- **Instants need the session pinned to UTC** (found 2026-09-16). Storing a business date as a date is only half the rule: Prisma's pg adapter sends a `DateTime` with no offset, so an instant is read in the session's time zone and, on an `Asia/Kolkata` machine, was stored 5½ hours early. Every connection now sets `timezone=UTC` ([`packages/db/README.md`](../../../packages/db/README.md#prisma-7-notes)). `businessDate` and other `@db.Date` columns were never affected, which is exactly why they are dates
 - Storing a derived column risks it disagreeing with `capturedAt` if written by a path that bypasses the conversion helper — mitigated by a single conversion point in [M06](../../01-product/modules/M06-working-calendar.md)
 
 **Neutral**

@@ -11,6 +11,7 @@ import {
 
 import { foundInScope, inScope, lineScope } from '../access/scope.js';
 import { AuditWriter } from '../audit/audit.writer.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { ConflictError, DomainError } from '../platform/errors/errors.js';
@@ -60,6 +61,7 @@ export class AssignmentService {
   constructor(
     private readonly database: Database,
     private readonly audit: AuditWriter,
+    private readonly notices: EventNotices,
   ) {}
 
   /**
@@ -99,7 +101,7 @@ export class AssignmentService {
         const line = foundInScope(
           await tx.line.findFirst({
             where: inScope(lineScope(context), { id: lineId }),
-            select: { id: true, isActive: true },
+            select: { id: true, isActive: true, name: true },
           }),
           'line',
         );
@@ -117,7 +119,13 @@ export class AssignmentService {
               organizationId: context.organizationId,
               deletedAt: null,
             },
-            select: { id: true, role: true, status: true, joinedAt: true },
+            select: {
+              id: true,
+              userId: true,
+              role: true,
+              status: true,
+              joinedAt: true,
+            },
           }),
           'staff',
         );
@@ -211,6 +219,18 @@ export class AssignmentService {
             effectiveFrom,
             ...(linesWithoutSenior.length > 0 ? { linesWithoutSenior } : {}),
           },
+        });
+
+        await this.notices.assignmentMade({
+          actorUserId: context.userId,
+          staffUserId: staff.userId,
+          role,
+          lineId: line.id,
+          lineName: line.name,
+          effectiveFrom,
+          previousLineIds: open
+            .filter((row) => row.staffProfileId === staff.id && row.lineId !== line.id)
+            .map((row) => row.lineId),
         });
 
         return {

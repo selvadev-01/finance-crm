@@ -37,6 +37,9 @@ import { backToRoute, parseView, useView } from "./hash-view";
 import { RouteScreen } from "./route-screen";
 import { StatusBar } from "./status-bar";
 import { SyncScreen } from "./sync-screen";
+import { HandoverScreen } from "./handover-screen";
+import { NotificationsScreen } from "./notifications-screen";
+import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 
 const ME_KEY = "me";
 
@@ -46,8 +49,8 @@ type Session =
   | { state: "signed-out" };
 
 /**
- * The Junior's field app (S-01, S-02, S-03) on the offline engine. One page,
- * three views by hash ([hash-view](./hash-view.ts)), one persistent status
+ * The Junior's field app (S-01, S-02, S-03, S-06, S-21) on the offline engine. One page,
+ * its views by hash ([hash-view](./hash-view.ts)), one persistent status
  * bar, no other chrome (navigation-ia.md).
  *
  * Nothing here waits for the network to record: a collection is saved on the
@@ -72,6 +75,7 @@ export function FieldRoute() {
   const [signOutBlocked, setSignOutBlocked] = useState(false);
   const businessDate = toBusinessDate(new Date());
   const connected = online && reachable;
+  const unread = useUnreadCount(session.state === "ready" && connected);
 
   /**
    * Several reloads overlap around a save (the record, the drain after it, the
@@ -128,7 +132,9 @@ export function FieldRoute() {
         setReachable(false);
       }
       if (cancelled) return;
-      setSession(me ? { state: "ready", me, fromCache } : { state: "signed-out" });
+      setSession(
+        me ? { state: "ready", me, fromCache } : { state: "signed-out" },
+      );
       if (!me) return;
       await registerFieldWorker().catch(() => undefined);
       await reload();
@@ -155,13 +161,23 @@ export function FieldRoute() {
   if (session.state === "loading") {
     // A skeleton in the route's shape, not a spinner (design-system.md).
     return (
-      <div className="flex min-h-dvh flex-col bg-surface" role="status" aria-label="Loading your route">
+      <div
+        className="flex min-h-dvh flex-col bg-surface"
+        role="status"
+        aria-label="Loading your route"
+      >
         <div className="h-[calc(var(--control-height)+1rem)] border-b border-border bg-surface-raised" />
-        <div className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4" aria-hidden>
+        <div
+          className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4"
+          aria-hidden
+        >
           <div className="h-7 w-40 animate-pulse rounded-[var(--radius-control)] bg-surface-sunken" />
           <div className="h-4 w-56 animate-pulse rounded-[var(--radius-control)] bg-surface-sunken" />
           {[0, 1, 2].map((card) => (
-            <div key={card} className="h-24 animate-pulse rounded-[var(--radius-surface)] border border-border bg-surface-raised" />
+            <div
+              key={card}
+              className="h-24 animate-pulse rounded-[var(--radius-surface)] border border-border bg-surface-raised"
+            />
           ))}
         </div>
       </div>
@@ -171,14 +187,22 @@ export function FieldRoute() {
     return (
       <main className="mx-auto flex max-w-md flex-col gap-4 p-4">
         <FormMessage tone="info">
-          Sign in to see your route. Collections saved on this phone are kept and sent after you sign in.
+          Sign in to see your route. Collections saved on this phone are kept
+          and sent after you sign in.
         </FormMessage>
-        <Link href="/sign-in" className="font-medium text-accent underline">Sign in</Link>
+        <Link href="/sign-in" className="font-medium text-accent underline">
+          Sign in
+        </Link>
       </main>
     );
   }
 
-  const onRecord: RecordAtDoor = async ({ account, customer, amount, note }) => {
+  const onRecord: RecordAtDoor = async ({
+    account,
+    customer,
+    amount,
+    note,
+  }) => {
     try {
       await recordAtDoor(
         {
@@ -192,12 +216,16 @@ export function FieldRoute() {
         () => void reload(),
       );
     } catch (error) {
-      return error instanceof OutboxFullError ? error.message : "Could not save on this phone. Try again.";
+      return error instanceof OutboxFullError
+        ? error.message
+        : "Could not save on this phone. Try again.";
     }
     const route = await reload();
     const stillDue = route?.route.customers
       .find((candidate) => candidate.customerId === customer.customerId)
-      ?.accounts.some((candidate) => route.rowState[candidate.accountLoanId] === "PENDING");
+      ?.accounts.some(
+        (candidate) => route.rowState[candidate.accountLoanId] === "PENDING",
+      );
     if (!stillDue) {
       // Back to the route after every customer (navigation-ia.md).
       backToRoute();
@@ -240,24 +268,51 @@ export function FieldRoute() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface">
-      <StatusBar connected={connected} unsynced={summary?.unsynced ?? 0} />
+      <StatusBar
+        connected={connected}
+        unsynced={summary?.unsynced ?? 0}
+        unread={connected ? unread : null}
+      />
       <main className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4">
         {summary?.pausedForSignIn && view.name !== "sync" ? (
           <FormMessage tone="critical">
-            Your sign-in has expired. <Link href="/sign-in" className="font-medium underline">Sign in again</Link> — your saved collections are kept and will send.
+            Your sign-in has expired.{" "}
+            <Link href="/sign-in" className="font-medium underline">
+              Sign in again
+            </Link>{" "}
+            — your saved collections are kept and will send.
           </FormMessage>
         ) : null}
         {summary?.blocked && view.name !== "sync" ? (
-          <FormMessage tone="critical">This phone is full of unsent collections. Find signal and send them before recording more.</FormMessage>
+          <FormMessage tone="critical">
+            This phone is full of unsent collections. Find signal and send them
+            before recording more.
+          </FormMessage>
         ) : summary?.warn && view.name !== "sync" ? (
-          <FormMessage tone="critical">Many collections are waiting. Find signal to send them.</FormMessage>
+          <FormMessage tone="critical">
+            Many collections are waiting. Find signal to send them.
+          </FormMessage>
         ) : null}
         {local?.stale ? (
-          <FormMessage tone="info">This route is more than three days old. Connect to refresh it.</FormMessage>
+          <FormMessage tone="info">
+            This route is more than three days old. Connect to refresh it.
+          </FormMessage>
         ) : null}
 
         {view.name === "collect" ? (
-          <CollectScreen key={view.customerId} customerId={view.customerId} local={local} onRecord={onRecord} />
+          <CollectScreen
+            key={view.customerId}
+            customerId={view.customerId}
+            local={local}
+            onRecord={onRecord}
+          />
+        ) : view.name === "notifications" ? (
+          <NotificationsScreen connected={connected} />
+        ) : view.name === "handover" ? (
+          <HandoverScreen
+            connected={connected}
+            unsent={summary?.unsynced ?? 0}
+          />
         ) : view.name === "sync" ? (
           <SyncScreen
             entries={entries}

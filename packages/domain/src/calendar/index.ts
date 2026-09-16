@@ -7,7 +7,7 @@ export {
   parseCalendarDate,
   toUtcMidnight,
 } from "./calendar-date.js";
-export { BUSINESS_TIME_ZONE, toBusinessDate } from "./business-date.js";
+export { BUSINESS_TIME_ZONE, businessDayStart, toBusinessDate } from "./business-date.js";
 export {
   addWorkingDays,
   countWorkingDays,

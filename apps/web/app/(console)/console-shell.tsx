@@ -2,7 +2,10 @@
 
 import {
   AddressBook,
+  Bell,
+  ClipboardText,
   List,
+  Money,
   MapTrifold,
   Path,
   Receipt,
@@ -17,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { authClient } from "../../lib/auth-client";
+import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 import { canManageOrganisation, ROLE_LABEL, type Role } from "../../lib/roles";
 import { LANDING, SignedInContext, useMe } from "../../lib/use-me";
 
@@ -29,17 +33,50 @@ interface NavItem {
 
 /**
  * navigation-ia.md#navigation-by-role — only the areas that exist so far.
- * Notifications, Reports and Settings join as
+ * Reports and Settings join as
  * their screens are built; a link to an unbuilt page is not added early.
  * Hidden, not disabled: a role without the area does not see the link.
  */
 const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: SquaresFour, shownTo: () => true },
-  { href: "/customers", label: "Customers", icon: AddressBook, shownTo: () => true },
-  { href: "/sectors", label: "Sectors", icon: MapTrifold, shownTo: canManageOrganisation },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: SquaresFour,
+    shownTo: () => true,
+  },
+  {
+    href: "/customers",
+    label: "Customers",
+    icon: AddressBook,
+    shownTo: () => true,
+  },
+  {
+    href: "/sectors",
+    label: "Sectors",
+    icon: MapTrifold,
+    shownTo: canManageOrganisation,
+  },
   { href: "/lines", label: "Lines", icon: Path, shownTo: () => true },
-  { href: "/collections", label: "Collections", icon: Receipt, shownTo: () => true },
+  {
+    href: "/collections",
+    label: "Collections",
+    icon: Receipt,
+    shownTo: () => true,
+  },
+  { href: "/cash", label: "Cash", icon: Money, shownTo: () => true },
   { href: "/team", label: "Team", icon: UsersThree, shownTo: () => true },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    icon: Bell,
+    shownTo: () => true,
+  },
+  {
+    href: "/settings/audit",
+    label: "Audit log",
+    icon: ClipboardText,
+    shownTo: canManageOrganisation,
+  },
 ];
 
 /**
@@ -55,6 +92,8 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawer = useRef<HTMLDialogElement>(null);
   const drawerBackdrop = useBackdropPress(() => setDrawerOpen(false));
+  // The bell (navigation-ia.md#notifications): polled, never for a Junior.
+  const unread = useUnreadCount(Boolean(me) && me?.role !== "JUNIOR");
 
   useEffect(() => {
     if (me?.role === "JUNIOR") router.replace(LANDING.JUNIOR);
@@ -89,6 +128,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
       {items.map((item) => {
         const current = isCurrent(item.href);
         const Icon = item.icon;
+        const count = item.href === "/notifications" ? unread : null;
         return (
           <li key={item.href}>
             <Link
@@ -104,10 +144,32 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
                   : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
               )}
             >
-              <Icon aria-hidden size={20} weight="regular" className="shrink-0" />
-              <span className={cn(layout === "rail" && "sr-only xl:not-sr-only")}>
+              <span className="relative shrink-0">
+                <Icon aria-hidden size={20} weight="regular" />
+                {count ? (
+                  <UnreadDot
+                    count={count}
+                    className={cn(layout === "rail" && "xl:hidden")}
+                  />
+                ) : null}
+              </span>
+              <span
+                className={cn(layout === "rail" && "sr-only xl:not-sr-only")}
+              >
                 {item.label}
               </span>
+              {count ? (
+                <span
+                  data-numeric
+                  className={cn(
+                    "ml-auto rounded-full bg-critical px-1.5 text-2xs font-semibold text-ink-inverse",
+                    layout === "rail" && "hidden xl:inline",
+                  )}
+                >
+                  {count}
+                  <span className="sr-only"> unread</span>
+                </span>
+              ) : null}
             </Link>
           </li>
         );
@@ -147,8 +209,12 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             className="px-2.5 text-lg font-semibold text-ink"
             aria-label="Rasi — dashboard"
           >
-            <span aria-hidden className="xl:hidden">R</span>
-            <span aria-hidden className="hidden xl:inline">Rasi</span>
+            <span aria-hidden className="xl:hidden">
+              R
+            </span>
+            <span aria-hidden className="hidden xl:inline">
+              Rasi
+            </span>
           </Link>
           <nav aria-label="Console" className="flex-1">
             {navLinks("rail")}
@@ -167,7 +233,17 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
           >
             <List aria-hidden size={22} weight="regular" />
           </Button>
-          <span className="text-base font-semibold text-ink">Rasi</span>
+          <span className="flex-1 text-base font-semibold text-ink">Rasi</span>
+          <Link
+            href="/notifications"
+            aria-label={
+              unread ? `Notifications, ${unread} unread` : "Notifications"
+            }
+            className="relative flex h-[var(--control-height)] items-center rounded-[var(--radius-control)] px-2.5 text-ink hover:bg-surface-sunken"
+          >
+            <Bell aria-hidden size={22} weight="regular" />
+            {unread ? <UnreadDot count={unread} /> : null}
+          </Link>
         </header>
 
         <dialog
@@ -182,7 +258,9 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         >
           <div className="flex h-full flex-col gap-4 px-3 py-3">
             <div className="flex items-center justify-between">
-              <span className="px-2.5 text-lg font-semibold text-ink">Rasi</span>
+              <span className="px-2.5 text-lg font-semibold text-ink">
+                Rasi
+              </span>
               <Button
                 tone="ghost"
                 aria-label="Close navigation"
@@ -204,5 +282,27 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
         </main>
       </div>
     </SignedInContext>
+  );
+}
+
+/** The count on the bell icon; the full count is also spoken where it is shown. */
+function UnreadDot({
+  count,
+  className,
+}: {
+  count: number;
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      data-numeric
+      className={cn(
+        "absolute -top-1.5 -right-2 min-w-4 rounded-full bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse",
+        className,
+      )}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }

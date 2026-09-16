@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 
 import { AccountService } from '../../src/accounts/account.service.js';
 import { AuditWriter } from '../../src/audit/audit.writer.js';
+import { DayCloseService } from '../../src/cash/day-close.service.js';
+import { HandoverViews } from '../../src/cash/handover-views.js';
 import { AccountSettlement } from '../../src/collections/account-settlement.js';
 import { CollectionService } from '../../src/collections/collection.service.js';
 import { RouteService } from '../../src/collections/route.service.js';
@@ -13,6 +15,7 @@ import type { RequestContext } from '../../src/platform/context/request-context.
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
+import { testNotifications } from '../notifications/notices.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -66,12 +69,22 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
       warn: (_: object, message: string) => warnings.push(message),
     } as unknown as PinoLogger;
     const settlement = new AccountSettlement(database);
+    const { notices } = testNotifications(database);
+    const dayCloses = new DayCloseService(
+      database,
+      audit,
+      settlement,
+      new HandoverViews(),
+      notices,
+    );
     const collections = new CollectionService(
       database,
       audit,
       ledger,
       logger,
       settlement,
+      dayCloses,
+      notices,
     );
     const routes = new RouteService(database);
 
@@ -518,8 +531,16 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         });
         // 100 slots, slot 1 collected on 5 January: 99 left for the first account.
         expect(
-          group.accounts.map((a) => [a.accountLoanId === first.id, a.daysRemaining]),
-        ).toEqual(expect.arrayContaining([[true, 99], [false, 100]]));
+          group.accounts.map((a) => [
+            a.accountLoanId === first.id,
+            a.daysRemaining,
+          ]),
+        ).toEqual(
+          expect.arrayContaining([
+            [true, 99],
+            [false, 100],
+          ]),
+        );
         // The device skips queued entries whose key the figures already include.
         expect(
           group.accounts.find((a) => a.accountLoanId === first.id)!

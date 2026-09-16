@@ -133,6 +133,7 @@ describe('admin password reset (US-003, e2e)', () => {
       email: junior.email,
       role: 'JUNIOR',
       currentLineId: null,
+      organization: { name: expect.any(String), slug: expect.any(String) },
     });
 
     const { temporaryPassword } = (

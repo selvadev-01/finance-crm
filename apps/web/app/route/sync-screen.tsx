@@ -1,4 +1,10 @@
-import { ArrowClockwise, CaretLeft, CheckCircle, SignOut } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowClockwise,
+  CaretLeft,
+  CheckCircle,
+  Money,
+  SignOut,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   Button,
   Dialog,
@@ -12,7 +18,7 @@ import { useState } from "react";
 
 import type { OutboxEntry } from "../../lib/offline/db";
 import type { OutboxSummary } from "../../lib/offline/outbox";
-import { backToRoute } from "./hash-view";
+import { backToRoute, openView } from "./hash-view";
 import { EntryStateMark, formatClockTime } from "./sync-marks";
 
 /**
@@ -49,7 +55,9 @@ export function SyncScreen({
   const [removing, setRemoving] = useState<OutboxEntry | null>(null);
   const unsent = entries.filter((entry) => entry.status !== "SYNCED");
   const sent = entries.filter((entry) => entry.status === "SYNCED").reverse();
-  const lastSent = lastSync ? `Last sent ${formatClockTime(lastSync)}` : "Nothing sent from this phone yet";
+  const lastSent = lastSync
+    ? `Last sent ${formatClockTime(lastSync)}`
+    : "Nothing sent from this phone yet";
 
   return (
     <div className="flex flex-col gap-[var(--stack-gap)]" data-testid="sync">
@@ -61,22 +69,42 @@ export function SyncScreen({
       </div>
 
       {unsent.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-6 text-center" data-testid="all-synced">
-          <CheckCircle aria-hidden size={40} weight="fill" className="text-positive" />
-          <h1 className="text-xl font-semibold text-ink">Everything is sent to the office</h1>
+        <div
+          className="flex flex-col items-center gap-2 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-6 text-center"
+          data-testid="all-synced"
+        >
+          <CheckCircle
+            aria-hidden
+            size={40}
+            weight="fill"
+            className="text-positive"
+          />
+          <h1 className="text-xl font-semibold text-ink">
+            Everything is sent to the office
+          </h1>
           <p className="text-sm text-ink-muted">{lastSent}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           <h1 className="text-xl font-semibold text-ink" data-numeric>
-            {unsent.length === 1 ? "1 collection not sent" : `${unsent.length} collections not sent`}
+            {unsent.length === 1
+              ? "1 collection not sent"
+              : `${unsent.length} collections not sent`}
           </h1>
           <p className="text-sm text-ink-muted">{lastSent}</p>
           {!connected ? (
-            <FormMessage tone="info">No signal. They are safe on this phone and send by themselves when signal returns.</FormMessage>
+            <FormMessage tone="info">
+              No signal. They are safe on this phone and send by themselves when
+              signal returns.
+            </FormMessage>
           ) : null}
           <Button tone="primary" onClick={onSendNow} disabled={sending}>
-            <ArrowClockwise aria-hidden size={20} weight="regular" className={sending ? "animate-spin" : undefined} />
+            <ArrowClockwise
+              aria-hidden
+              size={20}
+              weight="regular"
+              className={sending ? "animate-spin" : undefined}
+            />
             Send now
           </Button>
         </div>
@@ -85,21 +113,37 @@ export function SyncScreen({
       {summary?.pausedForSignIn ? (
         <FormMessage tone="critical">
           Your sign-in has expired.{" "}
-          <Link href="/sign-in" className="font-medium underline">Sign in again</Link> — the collections stay on this phone and send after.
+          <Link href="/sign-in" className="font-medium underline">
+            Sign in again
+          </Link>{" "}
+          — the collections stay on this phone and send after.
         </FormMessage>
       ) : null}
       {summary?.blocked ? (
-        <FormMessage tone="critical">This phone is full of unsent collections. Find signal and send them before recording more.</FormMessage>
+        <FormMessage tone="critical">
+          This phone is full of unsent collections. Find signal and send them
+          before recording more.
+        </FormMessage>
       ) : summary?.warn ? (
-        <FormMessage tone="critical">Many collections are waiting. Find signal to send them.</FormMessage>
+        <FormMessage tone="critical">
+          Many collections are waiting. Find signal to send them.
+        </FormMessage>
       ) : null}
 
       {unsent.length > 0 ? (
         <ul className="flex flex-col gap-2" data-testid="outbox">
           {unsent.map((entry) => (
-            <EntryRow key={entry.idempotencyKey} entry={entry} businessDate={businessDate}>
+            <EntryRow
+              key={entry.idempotencyKey}
+              entry={entry}
+              businessDate={businessDate}
+            >
               {entry.status === "QUEUED" ? (
-                <Button tone="secondary" onClick={() => onRetry(entry)} disabled={sending}>
+                <Button
+                  tone="secondary"
+                  onClick={() => onRetry(entry)}
+                  disabled={sending}
+                >
                   Retry
                 </Button>
               ) : entry.status === "FAILED" ? (
@@ -119,16 +163,26 @@ export function SyncScreen({
           </summary>
           <ul className="flex flex-col gap-2 p-2">
             {sent.map((entry) => (
-              <EntryRow key={entry.idempotencyKey} entry={entry} businessDate={businessDate} />
+              <EntryRow
+                key={entry.idempotencyKey}
+                entry={entry}
+                businessDate={businessDate}
+              />
             ))}
           </ul>
         </details>
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+        <Button tone="secondary" onClick={() => openView("#handover")}>
+          <Money aria-hidden size={20} weight="regular" />
+          Hand over cash
+        </Button>
         {signOutBlocked ? (
           <FormMessage tone="critical">
-            {summary?.unsynced} {summary?.unsynced === 1 ? "collection is" : "collections are"} still on this phone. Send them before signing out.
+            {summary?.unsynced}{" "}
+            {summary?.unsynced === 1 ? "collection is" : "collections are"}{" "}
+            still on this phone. Send them before signing out.
           </FormMessage>
         ) : null}
         <Button tone="ghost" onClick={onSignOut}>
@@ -183,13 +237,20 @@ function EntryRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-base font-medium text-ink">{entry.customerName}</span>
+          <span className="truncate text-base font-medium text-ink">
+            {entry.customerName}
+          </span>
           <span className="text-xs text-ink-muted">
             {entry.accountCode} · captured {captured}
           </span>
         </div>
-        <span className="shrink-0 text-base font-semibold text-ink" data-numeric>
-          {entry.payload.amount === "0" ? "No payment" : formatCurrency(entry.payload.amount)}
+        <span
+          className="shrink-0 text-base font-semibold text-ink"
+          data-numeric
+        >
+          {entry.payload.amount === "0"
+            ? "No payment"
+            : formatCurrency(entry.payload.amount)}
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -201,10 +262,14 @@ function EntryRow({
       ) : null}
       {entry.status !== "SYNCED" && entry.attempts > 0 ? (
         <details className="text-xs text-ink-muted">
-          <summary className="flex min-h-[var(--control-height)] cursor-pointer items-center">Details</summary>
+          <summary className="flex min-h-[var(--control-height)] cursor-pointer items-center">
+            Details
+          </summary>
           <p className="pt-1" data-numeric>
             Tried {entry.attempts} {entry.attempts === 1 ? "time" : "times"}
-            {entry.lastError && entry.status !== "FAILED" ? ` · last problem: ${entry.lastError.message}` : ""}
+            {entry.lastError && entry.status !== "FAILED"
+              ? ` · last problem: ${entry.lastError.message}`
+              : ""}
           </p>
           {entry.payload.note ? <p>Note: {entry.payload.note}</p> : null}
           <p>Reference {entry.idempotencyKey.slice(0, 8)}</p>

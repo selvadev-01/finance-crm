@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@repo/db';
+import { PrismaClient, UTC_SESSION } from '@repo/db';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -33,8 +33,10 @@ export function createTestPrismaClient(): PrismaClient {
   const schema = new URL(connectionString).searchParams.get('schema');
 
   return new PrismaClient({
+    // UTC like the application's own client: instants must not depend on the
+    // developer's time zone (see UTC_SESSION).
     adapter: new PrismaPg(
-      { connectionString },
+      { connectionString, ...UTC_SESSION },
       schema ? { schema } : undefined,
     ),
   });

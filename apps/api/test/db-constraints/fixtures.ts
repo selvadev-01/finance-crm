@@ -48,7 +48,7 @@ export async function createLine(tx: PrismaClient) {
 export async function createStaff(
   tx: PrismaClient,
   organizationId: string,
-  role: 'SENIOR' | 'JUNIOR',
+  role: 'ADMIN' | 'SENIOR' | 'JUNIOR',
 ) {
   const user = await createUser(tx);
   const suffix = randomUUID();

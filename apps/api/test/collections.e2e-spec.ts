@@ -221,14 +221,23 @@ describe('collections (M07, e2e)', () => {
 
     it('history is date-bounded and visible to every role in scope', async () => {
       const bad = await as('SENIOR').get('/api/collections').expect(400);
-      expect(bad.body.details.map((d: { field: string }) => d.field).sort()).toEqual(['from', 'to']);
+      expect(
+        bad.body.details.map((d: { field: string }) => d.field).sort(),
+      ).toEqual(['from', 'to']);
       const reversed = await as('ADMIN')
         .get('/api/collections?from=2026-01-10&to=2026-01-01')
         .expect(400);
       expect(reversed.body.code).toBe('INVALID_DATE_RANGE');
-      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
+      for (const role of [
+        'SUPER_ADMIN',
+        'ADMIN',
+        'SENIOR',
+        'JUNIOR',
+      ] as const) {
         const page = await as(role)
-          .get(`/api/collections?from=${today}&to=${today}&accountLoanId=${activeOnA}`)
+          .get(
+            `/api/collections?from=${today}&to=${today}&accountLoanId=${activeOnA}`,
+          )
           .expect(200);
         expect(page.body).toMatchObject({ data: [], hasMore: false });
       }
@@ -254,10 +263,9 @@ describe('collections (M07, e2e)', () => {
         correctedAmount: '-5',
         reason: '   ',
       }).expect(400);
-      expect(response.body.details.map((d: { field: string }) => d.field).sort()).toEqual([
-        'correctedAmount',
-        'reason',
-      ]);
+      expect(
+        response.body.details.map((d: { field: string }) => d.field).sort(),
+      ).toEqual(['correctedAmount', 'reason']);
     });
 
     it('approvals: Seniors and Admins see the queue and decide; a Junior is 403', async () => {
@@ -271,9 +279,13 @@ describe('collections (M07, e2e)', () => {
           decision: 'APPROVED',
         }).expect(404);
       }
-      const invalid = await post('ADMIN', '/api/collection-approvals/apr_missing/decision', {
-        decision: 'MAYBE',
-      }).expect(400);
+      const invalid = await post(
+        'ADMIN',
+        '/api/collection-approvals/apr_missing/decision',
+        {
+          decision: 'MAYBE',
+        },
+      ).expect(400);
       expect(invalid.body.details[0].field).toBe('decision');
     });
   });

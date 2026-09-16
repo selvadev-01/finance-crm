@@ -102,6 +102,43 @@ describe('configuration (M16)', () => {
     ]);
   });
 
+  it('sends no email by default, and needs a host and sender for SMTP', () => {
+    const config = parseConfig(valid);
+    expect(config).toMatchObject({
+      EMAIL_PROVIDER: 'NONE',
+      SMTP_PORT: 587,
+      SMTP_SECURE: false,
+    });
+    expect(problemsFor({ ...valid, EMAIL_PROVIDER: 'SMTP' })).toEqual([
+      'SMTP_HOST is required',
+      'EMAIL_FROM is required',
+    ]);
+    expect(
+      parseConfig({
+        ...valid,
+        EMAIL_PROVIDER: 'SMTP',
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_PORT: '465',
+        SMTP_SECURE: 'true',
+        SMTP_USER: 'rasi',
+        SMTP_PASS: 'secret',
+        EMAIL_FROM: 'Rasi <no-reply@example.com>',
+      }),
+    ).toMatchObject({ SMTP_PORT: 465, SMTP_SECURE: true });
+  });
+
+  it('refuses half an SMTP login, and a sender that is not an address', () => {
+    expect(problemsFor({ ...valid, SMTP_USER: 'rasi' })).toEqual([
+      'SMTP_PASS is required',
+    ]);
+    expect(problemsFor({ ...valid, EMAIL_FROM: 'Rasi' })).toEqual([
+      'EMAIL_FROM must be an address, or a name and <address>',
+    ]);
+    expect(
+      parseConfig({ ...valid, EMAIL_FROM: 'no-reply@example.com' }).EMAIL_FROM,
+    ).toBe('no-reply@example.com');
+  });
+
   it('returns a frozen object', () => {
     expect(Object.isFrozen(parseConfig(valid))).toBe(true);
   });

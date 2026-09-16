@@ -32,7 +32,7 @@ Seven screens are specified in full — the ones where getting it wrong costs mo
 
 **Error state.** Offline is **not an error** — the cached route renders with an offline indicator. A cache older than 72 hours shows a stale-data warning and prompts for connectivity. Sign-in expiry retains the queue and prompts to sign in.
 
-**As built.** Rows in customer-code order — there is no visiting-order model yet. Each account row carries its state (Pending shows nothing; amber "Saved on phone"; spinner "Syncing"; green tick "Sent to office"), and a line under the title says when the route was fetched and whether it includes collections not yet sent. No bell: notifications (M10) are not built.
+**As built.** Rows in customer-code order — there is no visiting-order model yet. Each account row carries its state (Pending shows nothing; amber "Saved on phone"; spinner "Syncing"; green tick "Sent to office"), and a line under the title says when the route was fetched and whether it includes collections not yet sent. The status bar carries the bell with the unread count (M10, 2026-09-15); it opens `#notifications`, which needs signal.
 
 > **Multi-account customers** (BR-01a) render as a group header with the customer name, and one independently-confirmable row per account beneath. The layout is visibly different from the single-account case, not a subtle variation — a Junior in a hurry must not be able to put a combined payment against the first account.
 
@@ -186,6 +186,8 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 
 > Blocking on unsynced devices would leave lines permanently open whenever a phone is off or out of signal, which is routine. Closing on what is known and reopening when the rest arrives matches how the day actually works.
 
+**As built** at `/lines/:lineId/day-closes/:date`, also reached from the line page and `/cash`: a date picker, expected, collected, shortfall or surplus, cash received with its discrepancy; Juniors with entries, collected and phone state (All sent / Not sent / Not heard from); "Needs a look" listing LOW, EXTRA, NO_PAYMENT, MISSED and not-yet-visited slots; handovers with denominations, Acknowledge and Dispute. The close dialog names the figures and missed slots, then "Close anyway" if phones have not sent everything. Reopen asks for a reason. A Senior hands the day's acknowledged cash to the office from here or `/cash`.
+
 ---
 
 ## S-06 · Cash Handover
@@ -217,6 +219,8 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 **Error state.** **A discrepancy does not block submission** — it is recorded and flagged.
 
 > Blocking a short handover would mean the cash never gets recorded as moving, which is the worst outcome: the money has physically changed hands whether or not the system accepts it.
+
+**As built.** The Junior hands over at `/route#handover` (needs signal; warns when collections are still on the phone): one card per line and date still held, nine rows with − / + and a number field, the computed total, "Matches" or "₹20.00 short", a note when it differs, and one submit button to the named Senior. A pending handover shows "waiting for … to acknowledge"; recent handovers show their status and any dispute note. Seniors and Admins acknowledge and dispute on `/cash` and S-05.
 >
 > The declared total is computed from counts rather than typed, so the count and the total cannot disagree. "One ₹200 note short" is a fact both parties can check while the cash is still in the room; "₹200 short" is an argument.
 
@@ -267,11 +271,11 @@ This form and S-10 are entered 1,000+ times in the launch window. They are **thr
 | S-18    | Pending approvals        | Action queue; **self-approval blocked**. **As built** at `/collections/pending-approval`: the recorded net struck through beside what it becomes, the reason and requester; Approve / Reject dialogs naming the consequence; a request of your own says another approver decides instead of offering buttons                                                               |
 | S-19    | Senior line dashboard    | Dashboard, one line                                                                                   |
 | S-20    | Admin dashboard          | Dashboard, §21 figures                                                                                |
-| S-21    | Notification centre      | Grouped list, deep-linking                                                                            |
+| S-21    | Notification centre      | Grouped list, deep-linking. **As built** at `/notifications` (console) and `/route#notifications` (Junior, needs signal): grouped by business day, unread marked by a dot and weight, mark read and mark all read, "Notify me on this device" asked only from a tap; the console page also holds category preferences with ALERT locked on. Junior rows do not deep-link, because their links are console pages |
 | S-22–26 | Reports                  | Filterable, date-bounded tables                                                                       |
 | S-27    | Holidays                 | List + create, future dates only                                                                      |
 | S-28    | Settings                 | Form, Super Admin only, audited                                                                       |
-| S-29    | Audit log                | Filterable list, read-only                                                                            |
+| S-29    | Audit log                | Filterable list, read-only. **As built** at `/settings/audit` (Admin, Super Admin): action, record type, record id, staff member and date filters kept in the URL; newest first with time, action, record (linked where a page exists) and who; each entry opens to the before/after, IP address and device; "Older entries" pages. Account history (US-091) is a section on the account page |
 | S-30    | Sign in                  | Form; generic failure message                                                                         |
 
 ---

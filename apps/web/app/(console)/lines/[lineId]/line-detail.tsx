@@ -1,9 +1,11 @@
 "use client";
 
 import { organisationContract as org, staffContract } from "@repo/contracts";
+import { toBusinessDate } from "@repo/domain";
 import {
   Badge,
   Button,
+  buttonClass,
   DataTable,
   DataTableSkeleton,
   formatBusinessDate,
@@ -140,14 +142,22 @@ export function LineDetail({ lineId }: { lineId: string }) {
           </span>
         }
         actions={
-          manages ? (
+          <>
+            <Link
+              href={`/lines/${lineId}/day-closes/${toBusinessDate(new Date())}`}
+              className={buttonClass("secondary")}
+            >
+              Day close
+            </Link>
+            {manages ? (
             <>
               <Button onClick={() => setOpen("rename")}>Rename</Button>
               {record.isActive ? (
                 <Button onClick={() => setOpen("deactivate")}>Deactivate</Button>
               ) : null}
             </>
-          ) : null
+            ) : null}
+          </>
         }
       />
 

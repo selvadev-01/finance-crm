@@ -15,6 +15,14 @@ CREATE DATABASE rasi_dev OWNER rasi;
 
 `CREATEDB` is required: `prisma migrate dev` creates and drops a shadow database to diff migrations against.
 
+For the job queue (M14), also as a superuser, once:
+
+```sql
+CREATE SCHEMA pgboss AUTHORIZATION rasi;
+```
+
+pg-boss creates and migrates its own tables there when a worker starts. Prisma does not manage that schema, so the migration drift check is unaffected.
+
 Then copy `.env.example` to `.env` at the repository root and fill in the password. Apply migrations with `pnpm --filter @repo/db db:deploy` — the test suite checks for pending migrations and refuses to run, but never applies them itself.
 
 ## Scripts
@@ -61,9 +69,10 @@ Rules for writing more:
 
 ## Prisma 7 notes
 
-Two things differ from most Prisma documentation written before v7:
+Three things differ from most Prisma documentation written before v7:
 
 - **`url` is gone from the `datasource` block.** The migration connection string lives in [`prisma7.config.ts`](prisma7.config.ts), which loads `.env` via `dotenv`.
 - **The runtime client takes a driver adapter**, not a connection string — `@prisma/adapter-pg`. See [`src/index.ts`](src/index.ts).
+- **Every connection pins the session to UTC** (`UTC_SESSION`, exported from [`src/index.ts`](src/index.ts)) — **a new `PrismaPg` anywhere must spread it in.** The adapter sends a `DateTime` as a timestamp with no offset, so PostgreSQL reads it in the session's time zone: on a machine set to `Asia/Kolkata` every instant the application wrote was stored 5½ hours early (found 2026-09-16). The application could not see it, because reads shift back by the same amount, but `now()`, psql, pg-boss and any other reader disagreed. Business dates (`@db.Date`) were never affected — they carry no time. `apps/api/test/platform/database.spec.ts` compares an application-written instant with the database's own clock.
 
 The client is constructed lazily, so importing `@repo/db` neither connects nor requires `DATABASE_URL` until something actually uses it. That is what lets the Better Auth CLI load `auth.config.ts` before a database exists.

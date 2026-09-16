@@ -99,7 +99,12 @@ export class CollectionHistoryService {
       throw new ValidationError(
         'INVALID_DATE_RANGE',
         `Choose a range of up to ${MAX_RANGE_DAYS} days, with "from" on or before "to"`,
-        [{ field: 'to', issue: `must be 0–${MAX_RANGE_DAYS - 1} days after from` }],
+        [
+          {
+            field: 'to',
+            issue: `must be 0–${MAX_RANGE_DAYS - 1} days after from`,
+          },
+        ],
       );
     }
     const rows = await this.database.client.collection.findMany({
@@ -152,7 +157,9 @@ export class CollectionHistoryService {
     const correctable =
       original &&
       !pending &&
-      (CORRECTABLE_ACCOUNT as readonly string[]).includes(row.accountLoan.status);
+      (CORRECTABLE_ACCOUNT as readonly string[]).includes(
+        row.accountLoan.status,
+      );
 
     return {
       ...toItem(row, names),

@@ -72,6 +72,40 @@ Scenario: Scope follows reassignment
 
 Device registers for Web Push or FCM depending on the configured provider; the same user may have several active devices.
 
+### US-006 · Organization sign-up · P1
+
+Decided 2026-09-15 ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md)).
+
+```gherkin
+Scenario: The owner of a new business signs up
+  When the owner enters the business name "Lakshmi Finance", their name, email, mobile and a password
+  Then an organization is created with the owner as its active Super Admin
+  And its sign-in link is "/lakshmi-finance/sign-in", generated without the owner typing it
+  And the owner is signed in with the password they chose and shown that link
+  And the organization and the owner's staff profile are audited
+
+Scenario: Two businesses with the same name
+  Given "Lakshmi Finance" already has the link "/lakshmi-finance/sign-in"
+  When another owner signs up as "Lakshmi Finance"
+  Then their link is "/lakshmi-finance-2/sign-in"
+
+Scenario: Staff use their business's link
+  When a staff member opens "/lakshmi-finance/sign-in"
+  Then the page names "Lakshmi Finance"
+  And an account from another business is signed back out and told to use its own link
+
+Scenario: Repeated sign-ups from one address
+  When one address makes a sixth sign-up attempt within an hour
+  Then it is refused with 429 and nothing is created
+
+Scenario: Codes belong to one business
+  Given another organization already has a line coded "LN-01"
+  When the new owner creates a line coded "LN-01"
+  Then it is accepted
+```
+
+Every other staff member is still created by an Admin (US-092).
+
 ---
 
 ## E02 — Organisation (M03)

@@ -95,6 +95,8 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Record denominations |      —      |   —   |    ✓     |    ✓     |
 
 > Manual reopen is Admin-and-above: it unlocks a settled day's figures. Automatic reopening by a late offline sync (BR-16a) is a system action requiring no permission.
+>
+> **As built:** acknowledging is further limited to the handover's receiver, and a Senior hands over only their current line's cash. The phone's queue report (`POST /api/devices/sync-report`) reuses `collection.record` — only a phone that records collections reports — and has no row of its own here.
 
 ### Organisation (M03)
 
@@ -143,6 +145,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Suspend staff            |      ✓      |   ✓   |    —     |   —    |
 | Reset another's password |      ✓      |   ✓   |    —     |   —    |
 | **View audit log**       |      ✓      |   ✓   |    —     |   —    |
+| View an account's history |     ✓      |   ✓   |    —     |   —    |
 | **Change settings**      |      ✓      |   —   |    —     |   —    |
 | Declare holiday          |      ✓      |   ✓   |    —     |   —    |
 | View own profile         |      ✓      |   ✓   |    ✓     |   ✓    |

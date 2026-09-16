@@ -12,6 +12,7 @@ import {
   decimal,
 } from '../db-constraints/fixtures.js';
 import { withRollback } from '../with-rollback.js';
+import { testNotifications } from '../notifications/notices.js';
 
 /**
  * Staff assignment (M03, US-012, US-013) against real rows, rolled back — so
@@ -53,7 +54,11 @@ describe('AssignmentService (US-012, US-013)', () => {
       currentLineId: null,
     };
     const database = new Database(tx);
-    const service = new AssignmentService(database, new AuditWriter(database));
+    const service = new AssignmentService(
+      database,
+      new AuditWriter(database),
+      testNotifications(database).notices,
+    );
     const open = (
       staffProfileId: string,
       lineId: string,
@@ -232,7 +237,7 @@ describe('AssignmentService (US-012, US-013)', () => {
       });
     });
 
-    it('assigns a Junior who is not on any line yet', async () => {
+    it('assigns a Junior who is not on any line yet, and tells them (M10 NEW_ASSIGNMENT)', async () => {
       await withRollback(prisma, async (tx) => {
         const { seven, context, service, organizationId } = await world(tx);
         const junior = await createStaff(tx, organizationId, 'JUNIOR');
@@ -241,6 +246,12 @@ describe('AssignmentService (US-012, US-013)', () => {
           effectiveFrom: '2026-09-13',
         });
         expect(result).toMatchObject({ closed: [], linesWithoutSenior: [] });
+        const told = await tx.notification.findMany({ where: { userId: junior.userId } });
+        expect(told).toEqual([
+          expect.objectContaining({ eventType: 'NEW_ASSIGNMENT', category: 'INFORMATION' }),
+        ]);
+        expect(told[0]!.body).toContain('is a Junior on');
+        expect(await tx.notification.count({ where: { userId: context.userId } })).toBe(0);
       });
     });
   });

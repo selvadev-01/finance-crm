@@ -21,6 +21,7 @@ One decision per file, numbered, never deleted. A decision that turns out wrong 
 | [0008](0008-offline-first-pwa.md)          | Offline-first PWA with an IndexedDB outbox    | Accepted           |
 | [0009](0009-decimal-money-stored-dates.md) | Decimal money and stored business dates       | Accepted           |
 | [0010](0010-tailwind-v4-component-base.md) | Tailwind v4 and an owned component base       | Accepted           |
+| [0012](0012-organization-sign-up.md)       | Public organization sign-up, generated slugs  | Accepted           |
 
 ## When to write one
 

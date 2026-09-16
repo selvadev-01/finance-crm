@@ -5,7 +5,11 @@ import {
   writeSignInAudit,
 } from '../../src/auth/sign-in-audit.js';
 import { createTestPrismaClient } from '../database.js';
-import { createUser } from '../db-constraints/fixtures.js';
+import {
+  createLine,
+  createStaff,
+  createUser,
+} from '../db-constraints/fixtures.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -45,7 +49,26 @@ describe('sign-in audit write (M13, US-001)', () => {
         after: { outcome: 'SUCCESS', reason: null },
         ipAddress: '203.0.113.7',
         userAgent: 'rasi-test',
+        organizationId: null,
       });
+    });
+  });
+
+  it("records the matched staff member's organization, so the attempt shows in that organization's log (US-090)", async () => {
+    await withRollback(prisma, async (tx) => {
+      const { organization } = await createLine(tx);
+      const staff = await createStaff(tx, organization.id, 'JUNIOR');
+      await writeSignInAudit(tx, {
+        userId: staff.userId,
+        outcome: 'REFUSED',
+        reason: 'STAFF_NOT_ACTIVE',
+        ipAddress: null,
+        userAgent: null,
+      });
+      const row = await tx.auditLog.findFirstOrThrow({
+        where: { entityId: staff.userId, action: 'LOGIN' },
+      });
+      expect(row.organizationId).toBe(organization.id);
     });
   });
 

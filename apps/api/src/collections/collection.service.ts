@@ -25,6 +25,8 @@ import {
   DomainError,
   InternalError,
 } from '../platform/errors/errors.js';
+import { DayCloseService } from '../cash/day-close.service.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import { AccountSettlement } from './account-settlement.js';
 
 type RecordInput = RouteInput<
@@ -66,6 +68,8 @@ export class CollectionService {
     private readonly ledger: LedgerService,
     private readonly logger: PinoLogger,
     private readonly settlement: AccountSettlement,
+    private readonly dayCloses: DayCloseService,
+    private readonly notices: EventNotices,
   ) {}
 
   async record(
@@ -164,7 +168,7 @@ export class CollectionService {
           outstandingAmount: true,
           disbursementDate: true,
           targetCompletionDate: true,
-          customer: { select: { lineId: true, sectorId: true } },
+          customer: { select: { lineId: true, sectorId: true, name: true } },
         },
       }),
       'account',
@@ -207,7 +211,9 @@ export class CollectionService {
       (await tx.accountSchedule.findFirst({
         where: {
           accountLoanId: account.id,
-          status: 'PENDING',
+          // A slot marked MISSED at day close is answered by the late
+          // collection that was taken that day (US-043).
+          status: { in: ['PENDING', 'MISSED'] },
           dueDate: { lte: day },
         },
         orderBy: { sequence: 'asc' },
@@ -320,6 +326,28 @@ export class CollectionService {
         ],
       });
     }
+
+    // US-072: the line's Senior hears of a low, extra or no-payment visit, and
+    // of a completed account, in this transaction.
+    await this.notices.collectionRecorded({
+      actorUserId: context.userId,
+      collectionId: collection.id,
+      accountLoanId: account.id,
+      lineId: account.customer.lineId,
+      accountCode: account.accountCode,
+      customerName: account.customer.name,
+      classification,
+      amount: amount.toFixed(2),
+      expectedAmount: expected.toFixed(2),
+      completed: completedOn !== null,
+    });
+
+    // BR-16a: a collection for a closed day reopens it.
+    await this.dayCloses.moneyWritten(
+      context,
+      account.customer.lineId,
+      businessDate,
+    );
 
     await this.audit.record(context, {
       action: 'CREATE',

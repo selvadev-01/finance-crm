@@ -23,6 +23,7 @@ import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 import { LoadFailed, RecordNotFound } from "../../_organisation/list-controls";
 import { AccountStatusBadge } from "../account-parts";
+import { AccountHistory } from "./account-history";
 
 const SLOT_TONE = {
   PENDING: "neutral",
@@ -43,12 +44,15 @@ const SLOT_LABEL = {
 export function AccountDetailView({ accountId }: { accountId: string }) {
   const me = useSignedIn();
   const [confirming, setConfirming] = useState(false);
-  const account = useApiQuery(accountContract.getAccount, { params: { accountId } });
+  const account = useApiQuery(accountContract.getAccount, {
+    params: { accountId },
+  });
   const schedule = useApiQuery(accountContract.getAccountSchedule, {
     params: { accountId },
   });
 
-  if (account.status === "loading") return <DataTableSkeleton columns={4} rows={4} />;
+  if (account.status === "loading")
+    return <DataTableSkeleton columns={4} rows={4} />;
   if (account.status === "not-found" || account.status === "not-permitted") {
     return <RecordNotFound noun="Account" />;
   }
@@ -58,13 +62,17 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
 
   const record = account.data;
   const today = toBusinessDate(new Date());
-  const canDisburse = canManageOrganisation(me.role) && record.status === "PENDING";
+  const canDisburse =
+    canManageOrganisation(me.role) && record.status === "PENDING";
 
   return (
     <>
       <PageHeader
         eyebrow={
-          <Link href={`/customers/${record.customerId}`} className="hover:text-ink hover:underline">
+          <Link
+            href={`/customers/${record.customerId}`}
+            className="hover:text-ink hover:underline"
+          >
             {record.customerName}
           </Link>
         }
@@ -74,7 +82,10 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
             <AccountStatusBadge account={record} />
             <span>
               on{" "}
-              <Link href={`/lines/${record.lineId}`} className="hover:text-ink hover:underline">
+              <Link
+                href={`/lines/${record.lineId}`}
+                className="hover:text-ink hover:underline"
+              >
                 {record.lineName}
               </Link>
             </span>
@@ -83,7 +94,8 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
         actions={
           canDisburse && record.disbursementDate > today ? (
             <p className="text-sm text-ink-muted">
-              Can be disbursed from {formatBusinessDate(record.disbursementDate)}
+              Can be disbursed from{" "}
+              {formatBusinessDate(record.disbursementDate)}
             </p>
           ) : canDisburse ? (
             <Button tone="primary" onClick={() => setConfirming(true)}>
@@ -94,9 +106,13 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
       />
 
       <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Figure label="Account amount">{formatCurrency(record.accountAmount)}</Figure>
+        <Figure label="Account amount">
+          {formatCurrency(record.accountAmount)}
+        </Figure>
         {record.investedAmount !== null ? (
-          <Figure label="Invested">{formatCurrency(record.investedAmount)}</Figure>
+          <Figure label="Invested">
+            {formatCurrency(record.investedAmount)}
+          </Figure>
         ) : null}
         {record.profitAmount !== null ? (
           <Figure label="Profit">{formatCurrency(record.profitAmount)}</Figure>
@@ -104,19 +120,30 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
         <Figure label="Daily amount">
           {formatCurrency(record.dailyAmount)} · {record.termDays} days
         </Figure>
-        <Figure label="Collected">{formatCurrency(record.collectedAmount)}</Figure>
-        <Figure label="Outstanding">{formatCurrency(record.outstandingAmount)}</Figure>
-        <Figure label="Disbursement">{formatBusinessDate(record.disbursementDate)}</Figure>
+        <Figure label="Collected">
+          {formatCurrency(record.collectedAmount)}
+        </Figure>
+        <Figure label="Outstanding">
+          {formatCurrency(record.outstandingAmount)}
+        </Figure>
+        <Figure label="Disbursement">
+          {formatBusinessDate(record.disbursementDate)}
+        </Figure>
         <Figure label="Target completion">
           {formatBusinessDate(record.targetCompletionDate)}
         </Figure>
       </dl>
 
-      <section aria-labelledby="account-schedule" className="flex flex-col gap-3">
+      <section
+        aria-labelledby="account-schedule"
+        className="flex flex-col gap-3"
+      >
         <h2 id="account-schedule" className="text-base font-semibold text-ink">
           Schedule
         </h2>
-        {schedule.status === "loading" ? <DataTableSkeleton columns={4} /> : null}
+        {schedule.status === "loading" ? (
+          <DataTableSkeleton columns={4} />
+        ) : null}
         {schedule.status === "error" ? (
           <LoadFailed message={schedule.message} onRetry={schedule.reload} />
         ) : null}
@@ -127,17 +154,33 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
             rowKey={(slot) => String(slot.sequence)}
             columns={[
               { header: "Day", align: "end", cell: (slot) => slot.sequence },
-              { header: "Date", cell: (slot) => formatBusinessDate(slot.dueDate) },
-              { header: "Expected", align: "end", cell: (slot) => formatCurrency(slot.expectedAmount) },
+              {
+                header: "Date",
+                cell: (slot) => formatBusinessDate(slot.dueDate),
+              },
+              {
+                header: "Expected",
+                align: "end",
+                cell: (slot) => formatCurrency(slot.expectedAmount),
+              },
               {
                 header: "Status",
                 align: "end",
-                cell: (slot) => <Badge tone={SLOT_TONE[slot.status]}>{SLOT_LABEL[slot.status]}</Badge>,
+                cell: (slot) => (
+                  <Badge tone={SLOT_TONE[slot.status]}>
+                    {SLOT_LABEL[slot.status]}
+                  </Badge>
+                ),
               },
             ]}
           />
         ) : null}
       </section>
+
+      {/* US-091: the audit substrate is Admin-and-above (M13). */}
+      {canManageOrganisation(me.role) ? (
+        <AccountHistory accountId={record.id} />
+      ) : null}
 
       {confirming ? (
         <DisburseDialog
@@ -197,8 +240,9 @@ function DisburseDialog({
     >
       {redated ? (
         <FormMessage tone="info">
-          It was planned for {formatBusinessDate(account.disbursementDate)}. It will be disbursed
-          today, {formatBusinessDate(today)}, and the schedule will start from the next working day.
+          It was planned for {formatBusinessDate(account.disbursementDate)}. It
+          will be disbursed today, {formatBusinessDate(today)}, and the schedule
+          will start from the next working day.
         </FormMessage>
       ) : null}
       {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
@@ -206,7 +250,11 @@ function DisburseDialog({
         <Button tone="ghost" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="primary" onClick={() => void disburse()} disabled={pending}>
+        <Button
+          tone="primary"
+          onClick={() => void disburse()}
+          disabled={pending}
+        >
           {pending ? "Disbursing…" : `Disburse ${account.accountCode}`}
         </Button>
       </DialogActions>
@@ -217,7 +265,9 @@ function DisburseDialog({
 function Figure({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
-      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">{label}</dt>
+      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">
+        {label}
+      </dt>
       <dd className="text-base font-semibold text-ink" data-numeric>
         {children}
       </dd>

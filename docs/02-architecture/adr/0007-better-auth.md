@@ -6,6 +6,8 @@
 
 Rasi needs authentication for about 60 staff across four roles. Accounts are Admin-created; there is no public sign-up and no customer login.
 
+> **Amended by [ADR-0012](0012-organization-sign-up.md):** the owner of a new organization signs up publicly, rate-limited, through a Rasi endpoint. Better Auth's own sign-up stays disabled; staff are still Admin-created.
+
 Two questions had to be answered together: which library, and where it lives. The repository has NestJS as the API with `packages/db` owning the Prisma schema, and Next.js as the front end — and Better Auth can be hosted in either.
 
 ## Decision

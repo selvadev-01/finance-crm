@@ -143,6 +143,8 @@ Posting so far:
 
 `CASH_AT_OFFICE` has no funding posting yet, so its balance goes negative as accounts are disbursed. A `CAPITAL` posting that funds the office has no story yet.
 
+**Reconciliation** (`reconciliation.service.ts`, US-095): for one organization, every ledger account's balance is recomputed from its entries. A cache that disagrees is re-checked under its row lock, rebuilt, and audited as a system action. Every disbursed account's `collectedAmount` is compared with `A − receivable`: a mismatch is audited and reported, and **the account is not changed**, because its balance drives the schedule and completion. `UNEARNED_PROFIT` is compared with the sum of `unearnedProfit` over accounts. Mismatches log at error level; the alert waits for M10.
+
 ---
 
 ## Risks

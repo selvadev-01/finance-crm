@@ -31,6 +31,38 @@ describe('Database transaction helper', () => {
   const createUser = (client: Pick<PrismaClient, 'user'>, email: string) =>
     client.user.create({ data: { id: randomUUID(), name: 'Tx Probe', email } });
 
+  /**
+   * Found 2026-09-16: Prisma's pg adapter sends a `DateTime` without an
+   * offset, so PostgreSQL reads it in the session's time zone. With the
+   * session on `Asia/Kolkata`, every instant the application wrote was stored
+   * 5½ hours early — and the application could not see it, because reads
+   * shifted back by the same amount. The connection pins the session to UTC
+   * (`UTC_SESSION`); this compares an application-written instant with the
+   * database's own clock, which no shift can fool.
+   */
+  it('stores an instant as the moment it happened, whatever the machine’s time zone', async () => {
+    await withRollback(prisma, async (tx) => {
+      const written = new Date();
+      const user = await createUser(tx, testEmail('clock'));
+      await tx.notification.create({
+        data: {
+          userId: user.id,
+          category: 'ALERT',
+          eventType: 'LOW_COLLECTION',
+          title: 'Clock probe',
+          body: 'Clock probe',
+          readAt: written,
+        },
+      });
+      const [row] = await tx.$queryRaw<{ drift_seconds: number }[]>`
+        SELECT EXTRACT(EPOCH FROM (now() - "readAt")) AS drift_seconds
+        FROM notification
+        WHERE "userId" = ${user.id}`;
+      // Seconds apart at most; a time-zone shift would be thousands.
+      expect(Math.abs(Number(row?.drift_seconds ?? 0))).toBeLessThan(120);
+    });
+  });
+
   it('outside a transaction, client is the base client', () => {
     const database = new Database(prisma);
     expect(database.client).toBe(prisma);

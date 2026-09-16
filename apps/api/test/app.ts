@@ -90,11 +90,18 @@ export async function createTestApp(
       .overrideProvider(LOG_DESTINATION)
       .useValue(options.logDestination);
   }
-  if (options.config) {
-    builder = builder
-      .overrideProvider(APP_CONFIG)
-      .useValue(Object.freeze({ ...loadConfig(), ...options.config }));
-  }
+  // Email and the job worker are always off in HTTP tests, whatever the
+  // developer's `.env` says: no test may reach a real mail server or start a
+  // queue, and results must not depend on local settings. A test that needs
+  // either on passes `config`.
+  builder = builder.overrideProvider(APP_CONFIG).useValue(
+    Object.freeze({
+      ...loadConfig(),
+      EMAIL_PROVIDER: 'NONE' as const,
+      WORKER_ENABLED: false,
+      ...options.config,
+    }),
+  );
 
   for (const [token, value] of options.overrides ?? []) {
     builder = builder.overrideProvider(token).useValue(value);

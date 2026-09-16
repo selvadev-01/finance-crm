@@ -35,10 +35,16 @@ export class StaffController {
   async me(
     @CurrentContext() context: RequestContext,
   ): Promise<RouteSuccess<typeof api.me>> {
-    const user = await this.database.client.user.findUniqueOrThrow({
-      where: { id: context.userId },
-      select: { name: true, email: true },
-    });
+    const [user, organization] = await Promise.all([
+      this.database.client.user.findUniqueOrThrow({
+        where: { id: context.userId },
+        select: { name: true, email: true },
+      }),
+      this.database.client.organization.findUniqueOrThrow({
+        where: { id: context.organizationId },
+        select: { name: true, slug: true },
+      }),
+    ]);
     return {
       userId: context.userId,
       staffProfileId: context.staffProfileId,
@@ -46,6 +52,7 @@ export class StaffController {
       email: user.email,
       role: context.role,
       currentLineId: context.currentLineId,
+      organization,
     };
   }
 

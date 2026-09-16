@@ -46,8 +46,99 @@ const configSchema = z
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     /** Identifies the deployed build in `/health/info`. Optional in development. */
     BUILD_ID: z.string().min(1).optional(),
+    /**
+     * ADR-0003: this process also consumes jobs and runs the schedules (M14).
+     * Read once, in `JobsModule`. Off by default, so the API and the test
+     * suites never start a queue.
+     */
+    WORKER_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /** M14 schedules, cron expressions evaluated in Asia/Kolkata. */
+    JOBS_RECONCILE_CRON: z.string().min(9).default('0 1 * * *'),
+    JOBS_OVERDUE_CRON: z.string().min(9).default('30 0 * * *'),
+    JOBS_PURGE_KEYS_CRON: z.string().min(9).default('0 2 * * *'),
+    /**
+     * notifications.md: which push providers deliver. `NONE` (the development
+     * default) still writes every in-app notification.
+     */
+    PUSH_PROVIDER: z.enum(['WEB_PUSH', 'FCM', 'BOTH', 'NONE']).default('NONE'),
+    VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+    VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+    VAPID_SUBJECT: z
+      .string()
+      .regex(/^(mailto:|https:\/\/)/, 'must be a mailto: or https:// URL')
+      .optional(),
+    FCM_PROJECT_ID: z.string().min(1).optional(),
+    FCM_CLIENT_EMAIL: z.string().min(1).optional(),
+    FCM_PRIVATE_KEY: z.string().min(1).optional(),
+    /**
+     * notifications.md#email: `SMTP` sends email through the server below;
+     * `NONE` (the default) queues nothing, so development and the test suites
+     * never send mail.
+     */
+    EMAIL_PROVIDER: z.enum(['SMTP', 'NONE']).default('NONE'),
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(587),
+    /** `true` for implicit TLS (465); `false` upgrades with STARTTLS (587). */
+    SMTP_SECURE: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASS: z.string().min(1).optional(),
+    /** The sender, `Rasi <no-reply@example.com>` or a bare address. */
+    EMAIL_FROM: z
+      .string()
+      .regex(
+        /^(?:[^<>]+<[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>|[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)$/,
+        'must be an address, or a name and <address>',
+      )
+      .optional(),
   })
   .superRefine((config, context) => {
+    const needs = (
+      provider: 'WEB_PUSH' | 'FCM',
+      keys: (keyof typeof config)[],
+    ) => {
+      if (config.PUSH_PROVIDER !== provider && config.PUSH_PROVIDER !== 'BOTH')
+        return;
+      for (const key of keys) {
+        if (config[key] === undefined) {
+          context.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `is required when PUSH_PROVIDER is ${config.PUSH_PROVIDER}`,
+          });
+        }
+      }
+    };
+    needs('WEB_PUSH', [
+      'VAPID_PUBLIC_KEY',
+      'VAPID_PRIVATE_KEY',
+      'VAPID_SUBJECT',
+    ]);
+    needs('FCM', ['FCM_PROJECT_ID', 'FCM_CLIENT_EMAIL', 'FCM_PRIVATE_KEY']);
+    if (config.EMAIL_PROVIDER === 'SMTP') {
+      for (const key of ['SMTP_HOST', 'EMAIL_FROM'] as const) {
+        if (config[key] === undefined) {
+          context.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'is required when EMAIL_PROVIDER is SMTP',
+          });
+        }
+      }
+    }
+    // A login is a user and a password together; half of one is a typo.
+    if ((config.SMTP_USER === undefined) !== (config.SMTP_PASS === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: [config.SMTP_USER === undefined ? 'SMTP_USER' : 'SMTP_PASS'],
+        message: 'is required when the other SMTP login value is set',
+      });
+    }
     // security.md: generated with `openssl rand -base64 32`, 44 characters.
     if (
       config.NODE_ENV === 'production' &&

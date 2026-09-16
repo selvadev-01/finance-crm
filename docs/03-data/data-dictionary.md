@@ -56,7 +56,7 @@ Role is single-valued — a person is a Senior or a Junior, not both. Multi-role
 | Column           | Type      | Null | Notes                                                              |
 | ---------------- | --------- | ---- | ------------------------------------------------------------------ |
 | `organizationId` | `String`  | No   | FK → `organization.id`                                             |
-| `code`           | `String`  | No   | Unique (`SEC-01`)                                                  |
+| `code`           | `String`  | No   | Unique within the organization (`SEC-01`)                          |
 | `name`           | `String`  | No   |                                                                    |
 | `isActive`       | `Boolean` | No   | Default `true`. Inactive sectors keep history, accept no new lines |
 
@@ -65,7 +65,7 @@ Role is single-valued — a person is a Senior or a Junior, not both. Multi-role
 | Column     | Type      | Null | Notes                                          |
 | ---------- | --------- | ---- | ---------------------------------------------- |
 | `sectorId` | `String`  | No   | FK → `sector.id`                               |
-| `code`     | `String`  | No   | Unique business-wide, not per sector (`LN-07`) |
+| `code`     | `String`  | No   | Unique within the organization, not per sector (`LN-07`) |
 | `name`     | `String`  | No   |                                                |
 | `isActive` | `Boolean` | No   | Default `true`                                 |
 
@@ -268,9 +268,26 @@ Constraints: `discrepancy = cashReceivedTotal - collectedTotal`; `expectedTotal 
 | `discrepancy`    | `Decimal`        | No   | `declaredAmount − systemAmount`              |
 | `status`         | `HandoverStatus` | No   | `PENDING` \| `ACKNOWLEDGED` \| `DISPUTED`    |
 | `acknowledgedAt` | `DateTime`       | Yes  | Cash has not moved until this is set (BR-17) |
-| `disputeNote`    | `String`         | Yes  |                                              |
+| `hop`            | `HandoverHop`    | No   | `JUNIOR_TO_SENIOR` \| `SENIOR_TO_OFFICE`. Only the first counts towards the line's cash received |
+| `note`           | `String`         | Yes  | The sender's explanation; required when `discrepancy ≠ 0` (S-06) |
+| `disputeNote`    | `String`         | Yes  | Required exactly when `status = DISPUTED`    |
 
 Constraints: `discrepancy = declaredAmount - systemAmount`; `declaredAmount >= 0`; `fromUserId <> toUserId`; BR-17 `status = ACKNOWLEDGED` if and only if `acknowledgedAt` is set.
+
+Further constraints (US-061…US-063): `cash_handover_discrepancy_note_check` — a non-zero discrepancy carries a non-blank note; `cash_handover_dispute_note_check` — `DISPUTED` if and only if a non-blank dispute note; `cash_handover_one_pending_key` — at most one `PENDING` handover per `(dayCloseId, fromUserId)`. `day_close_reopen_reason_check` — a reopen reason, when set, is not blank.
+
+### `device_sync_report`
+
+What a Junior's phone last reported about its outbox, so a Senior closing the day knows whose phone may still hold that day's collections (US-060). One row per staff member, replaced on every report.
+
+| Column           | Type       | Null | Notes                                             |
+| ---------------- | ---------- | ---- | ------------------------------------------------- |
+| `staffProfileId` | `String`   | No   | Unique. FK → `staff_profile.id`, cascade delete   |
+| `unsentCount`    | `Int`      | No   | Collections on the phone not yet acknowledged     |
+| `oldestUnsentAt` | `DateTime` | Yes  | `capturedAt` of the oldest of them                |
+| `reportedAt`     | `DateTime` | No   | Server time of the report                         |
+
+Constraints: `unsentCount >= 0`; `oldestUnsentAt` is null exactly when `unsentCount = 0`.
 
 ### `cash_denomination`
 
@@ -339,11 +356,23 @@ A **deferred** constraint trigger enforces Σ debits = Σ credits per transactio
 | ----------- | ---------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `userId`    | `String`               | No   | Recipient                                                                                                                                                   |
 | `category`  | `NotificationCategory` | No   | `INFORMATION` \| `SUCCESS` \| `WARNING` \| `ALERT` (PDF §24)                                                                                                |
-| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` |
+| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` \| `NO_PAYMENT_COLLECTION` \| `HANDOVER_SUBMITTED` \| `HANDOVER_DISPUTED` \| `DAY_REOPENED` \| `RECONCILIATION_MISMATCH` (the last five added by M10, 2026-09-15) |
 | `title`     | `String`               | No   |                                                                                                                                                             |
 | `body`      | `String`               | No   |                                                                                                                                                             |
-| `payload`   | `Json`                 | Yes  | Deep-link context — entity type and id                                                                                                                      |
+| `payload`   | `Json`                 | Yes  | Deep-link context — `entityType`, `entityId` and `url`                                                                                                      |
 | `readAt`    | `DateTime`             | Yes  |                                                                                                                                                             |
+
+Constraint: `title` and `body` are not blank. Written in the transaction of the event that raises it ([M10 as built](../01-product/modules/M10-notifications.md#as-built)); rows cascade with their user.
+
+### `notification_preference`
+
+| Column     | Type                   | Null | Notes                    |
+| ---------- | ---------------------- | ---- | ------------------------ |
+| `userId`   | `String`               | No   | FK → `user.id`, cascades |
+| `category` | `NotificationCategory` | No   | Unique with `userId`     |
+| `enabled`  | `Boolean`              | No   | A missing row means on   |
+
+Constraint: `category = ALERT` requires `enabled` — ALERT cannot be switched off (US-073).
 
 ### `push_subscription`
 
@@ -373,7 +402,28 @@ Check constraint: `WEB_PUSH` requires `endpoint`/`p256dh`/`auth` and no `fcmToke
 | `nextAttemptAt`      | `DateTime`     | Yes  | Exponential backoff                          |
 | `sentAt`             | `DateTime`     | Yes  |                                              |
 
-Constraints: `attempts >= 0`; `status = SENT` requires `sentAt`.
+Constraints: `attempts >= 0`; `status = SENT` requires `sentAt`; `status = FAILED` requires `lastError`. Rows are written only for `ALERT` and `WARNING`; while a row is claimed, `nextAttemptAt` holds its five-minute lease.
+
+### `email_outbox`
+
+Email waiting to be sent, or already sent, over SMTP ([notifications.md#email](../02-architecture/notifications.md#email)). Written in the transaction of the event it describes; drained by `dispatch-emails`.
+
+| Column           | Type           | Null | Notes                                                                 |
+| ---------------- | -------------- | ---- | --------------------------------------------------------------------- |
+| `organizationId` | `String`       | No   | FK → `organization.id`, cascade. The dispatch job runs per organization |
+| `userId`         | `String`       | No   | FK → `user.id`, cascade. The recipient; **the address is read at send time**, never copied here |
+| `kind`           | `EmailKind`    | No   | `NOTIFICATION` \| `WELCOME`                                           |
+| `notificationId` | `String`       | Yes  | FK → `notification.id`, cascade. Set exactly when `kind = NOTIFICATION` |
+| `subject`        | `String`       | No   | One line                                                              |
+| `textBody`       | `String`       | No   | The plain-text part                                                   |
+| `htmlBody`       | `String`       | Yes  | The HTML part, values escaped                                         |
+| `status`         | `OutboxStatus` | No   | `PENDING` \| `SENT` \| `FAILED` \| `EXPIRED`                          |
+| `attempts`       | `Int`          | No   | Default `0`                                                           |
+| `lastError`      | `String`       | Yes  | The SMTP server's reply or the connection error                       |
+| `nextAttemptAt`  | `DateTime`     | Yes  | Backoff 1 / 5 / 30 / 120 min; the five-minute lease while claimed     |
+| `sentAt`         | `DateTime`     | Yes  |                                                                       |
+
+Constraints (migration `constraints_email_outbox`): `email_outbox_attempts_non_negative_check`; `email_outbox_sent_has_timestamp_check`; `email_outbox_failed_has_error_check`; `email_outbox_notification_kind_check` (`kind = NOTIFICATION` if and only if `notificationId` is set); `email_outbox_content_check` (subject and text not blank). Index on `(organizationId, status, nextAttemptAt)` for the claim. A row for someone no longer an active staff member is `EXPIRED` rather than sent.
 
 ### `holiday`
 
@@ -383,7 +433,7 @@ Constraints: `attempts >= 0`; `status = SENT` requires `sentAt`.
 | `name`     | `String`            | No   |                                |
 | `sectorId` | `String`            | Yes  | `NULL` = business-wide (BR-02) |
 
-Unique on `(date, sectorId)` **`NULLS NOT DISTINCT`**, so there is at most one business-wide holiday per date. Sundays are **not** stored here — they are excluded by rule, not by data.
+Unique on `(organizationId, date, sectorId)` **`NULLS NOT DISTINCT`**, so there is at most one business-wide holiday per date in each organization. Sundays are **not** stored here — they are excluded by rule, not by data.
 
 ### `audit_log`
 
@@ -391,6 +441,7 @@ Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 
 | Column        | Type          | Null | Notes                                                                                |
 | ------------- | ------------- | ---- | ------------------------------------------------------------------------------------ |
+| `organizationId` | `String`   | Yes  | FK → `organization.id` (restrict). The organization the entry belongs to, so the log is read in scope (US-090). Null only for a sign-in with an unknown email, and for rows written before 2026-09-15 (not backfilled: the table rejects UPDATE) |
 | `actorUserId` | `String`      | Yes  | Null for system actions                                                              |
 | `entityTable` | `String`      | No   |                                                                                      |
 | `entityId`    | `String`      | No   |                                                                                      |
@@ -399,6 +450,8 @@ Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 | `after`       | `Json`        | Yes  |                                                                                      |
 | `ipAddress`   | `String`      | Yes  |                                                                                      |
 | `userAgent`   | `String`      | Yes  |                                                                                      |
+
+Constraint (`constraints_audit_log_organization`, `NOT VALID` so it applies to new rows only): `organizationId` is set unless `action = LOGIN`. Indexed on `(organizationId, createdAt)` for the log's newest-first reads.
 
 ### `idempotency_key`
 
@@ -415,7 +468,7 @@ Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 
 | Column        | Type     | Null | Notes                                   |
 | ------------- | -------- | ---- | --------------------------------------- |
-| `key`         | `String` | No   | Unique (`collection.varianceTolerance`) |
+| `key`         | `String` | No   | Unique within the organization (`collection.varianceTolerance`) |
 | `value`       | `Json`   | No   |                                         |
 | `description` | `String` | No   |                                         |
 
@@ -423,10 +476,11 @@ Runtime business settings only. Infrastructure configuration stays in environmen
 
 ### `organization`
 
-Single row in v1. Present so multi-tenancy is a migration rather than a rewrite.
+One row per business, created by organization sign-up with its owner as Super Admin ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md)). Every top-level entity carries `organizationId`, and every query is scoped by it (M02).
 
 | Column     | Type     | Null | Notes          |
 | ---------- | -------- | ---- | -------------- |
 | `name`     | `String` | No   |                |
+| `slug`     | `String` | No   | Unique. The sign-in link `/<slug>/sign-in`, generated from the name at sign-up; default `org-` + 12 random hex characters. CHECK `organization_slug_format_check`: `^[a-z0-9]+(-[a-z0-9]+)*$`, 3–63 characters |
 | `timezone` | `String` | No   | `Asia/Kolkata` |
 | `currency` | `String` | No   | `INR`          |

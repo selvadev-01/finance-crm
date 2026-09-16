@@ -32,6 +32,7 @@ All times `Asia/Kolkata`. Cron expressions live in configuration, not code (M15)
 | `flag-overdue-accounts`          | Daily 00:30         | M05    | Set `isOverdue` past target completion                            |
 | `reconcile-balances`             | Daily 01:00         | M09    | Rebuild ledger balances, verify account caches, alert on mismatch |
 | `dispatch-notifications`         | Continuous worker   | M10    | Drain the notification outbox                                     |
+| `dispatch-emails`                | Every minute        | M10    | Send queued email over SMTP                                       |
 | `retry-failed-push`              | Every 5 min         | M10    | Backoff retries                                                   |
 | `purge-idempotency-keys`         | Daily 02:00         | M07    | Remove keys past 90 days                                          |
 | `deactivate-stale-subscriptions` | Weekly              | M10    | Clear subscriptions unseen for 90 days                            |
@@ -98,6 +99,21 @@ If the transaction rolls back, the job never existed. This removes the entire cl
 | Trigger a scheduled job manually | Super Admin |
 
 ---
+
+## As built
+
+In `apps/api/src/jobs/`. Status is in the [backlog](../../06-delivery/backlog.md). **Not yet run against the database** — see below.
+
+- **Schema.** pg-boss 12.32.0 keeps its tables in the `pgboss` schema. The `rasi` role cannot create a schema, so a superuser creates it once: `CREATE SCHEMA pgboss AUTHORIZATION rasi;` (decided 2026-09-14). `JobQueue` passes `createSchema: false`: otherwise pg-boss runs `CREATE SCHEMA IF NOT EXISTS` on install, and PostgreSQL refuses that to `rasi` with "permission denied for database" even when the schema exists. pg-boss creates its own tables inside the schema on the first worker start. Prisma never sees those tables, so migration drift checks stay empty.
+- **Worker mode.** `WORKER_ENABLED` is read only in `JobsModule`. When true, the process starts pg-boss and registers queues, schedules and consumers; the HTTP server still listens (the development convenience ADR-0003 allows). Off by default; `createTestApp` forces it off, so no test suite starts a queue whatever the developer's `.env` holds.
+- **A worker that cannot start does not take the API down** (decided 2026-09-15). The first real run failed on the missing `pgboss` schema and the whole API stopped with it, leaving nowhere to record a collection. The failure is now caught and logged at error level — naming that jobs, notifications and email are not being sent — and the HTTP server keeps serving. Queued work waits for a process that starts successfully. `test/worker-start.e2e-spec.ts` holds both halves: the app serves with a failing worker and logs the cause, and no worker starts by default.
+- **Queues.** Each scheduled job has a trigger queue and a per-organization queue, both `stately` (one queued, one active), with `retryLimit: 5`, `retryBackoff: true` and a `.dead` dead-letter queue whose handler logs at error level. The trigger fans out one job per organization, singleton-keyed by it.
+- **Schedules** come from `JOBS_RECONCILE_CRON` (01:00), `JOBS_OVERDUE_CRON` (00:30) and `JOBS_PURGE_KEYS_CRON` (02:00), evaluated in `Asia/Kolkata`; `dispatch-notifications` runs every minute and drains the M10 outbox through `PushDispatchService`; `dispatch-emails` runs every minute and sends `email_outbox` through `EmailDispatchService`. M15 settings are not built, so these are environment variables.
+- **Handlers** live in their modules and take a `SystemContext` — one organization and the run id — instead of a `RequestContext`; every query filters by `organizationId`. Audit entries use `AuditWriter.recordSystem` with a null actor. `reconcile-balances` → `ReconciliationService` (M09), `flag-overdue-accounts` → `OverdueService` (M05), `purge-idempotency-keys` → `IdempotencyPurgeService` (M07). Each is proven idempotent in Tier 1 by running it twice.
+- **Transactional enqueue.** `JobQueue.enqueue(tx, name, data)` passes pg-boss a `db` executor that runs its insert through the Prisma transaction. Nothing enqueues yet: M10 writes its outbox rows in the event's transaction and drains them on a schedule instead, which keeps the same guarantee.
+- **`detect-missed-collections` is not scheduled**: missed slots are marked when a line closes (M08).
+
+**Not built:** the job status and dead-letter screens, replay and manual trigger, the dead-letter Admin alert, `deactivate-stale-subscriptions`, `archive-audit-partitions`.
 
 ## Risks
 

@@ -107,7 +107,7 @@ Single `push_subscription` table discriminated by `provider`; Web Push columns a
 
 ## Delivery and retry
 
-One outbox row **per active subscription**. A user with three devices gets three rows, each retried independently.
+One outbox row **per active subscription**, written in the event's transaction and drained every minute by `dispatch-notifications` rather than a job per notification ([M10 as built](../01-product/modules/M10-notifications.md#as-built)). A user with three devices gets three rows, each retried independently.
 
 | Attempt | Delay     |
 | ------- | --------- |
@@ -145,7 +145,7 @@ A `gone` result deactivates the subscription immediately and stops retrying. Sub
 
 ## Service worker
 
-The same service worker that handles offline sync also handles push. `notificationclick` deep-links via `data.url`, focusing an existing tab where one is open rather than opening a duplicate.
+The same service worker that handles offline sync also handles push. **As built:** true for the Junior's field app, whose taps open `/route#notifications`; the console registers a separate push-only worker (`public/push-sw.js`, scope `/push/`) because the offline worker is scoped to `/route` ([M10 as built](../01-product/modules/M10-notifications.md#as-built)). `notificationclick` deep-links via `data.url`, focusing an existing tab where one is open rather than opening a duplicate.
 
 ---
 
@@ -166,6 +166,29 @@ Not everything in the notification centre warrants a phone buzz.
 
 ---
 
+## Email
+
+Email is a third channel, beside the centre and push. It is **SMTP through Nodemailer**, so any mail service works without a vendor SDK: a company server, Amazon SES, Brevo, Gmail with an app password, or Mailpit on a laptop. Configuration is in [M10 as built](../01-product/modules/M10-notifications.md#as-built--email-decided-2026-09-15).
+
+**Its own outbox, not `notification_outbox`.** A push row belongs to one device and is deactivated with it; an email has no device. `email_outbox` also carries email that is not a notification: the sign-up welcome, and later verification and password reset. It keeps the same lifecycle (`PENDING` → `SENT` | `FAILED` | `EXPIRED`), the same claim-with-lease dispatch and the same retry table.
+
+**Written in the event's transaction, sent later.** Sending SMTP inside a request would make a collection wait on a mail server, and a timeout could fail the request after the money was recorded. The row is queued with its cause and `dispatch-emails` sends it within a minute.
+
+**Addressed to a user, not an address.** The address is read when the email is sent: a corrected address is used, a deleted user's queue goes with them, and the table holds no copy of anyone's email.
+
+| Category      | Emailed |
+| ------------- | ------- |
+| `ALERT`       | Yes     |
+| `WARNING`     | **No** — it fires on every extra collection and correction request |
+| `SUCCESS`     | **No**  |
+| `INFORMATION` | **No**  |
+
+> An inbox fills faster than a notification tray and is read less often. Only the events the business must act on go there.
+
+**Payload rule.** An email carries the notification's own title and body, already written for that recipient. Nothing is added to it.
+
+---
+
 ## Risks
 
 | Risk                            | Mitigation                                                                                                   |
@@ -176,3 +199,6 @@ Not everything in the notification centre warrants a phone buzz.
 | VAPID keys lost                 | Documented in the ops runbook; losing them invalidates every subscription and forces re-registration         |
 | Sensitive data on a lock screen | Payload scoped to the recipient's permissions                                                                |
 | FCM private key leaked          | Env only, never committed; rotation documented                                                               |
+| Mail server down or slow        | Email is queued in the transaction and sent by a job; retried with backoff; the notification is in the app regardless |
+| SMTP password leaked            | Env only (`SMTP_PASS`), never logged — failures log row ids only; use an app password or service credential, not a mailbox's own password |
+| Alert emails land in spam       | Send from a domain with SPF, DKIM and DMARC set up at the mail service; a plain-text part in every email      |

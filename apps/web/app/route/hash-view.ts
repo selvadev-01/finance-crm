@@ -3,23 +3,29 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * The Junior's three screens are views of one page, told apart by the URL hash
+ * The Junior's screens are views of one page, told apart by the URL hash
  * (decision 2026-09-14): `/route` is S-01, `/route#collect/<customerId>` S-02,
- * `/route#sync` S-03. The service worker caches pages by exact URL, so
- * separate `/route/collect/<id>` pages would not open offline for a customer
- * whose page was never visited with signal — a hash never reaches the network,
- * and every view is the one cached document, reloads included.
+ * `/route#sync` S-03, `/route#handover` S-06 (which needs signal), and
+ * `/route#notifications` S-21 (which needs signal too). The
+ * service worker caches pages by exact URL, so separate `/route/collect/<id>`
+ * pages would not open offline for a customer whose page was never visited
+ * with signal — a hash never reaches the network, and every view is the one
+ * cached document, reloads included.
  */
 export type View =
   | { name: "route" }
   | { name: "collect"; customerId: string }
-  | { name: "sync" };
+  | { name: "sync" }
+  | { name: "handover" }
+  | { name: "notifications" };
 
 const ROUTE: View = { name: "route" };
 
 export function parseView(hash: string): View {
   const value = hash.replace(/^#/, "");
   if (value === "sync") return { name: "sync" };
+  if (value === "handover") return { name: "handover" };
+  if (value === "notifications") return { name: "notifications" };
   const collect = /^collect\/([\w-]+)$/.exec(value);
   if (collect) return { name: "collect", customerId: collect[1]! };
   return ROUTE;

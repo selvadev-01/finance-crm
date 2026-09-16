@@ -10,7 +10,8 @@
 // model User exists.
 //
 // The generated Better Auth models are never hand-edited except to add
-// back-relation fields (staffProfile, notifications, pushSubscriptions).
+// back-relation fields (staffProfile, notifications, pushSubscriptions,
+// notificationPreferences, emails).
 // Never add scalar columns to them — `generate` has to stay re-runnable
 // across Better Auth upgrades. See packages/db/README.md.
 //
@@ -63,9 +64,11 @@ model User {
 
   // Back-relations added by hand. Prisma requires both sides of a relation,
   // so these cannot be omitted. Relation fields only — never scalar columns.
-  staffProfile      StaffProfile?
-  notifications     Notification[]
-  pushSubscriptions PushSubscription[]
+  staffProfile            StaffProfile?
+  notifications           Notification[]
+  pushSubscriptions       PushSubscription[]
+  notificationPreferences NotificationPreference[]
+  emails                  EmailOutbox[]
 
   @@unique([email])
   @@map("user")
@@ -202,6 +205,12 @@ enum HandoverStatus {
   DISPUTED
 }
 
+/// BR-17: cash moves in two hops. The office hop lands in CASH_AT_OFFICE.
+enum HandoverHop {
+  JUNIOR_TO_SENIOR
+  SENIOR_TO_OFFICE
+}
+
 enum LedgerAccountType {
   CASH_IN_HAND
   CASH_AT_OFFICE
@@ -239,6 +248,12 @@ enum NotificationEvent {
   ACCOUNT_COMPLETED
   DAY_CLOSE_DISCREPANCY
   APPROVAL_REQUESTED
+  /// Added 2026-09-14 for events shipped since M10 was specified.
+  NO_PAYMENT_COLLECTION
+  HANDOVER_SUBMITTED
+  HANDOVER_DISPUTED
+  DAY_REOPENED
+  RECONCILIATION_MISMATCH
 }
 
 enum PushProvider {
@@ -251,6 +266,14 @@ enum OutboxStatus {
   SENT
   FAILED
   EXPIRED
+}
+
+/// What an email is for (notifications.md#email).
+enum EmailKind {
+  /// A copy of an in-app notification; points at it.
+  NOTIFICATION
+  /// Sent to an organization's owner on sign-up (US-006).
+  WELCOME
 }
 
 enum AuditAction {
@@ -267,10 +290,14 @@ enum AuditAction {
 // Identity and organisation
 // ---------------------------------------------------------------------------
 
-/// Single row in v1. Present so multi-tenancy is a migration, not a rewrite.
+/// One per business, created by organization sign-up (ADR-0012). Business
+/// codes, settings and holidays are unique within an organization.
 model Organization {
   id        String   @id @default(cuid())
   name      String
+  /// Public identity in the sign-in link, generated from the name by sign-up.
+  /// CHECK organization_slug_format_check (migration constraints_organization_slug).
+  slug      String   @unique @default(dbgenerated("('org-'::text || substr(md5((random())::text), 1, 12))"))
   timezone  String
   currency  String
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -284,6 +311,8 @@ model Organization {
   holidays       Holiday[]
   settings       Setting[]
   ledgerAccounts LedgerAccount[]
+  auditLogs      AuditLog[]
+  emails         EmailOutbox[]
 
   @@map("organization")
 }
@@ -307,9 +336,10 @@ model StaffProfile {
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   createdByUserId String?
 
-  organization Organization     @relation(fields: [organizationId], references: [id])
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignments  LineAssignment[]
+  syncReport   DeviceSyncReport?
 
   @@index([organizationId])
   @@index([status])
@@ -319,7 +349,8 @@ model StaffProfile {
 model Sector {
   id             String  @id @default(cuid())
   organizationId String
-  code           String  @unique
+  /// Unique within the organization (ADR-0012).
+  code           String
   name           String
   /// Inactive sectors keep history and accept no new lines.
   isActive       Boolean @default(true)
@@ -333,6 +364,7 @@ model Sector {
   customers    Customer[]
   holidays     Holiday[]
 
+  @@unique([organizationId, code])
   @@index([organizationId])
   @@map("sector")
 }
@@ -341,8 +373,8 @@ model Line {
   id             String  @id @default(cuid())
   organizationId String
   sectorId       String
-  /// Unique business-wide, not per sector (LN-07).
-  code           String  @unique
+  /// Unique across the organization, not per sector (LN-07, ADR-0012).
+  code           String
   name           String
   isActive       Boolean @default(true)
 
@@ -358,6 +390,7 @@ model Line {
   collections  Collection[]
   dayCloses    DayClose[]
 
+  @@unique([organizationId, code])
   @@index([organizationId])
   @@index([sectorId])
   @@map("line")
@@ -589,6 +622,9 @@ model Collection {
   adjustedBy      Collection[]        @relation("CollectionAdjustment")
   approval        CollectionApproval?
 
+  /// One correction at a time per collection (US-044): a second request while
+  /// one waits would be decided against a balance the first may change.
+  @@unique([adjustsCollectionId], map: "collection_one_pending_correction_key", where: raw("(\"status\" = 'PENDING_APPROVAL'::\"CollectionStatus\")"))
   // Daily line tally and day close; account history; per-Junior cash
   // reconciliation (erd.md).
   @@index([lineId, businessDate])
@@ -596,9 +632,6 @@ model Collection {
   @@index([collectedByUserId, businessDate])
   @@index([accountScheduleId])
   @@index([adjustsCollectionId])
-  /// One correction at a time per collection (US-044): a second request while
-  /// one waits would be decided against a balance the first may change.
-  @@unique([adjustsCollectionId], map: "collection_one_pending_correction_key", where: raw("(\"status\" = 'PENDING_APPROVAL'::\"CollectionStatus\")"))
   @@map("collection")
 }
 
@@ -658,12 +691,13 @@ model DayClose {
 }
 
 model CashHandover {
-  id         String @id @default(cuid())
+  id         String      @id @default(cuid())
   dayCloseId String
   /// A Junior, or a Senior on the second hop.
   fromUserId String
   /// A Senior, or an Admin.
   toUserId   String
+  hop        HandoverHop
 
   /// Physically counted.
   declaredAmount Decimal @db.Decimal(14, 2)
@@ -672,6 +706,8 @@ model CashHandover {
   /// declaredAmount - systemAmount.
   discrepancy    Decimal @db.Decimal(14, 2)
 
+  /// The sender's explanation; required when the count differs from the system (S-06).
+  note           String?
   status         HandoverStatus @default(PENDING)
   /// Cash has not moved until this is set (BR-17).
   acknowledgedAt DateTime?      @db.Timestamptz(3)
@@ -684,10 +720,33 @@ model CashHandover {
   dayClose      DayClose           @relation(fields: [dayCloseId], references: [id])
   denominations CashDenomination[]
 
+  /// One handover waiting at a time per sender and day: a second count while
+  /// the first is unanswered would be reconciled against a moving figure.
+  @@unique([dayCloseId, fromUserId], map: "cash_handover_one_pending_key", where: raw("(\"status\" = 'PENDING'::\"HandoverStatus\")"))
   @@index([dayCloseId])
   @@index([fromUserId])
   @@index([toUserId])
   @@map("cash_handover")
+}
+
+/// What a Junior's phone last said about its outbox (US-060: S-05 names Juniors
+/// who have not synced). One row per staff member, replaced on each report;
+/// the server cannot see a phone's queue any other way.
+model DeviceSyncReport {
+  id             String    @id @default(cuid())
+  staffProfileId String    @unique
+  /// Collections saved on the phone and not yet acknowledged by the server.
+  unsentCount    Int
+  /// capturedAt of the oldest of them.
+  oldestUnsentAt DateTime? @db.Timestamptz(3)
+  reportedAt     DateTime  @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  staffProfile StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@map("device_sync_report")
 }
 
 model CashDenomination {
@@ -811,6 +870,7 @@ model Notification {
 
   user   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   outbox NotificationOutbox[]
+  emails EmailOutbox[]
 
   // Unread badge (erd.md).
   @@index([userId, readAt])
@@ -845,6 +905,23 @@ model PushSubscription {
   @@map("push_subscription")
 }
 
+/// US-073: a category a user has switched off. No row means on. ALERT can
+/// never be off (constraints_notifications).
+model NotificationPreference {
+  id       String               @id @default(cuid())
+  userId   String
+  category NotificationCategory
+  enabled  Boolean
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@map("notification_preference")
+}
+
 model NotificationOutbox {
   id                 String       @id @default(cuid())
   notificationId     String
@@ -868,6 +945,40 @@ model NotificationOutbox {
   @@map("notification_outbox")
 }
 
+/// Email delivery (notifications.md#email), drained by `dispatch-emails`.
+/// Addressed to a user, not an address: the address is read when sending.
+/// CHECKs email_outbox_attempts_non_negative_check, _sent_has_timestamp_check,
+/// _failed_has_error_check, _notification_kind_check, _content_check
+/// (migration constraints_email_outbox).
+model EmailOutbox {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  kind           EmailKind
+  /// Set exactly when kind = NOTIFICATION.
+  notificationId String?
+  subject        String
+  textBody       String
+  htmlBody       String?
+  status         OutboxStatus @default(PENDING)
+  attempts       Int          @default(0)
+  lastError      String?
+  nextAttemptAt  DateTime?    @db.Timestamptz(3)
+  sentAt         DateTime?    @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification? @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, nextAttemptAt])
+  @@index([userId])
+  @@index([notificationId])
+  @@map("email_outbox")
+}
+
 /// Sundays are NOT stored here — they are excluded by rule, not by data (BR-02).
 model Holiday {
   id             String   @id @default(cuid())
@@ -884,10 +995,10 @@ model Holiday {
   organization Organization @relation(fields: [organizationId], references: [id])
   sector       Sector?      @relation(fields: [sectorId], references: [id])
 
-  /// Rebuilt as NULLS NOT DISTINCT by migration constraints_platform, so one
-  /// business-wide (NULL sector) holiday per date. Prisma cannot express the
-  /// clause; the index keeps its name and columns, so it does not diff.
-  @@unique([date, sectorId])
+  /// NULLS NOT DISTINCT (migration organization_scoped_uniques), so one
+  /// business-wide (NULL sector) holiday per date per organization. Prisma
+  /// cannot express the clause and does not diff it.
+  @@unique([organizationId, date, sectorId])
   @@index([organizationId])
   @@index([sectorId])
   @@map("holiday")
@@ -895,22 +1006,30 @@ model Holiday {
 
 /// Append-only.
 model AuditLog {
-  id          String      @id @default(cuid())
+  id             String      @id @default(cuid())
+  /// The organization the action belongs to, so the log is read in scope
+  /// (US-090). Null only for a sign-in attempt matching no staff member, and
+  /// for rows written before the column existed (the table rejects UPDATE).
+  organizationId String?
   /// Null for system actions.
-  actorUserId String?
-  entityTable String
-  entityId    String
-  action      AuditAction
-  before      Json?
-  after       Json?
-  ipAddress   String?
-  userAgent   String?
+  actorUserId    String?
+  entityTable    String
+  entityId       String
+  action         AuditAction
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  userAgent      String?
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  /// Restrict, not SetNull: a set-null would UPDATE audit rows, which the table rejects.
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([entityTable, entityId])
   @@index([actorUserId])
   @@index([createdAt])
+  @@index([organizationId, createdAt])
   @@map("audit_log")
 }
 
@@ -939,8 +1058,8 @@ model IdempotencyKey {
 model Setting {
   id             String @id @default(cuid())
   organizationId String
-  /// e.g. "collection.varianceTolerance"
-  key            String @unique
+  /// e.g. "collection.varianceTolerance". Unique within the organization.
+  key            String
   value          Json
   description    String
 
@@ -950,6 +1069,7 @@ model Setting {
 
   organization Organization @relation(fields: [organizationId], references: [id])
 
+  @@unique([organizationId, key])
   @@index([organizationId])
   @@map("setting")
 }

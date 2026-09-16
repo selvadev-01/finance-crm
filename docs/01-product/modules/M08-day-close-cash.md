@@ -112,6 +112,34 @@ Cash follows `collection.collectedByUserId`, not current line staffing (open que
 
 ---
 
+## As built
+
+In `apps/api/src/cash/`, through `packages/contracts/src/cash.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
+
+| Endpoint | Permission | Answers |
+| --- | --- | --- |
+| `POST /api/devices/sync-report` | `collection.record` | The phone's unsent count and oldest capture time |
+| `GET /api/lines/:lineId/day-closes/:businessDate` | `dayClose.view` | S-05: live totals, Juniors with phone sync state, exceptions, handovers, `canClose`/`canReopen` |
+| `POST …/close` | `dayClose.close` | `409 UNSYNCED_DEVICES` naming Juniors unless `confirmUnsynced`; `409 DAY_ALREADY_CLOSED`; `422 DAY_NOT_STARTED` |
+| `POST …/reopen` | `dayClose.reopen` | With a reason; `409 DAY_NOT_CLOSED` |
+| `GET /api/cash` | `handover.initiate` | What the caller still holds per line and date, receivers, recent handovers |
+| `POST /api/handovers` | `handover.initiate` | `422 NOTE_REQUIRED`, `NOTHING_TO_HAND_OVER`, `NO_SENIOR_ON_LINE`, `RECEIVER_NOT_ADMIN`; `409 HANDOVER_PENDING` |
+| `GET /api/handovers` | `handover.acknowledge` | Handovers addressed to the caller |
+| `POST /api/handovers/:id/acknowledge` | `handover.acknowledge` | Receiver only (`403 NOT_THE_RECEIVER`); posts the ledger |
+| `POST /api/handovers/:id/dispute` | `handover.dispute` | Sender, receiver or Admin, while pending |
+
+**Decided 2026-09-14:**
+- **Unsynced phones.** Each phone reports its queue after every drain (`device_sync_report`). A Junior is `UNSENT` for a date when their oldest unsent collection was captured on or before it, `NOT_HEARD` when there has been no report since that date began, else `SENT`. Closing with any Junior not `SENT` is refused until confirmed.
+- **Missed at close.** Closing marks every slot on the line still `PENDING` for the date `MISSED`, in the same transaction, and regenerates that account's tail with no change to its balance — the plan runs a day longer (US-043). A late collection answers its `MISSED` slot. There is no job for this (M14 is not built).
+- **Handover amounts.** `declaredAmount` is computed from the nine counts. `systemAmount` is what the sender recorded for the line and date less the `systemAmount` of their earlier acknowledged handovers, so late cash is handed over separately. A Junior must have recorded collections on that line and date. A count that differs needs a note; nothing is blocked.
+- **Acknowledgement posts the declared amount**: receiver's `CASH_IN_HAND` (or the organisation's `CASH_AT_OFFICE` on the office hop, to the Admin the Senior picked) debit, sender's `CASH_IN_HAND` credit. Only the Junior → Senior hop counts towards the line's cash received.
+- **Dispute is final**: nothing posts, and the sender submits a new count.
+- **The Junior hands over in the field app, online only** (`/route#handover`).
+
+**State:** the view computes totals live; the row stores them at each close, reopen and acknowledgement. `TALLIED` when closed with cash received equal to collected and no handover pending; an acknowledgement or dispute re-tallies. A collection or approved correction on a closed date reopens it automatically (`DayCloseService.moneyWritten`, audited as automatic by the user whose write caused it). Closing takes the due accounts' row locks before the day's row, the same order a collection takes them, so the two cannot deadlock.
+
+**Not built:** notifications (M10) for close, discrepancy, reopen, submission and dispute; month-end lock; Admin resolution of a dispute beyond recounting.
+
 ## Risks
 
 | Risk                                            | Mitigation                                                                                        |

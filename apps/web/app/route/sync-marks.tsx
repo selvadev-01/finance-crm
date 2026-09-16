@@ -37,7 +37,12 @@ export function RowStateMark({ state }: { state: RowState }) {
     case "SYNCING":
       return (
         <Badge tone="info" className={LEGIBLE}>
-          <CircleNotch aria-hidden size={12} weight="bold" className="animate-spin text-info" />
+          <CircleNotch
+            aria-hidden
+            size={12}
+            weight="bold"
+            className="animate-spin text-info"
+          />
           Syncing
         </Badge>
       );

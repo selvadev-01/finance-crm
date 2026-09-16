@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SignInForm } from "./sign-in-form";
 
@@ -15,6 +16,12 @@ export default function SignInPage() {
         </p>
       </header>
       <SignInForm />
+      <p className="text-sm text-ink-muted">
+        Setting up a new business?{" "}
+        <Link href="/sign-up" className="font-medium text-accent underline">
+          Create one
+        </Link>
+      </p>
     </section>
   );
 }

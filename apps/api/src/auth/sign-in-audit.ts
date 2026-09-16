@@ -27,8 +27,9 @@ export const UNKNOWN_USER = 'unknown';
  * Builds the `audit_log` row for an attempt. Separate from the write so the
  * row's shape is testable, and so tests can prove it satisfies the table.
  */
-export function signInAuditRow(attempt: SignInAttempt) {
+export function signInAuditRow(attempt: SignInAttempt, organizationId: string | null = null) {
   return {
+    organizationId,
     actorUserId: attempt.userId,
     entityTable: 'user',
     entityId: attempt.userId ?? UNKNOWN_USER,
@@ -40,10 +41,15 @@ export function signInAuditRow(attempt: SignInAttempt) {
 }
 
 export async function writeSignInAudit(
-  client: Pick<PrismaClient, 'auditLog'>,
+  client: Pick<PrismaClient, 'auditLog' | 'staffProfile'>,
   attempt: SignInAttempt,
 ): Promise<void> {
-  await client.auditLog.create({ data: signInAuditRow(attempt) });
+  // The organization of the staff member the email matched (US-090); none
+  // for an unknown email, which stays outside every organization's log.
+  const staff = attempt.userId
+    ? await client.staffProfile.findUnique({ where: { userId: attempt.userId }, select: { organizationId: true } })
+    : null;
+  await client.auditLog.create({ data: signInAuditRow(attempt, staff?.organizationId ?? null) });
 }
 
 /**

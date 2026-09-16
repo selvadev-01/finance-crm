@@ -379,7 +379,7 @@ The dashboards (PDF §17–§23) and the Junior route screen drive these. They a
 
 Schema room is left for these without building them:
 
-- **`organization`** exists with a single row. Multi-tenancy is out of scope, but every top-level entity carries the key so adding it later is a migration rather than a rewrite.
+- **`organization`** has one row per business, created by organization sign-up ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md)). Every top-level entity carries the key; sector and line codes, setting keys and business-wide holidays are unique within an organization.
 - **Phone/PIN login** for field staff — Better Auth's `phoneNumber` plugin adds its own columns to `user`; `staff_profile.phone` is already present.
 - **Proof-of-visit** (GPS, photo) — would add `latitude`, `longitude`, `attachmentId` to `collection`. Nullable additions, no restructuring.
 - **Digital receipts** — a `receipt_dispatch` table alongside `notification_outbox`, reusing the same retry pattern.

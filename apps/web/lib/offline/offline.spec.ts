@@ -13,6 +13,7 @@ import {
   clearRefused,
   listOutbox,
   OutboxFullError,
+  queueReport,
   readRoute,
   recordCollection,
   storeRoute,
@@ -275,6 +276,19 @@ describe("offline outbox (offline-sync.md, BR-13)", () => {
       for (const bad of ["", "1e3", "-5", "10.005", "1,000", " 100"]) {
         expect(amountProblem(bad, "5000.00")).toBe("NOT_AN_AMOUNT");
       }
+    });
+  });
+
+  describe("US-060 the phone tells the office what it still holds", () => {
+    it("reports the unsent count and the oldest capture time, and nothing once everything is sent", async () => {
+      expect(await queueReport(db)).toEqual({ unsentCount: 0 });
+      await record(db, "acc-1", "100", new Date("2026-09-14T04:00:00Z"));
+      await record(db, "acc-2", "80", new Date("2026-09-14T05:00:00Z"));
+      expect(await queueReport(db)).toEqual({ unsentCount: 2, oldestUnsentAt: "2026-09-14T04:00:00.000Z" });
+
+      await drainOutbox(db, { fetch: server(201, 422).fetch, locks: null });
+      // A refused collection is still the Junior's to account for.
+      expect(await queueReport(db)).toEqual({ unsentCount: 1, oldestUnsentAt: "2026-09-14T05:00:00.000Z" });
     });
   });
 

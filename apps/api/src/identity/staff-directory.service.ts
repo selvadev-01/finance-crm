@@ -40,6 +40,7 @@ type AssignmentRow = Prisma.LineAssignmentGetPayload<{
 function staffFields(today: CalendarDate) {
   return {
     id: true,
+    userId: true,
     staffCode: true,
     phone: true,
     role: true,
@@ -78,6 +79,7 @@ function toSummary(row: StaffRow): StaffSummary {
   const current = row.assignments[0];
   return {
     staffProfileId: row.id,
+    userId: row.userId,
     name: row.user.name,
     email: row.user.email,
     phone: row.phone,

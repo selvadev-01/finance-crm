@@ -1,6 +1,6 @@
 "use client";
 
-import { collectionContract, type RouteView } from "@repo/contracts";
+import { cashContract, collectionContract, type RouteView } from "@repo/contracts";
 
 import { api } from "../api-client";
 import { type FieldDb, openFieldDb } from "./db";
@@ -12,7 +12,7 @@ import {
   retryEntry,
   SYNC_TAG,
 } from "./drain";
-import { recordCollection, type RecordRequest, storeRoute } from "./outbox";
+import { queueReport, recordCollection, type RecordRequest, storeRoute } from "./outbox";
 
 export const SW_URL = "/serwist/sw.js";
 export const SW_SCOPE = "/route";
@@ -54,6 +54,20 @@ export async function drainNow(
     await drainOutbox(db, options);
   }
   await pruneSynced(db, KEEP_SYNCED_MS);
+  void reportQueue(db);
+}
+
+/**
+ * Tells the office what is still on this phone (US-060), so closing the day
+ * can name a Junior whose collections have not arrived. Best effort: with no
+ * signal it simply does not reach the office, which reads as "not heard from".
+ */
+async function reportQueue(db: FieldDb): Promise<void> {
+  try {
+    await api(cashContract.reportSync, { body: await queueReport(db) });
+  } catch {
+    // No signal: the last report stands.
+  }
 }
 
 /**

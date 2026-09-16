@@ -27,7 +27,7 @@ export async function completePasswordChange(
 ): Promise<void> {
   const staff = await client.staffProfile.findFirst({
     where: { userId, mustChangePassword: true },
-    select: { id: true },
+    select: { id: true, organizationId: true },
   });
   if (!staff) return;
 
@@ -41,6 +41,7 @@ export async function completePasswordChange(
     });
     await tx.auditLog.create({
       data: {
+        organizationId: staff.organizationId,
         actorUserId: userId,
         entityTable: 'staff_profile',
         entityId: staff.id,

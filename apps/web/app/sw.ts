@@ -8,6 +8,7 @@ import {
 } from "serwist";
 
 import { openFieldDb } from "../lib/offline/db";
+import { installPushHandlers } from "../lib/notifications/push-worker";
 import { drainOutbox, SYNC_TAG } from "../lib/offline/drain";
 
 /**
@@ -19,6 +20,8 @@ import { drainOutbox, SYNC_TAG } from "../lib/offline/drain";
  * - **Sync:** Background Sync drains the outbox even with the app closed;
  *   the worker also drains when it starts and when a page asks. The same
  *   engine, the same idempotency keys, the same Web Lock as the page.
+ * - **Push:** shows M10 notifications; a tap opens the field app's
+ *   notifications view — the deep links point at console pages (US-071).
  * - **Updates wait for the next launch:** no `skipWaiting`, no
  *   `clientsClaim`, so an outbox never changes implementation mid-route. Opening
  *   the database runs its versioned migrations before any drain.
@@ -42,7 +45,10 @@ const serwist = new Serwist({
     // copy in the Cache API would disagree with it. Network-only also fails at
     // once with no signal, instead of waiting out a network-first timeout
     // before the page falls back to the phone's copy.
-    { matcher: ({ url }) => url.pathname.startsWith("/api/"), handler: new NetworkOnly() },
+    {
+      matcher: ({ url }) => url.pathname.startsWith("/api/"),
+      handler: new NetworkOnly(),
+    },
     ...defaultCache,
   ],
 });
@@ -74,6 +80,8 @@ self.addEventListener("message", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(drain());
 });
+
+installPushHandlers(self, () => "/route#notifications");
 
 // Fallback 1 (offline-sync.md#sync): drain whenever the worker starts.
 void drain();

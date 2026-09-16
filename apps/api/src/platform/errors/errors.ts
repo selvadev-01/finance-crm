@@ -61,6 +61,11 @@ export class DomainError extends AppError {
   readonly status = 422;
 }
 
+/** `429` — the caller has made too many attempts; try again later. */
+export class RateLimitError extends AppError {
+  readonly status = 429;
+}
+
 /** `500` — the client sees a generic message and the correlation id only. */
 export class InternalError extends AppError {
   readonly status = 500;

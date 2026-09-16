@@ -50,7 +50,7 @@ Out of scope, with the reasoning:
 | Credit scoring or automated approval | Lending decisions stay human. Rasi records them; it does not make them.                                       |
 | Online payments / UPI collection     | The business is cash. Digital collection changes the cash-control model entirely and deserves its own design. |
 | Accounting-package integration       | The internal ledger must be trustworthy first. Exporting to Tally is a later conversation.                    |
-| Multi-business tenancy               | One business. The schema leaves room, but no multi-tenant machinery is built.                                 |
+| Multi-business tenancy               | Organizations are separate and each owner signs up with a setup key ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md)). No billing, plans or cross-organization administration. |
 
 Deferred to Phase 2 and tracked in the roadmap: Tamil language support, GPS and photo proof-of-visit, SMS/WhatsApp receipts to customers, and Excel/PDF report export.
 

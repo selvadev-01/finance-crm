@@ -3,10 +3,14 @@ import { Module } from '@nestjs/common';
 import { AccessModule } from './access/access.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { CashModule } from './cash/cash.module.js';
 import { CollectionsModule } from './collections/collections.module.js';
 import { RasiAuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
+import { EmailModule } from './email/email.module.js';
 import { IdentityModule } from './identity/identity.module.js';
+import { JobsModule } from './jobs/jobs.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { OrganisationModule } from './organisation/organisation.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 
@@ -21,6 +25,8 @@ import { PlatformModule } from './platform/platform.module.js';
   imports: [
     PlatformModule,
     AuditModule,
+    EmailModule,
+    NotificationsModule,
     RasiAuthModule,
     AccessModule,
     IdentityModule,
@@ -28,6 +34,8 @@ import { PlatformModule } from './platform/platform.module.js';
     CustomersModule,
     AccountsModule,
     CollectionsModule,
+    CashModule,
+    JobsModule,
   ],
 })
 export class AppModule {}

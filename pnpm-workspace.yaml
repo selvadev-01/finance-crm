@@ -19,6 +19,10 @@ allowBuilds:
   msgpackr-extract: false
   workerd: false
   "@swc/core": false
+  # firebase-admin (packages/notifications): neither postinstall is needed at runtime.
+  "@firebase/util": false
+  protobufjs: false
 
 minimumReleaseAgeExclude:
   - tailwind-merge@3.7.0
+  - pg-boss@12.32.0

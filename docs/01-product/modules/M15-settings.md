@@ -60,8 +60,7 @@ Environment-driven, not database-driven — they gate code paths, and a database
 | Flag                   | Purpose                                       |
 | ---------------------- | --------------------------------------------- |
 | `PUSH_PROVIDER`        | `WEB_PUSH` \| `FCM` \| `BOTH` \| `NONE` (M10) |
-| `WORKER_ENABLED`       | Run job consumers in this process (M14)       |
-| `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox            |
+| `WORKER_ENABLED`       | Run job consumers in this process (M14)       || `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox            |
 
 `PUSH_PROVIDER=NONE` is the development default so local work raises no push traffic. `BOTH` exists for the migration window if the business moves between providers.
 
@@ -69,9 +68,7 @@ Environment-driven, not database-driven — they gate code paths, and a database
 
 ## Organisation profile
 
-Single row: name, `timezone` (`Asia/Kolkata`), `currency` (`INR`).
-
-Present so multi-tenancy is a migration rather than a rewrite. **The timezone value is informational only** — `Asia/Kolkata` is settled in code (BR-12), because making the business date configurable would mean every date calculation depends on a database read, and a wrong value would silently misfile every collection.
+One row per organization: name, `slug` (its sign-in link, generated from the name), `timezone` (`Asia/Kolkata`), `currency` (`INR`). Created by organization sign-up ([ADR-0012](../../02-architecture/adr/0012-organization-sign-up.md)). Setting keys are unique within an organization, so each business overrides its own. **The timezone value is informational only** — `Asia/Kolkata` is settled in code (BR-12), because making the business date configurable would mean every date calculation depends on a database read, and a wrong value would silently misfile every collection.
 
 ---
 

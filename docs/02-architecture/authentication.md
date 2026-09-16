@@ -33,7 +33,8 @@ import { prisma } from "@repo/db";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
-  // No public sign-up: staff are created by an Admin (M01).
+  // No Better Auth sign-up: staff are created by an Admin (M01), and an
+  // organization's owner through Rasi's POST /api/organizations (ADR-0012).
   emailAndPassword: { enabled: true, disableSignUp: true },
   // Only ACTIVE staff sign in; every attempt writes a LOGIN audit entry.
   hooks: createSignInHooks(prisma),

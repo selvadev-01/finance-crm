@@ -19,10 +19,14 @@
  *     @repo/domain (BR-12).
  */
 export * from "./account.contract.js";
+export * from "./audit.contract.js";
+export * from "./cash.contract.js";
 export * from "./client.js";
 export * from "./collection.contract.js";
 export * from "./customer.contract.js";
+export * from "./notification.contract.js";
 export * from "./organisation.contract.js";
 export * from "./route.js";
 export * from "./shared.js";
+export * from "./sign-up.contract.js";
 export * from "./staff.contract.js";

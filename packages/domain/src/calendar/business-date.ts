@@ -1,4 +1,4 @@
-import { tz } from "@date-fns/tz";
+import { TZDate, tz } from "@date-fns/tz";
 import { format } from "date-fns";
 
 import type { CalendarDate } from "./calendar-date.js";
@@ -31,4 +31,16 @@ export function toBusinessDate(instant: Date): CalendarDate {
   return format(instant, "yyyy-MM-dd", {
     in: inBusinessTimeZone,
   }) as CalendarDate;
+}
+
+/**
+ * The instant a business date begins: midnight in Asia/Kolkata. The inverse
+ * of `toBusinessDate`, for filtering stored instants by business date (an
+ * audit log "from 5 Jan to 6 Jan" is `[start(5 Jan), start(7 Jan))`).
+ * `toBusinessDate(businessDayStart(d)) === d`, and one millisecond earlier is
+ * the day before.
+ */
+export function businessDayStart(date: CalendarDate): Date {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  return new Date(new TZDate(year, month - 1, day, BUSINESS_TIME_ZONE).getTime());
 }

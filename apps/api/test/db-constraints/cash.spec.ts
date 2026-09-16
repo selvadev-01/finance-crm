@@ -2,7 +2,7 @@ import type { PrismaClient } from '@repo/db';
 
 import { createTestPrismaClient } from '../database.js';
 import { withRollback } from '../with-rollback.js';
-import { createLine, createUser, decimal } from './fixtures.js';
+import { createLine, createStaff, createUser, decimal } from './fixtures.js';
 
 /**
  * Cash control invariants (M08, BR-16, BR-17), migration `constraints_cash`.
@@ -49,9 +49,11 @@ describe('cash constraints (BR-16, BR-17)', () => {
         dayCloseId: day.id,
         fromUserId: from.id,
         toUserId: to.id,
+        hop: 'JUNIOR_TO_SENIOR',
         declaredAmount: decimal(declared),
         systemAmount: decimal('950.00'),
         discrepancy: decimal(declared).minus('950.00'),
+        note: 'Counted against the recorded 950',
         denominations: {
           create: denominations.map((d) => ({
             denomination: d.denomination,
@@ -162,6 +164,7 @@ describe('cash constraints (BR-16, BR-17)', () => {
               dayCloseId: day.id,
               fromUserId: user.id,
               toUserId: user.id,
+              hop: 'JUNIOR_TO_SENIOR',
               declaredAmount: decimal('0.00'),
               systemAmount: decimal('0.00'),
               discrepancy: decimal('0.00'),
@@ -169,6 +172,66 @@ describe('cash constraints (BR-16, BR-17)', () => {
           });
         }),
       ).rejects.toThrow('cash_handover_distinct_parties_check');
+    });
+
+    it('rejects a dispute with no note, and a note on a handover that is not disputed (US-063)', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
+          await tx.cashHandover.update({ where: { id: created.id }, data: { status: 'DISPUTED', disputeNote: ' ' } });
+        }),
+      ).rejects.toThrow('cash_handover_dispute_note_check');
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
+          await tx.cashHandover.update({ where: { id: created.id }, data: { disputeNote: 'One note short' } });
+        }),
+      ).rejects.toThrow('cash_handover_dispute_note_check');
+    });
+
+    it('rejects a count that differs from the system with no note (S-06)', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
+          await tx.cashHandover.update({ where: { id: created.id }, data: { note: null } });
+        }),
+      ).rejects.toThrow('cash_handover_discrepancy_note_check');
+    });
+
+    it('rejects a second pending handover from the same sender for the same day', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const first = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
+          await tx.cashHandover.create({
+            data: {
+              dayCloseId: first.dayCloseId,
+              fromUserId: first.fromUserId,
+              toUserId: first.toUserId,
+              hop: 'JUNIOR_TO_SENIOR',
+              declaredAmount: decimal('0.00'),
+              systemAmount: decimal('0.00'),
+              discrepancy: decimal('0.00'),
+            },
+          });
+        }),
+      ).rejects.toThrow('cash_handover_one_pending_key');
+    });
+  });
+
+  describe('device_sync_report', () => {
+    it('rejects a negative unsent count, and an oldest time that disagrees with the count', async () => {
+      const report = (unsentCount: number, oldestUnsentAt: Date | null) =>
+        withRollback(prisma, async (tx) => {
+          const { organization } = await createLine(tx);
+          const staff = await createStaff(tx, organization.id, 'JUNIOR');
+          await tx.deviceSyncReport.create({
+            data: { staffProfileId: staff.id, unsentCount, oldestUnsentAt, reportedAt: new Date() },
+          });
+        });
+      await expect(report(-1, new Date())).rejects.toThrow('device_sync_report_unsent_non_negative_check');
+      await expect(report(2, null)).rejects.toThrow('device_sync_report_oldest_when_unsent_check');
+      await expect(report(0, new Date())).rejects.toThrow('device_sync_report_oldest_when_unsent_check');
+      await expect(report(2, new Date())).resolves.toBeUndefined();
     });
   });
 
@@ -212,6 +275,15 @@ describe('cash constraints (BR-16, BR-17)', () => {
           });
         }),
       ).rejects.toThrow('day_close_closed_has_timestamp_check');
+    });
+
+    it('rejects a blank reopen reason', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const day = await openDay(tx);
+          await tx.dayClose.update({ where: { id: day.id }, data: { status: 'REOPENED', reopenReason: '  ' } });
+        }),
+      ).rejects.toThrow('day_close_reopen_reason_check');
     });
   });
 });

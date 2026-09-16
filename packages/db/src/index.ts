@@ -22,6 +22,17 @@ export { listMigrationNames } from "./migrations.js";
  *    is `apps/api/src/auth/auth.config.ts`, because Better Auth's Prisma
  *    adapter takes a client instance directly (authentication.md).
  */
+/**
+ * **The session runs in UTC, and every connection must set this** (found
+ * 2026-09-16). Prisma's pg adapter sends a `DateTime` as a timestamp with no
+ * offset, so PostgreSQL reads it in the session's own time zone. On a machine
+ * set to `Asia/Kolkata` that stored every instant 5½ hours early — invisible to
+ * the application, which shifts it back on the way out, but wrong against
+ * `now()`, against psql, and against anything else reading the database.
+ * Business dates (`@db.Date`) were never affected (ADR-0009).
+ */
+export const UTC_SESSION = { options: "-c timezone=UTC" } as const;
+
 let client: PrismaClient | undefined;
 
 export function getPrismaClient(): PrismaClient {
@@ -45,7 +56,7 @@ export function getPrismaClient(): PrismaClient {
 
   client = new PrismaClient({
     adapter: new PrismaPg(
-      { connectionString },
+      { connectionString, ...UTC_SESSION },
       schema ? { schema } : undefined,
     ),
   });

@@ -31,6 +31,8 @@ export const meSchema = z.object({
   role: z.enum(["SUPER_ADMIN", "ADMIN", "SENIOR", "JUNIOR"]),
   /** The line in effect today, if any. */
   currentLineId: idSchema.nullable(),
+  /** The caller's organization; its sign-in link is `/<slug>/sign-in` (US-006). */
+  organization: z.object({ name: z.string(), slug: z.string() }),
 });
 
 const roleSchema = z.enum(["SUPER_ADMIN", "ADMIN", "SENIOR", "JUNIOR"]);
@@ -50,6 +52,8 @@ export const currentAssignmentSchema = z.object({
 /** One row of the Team list (S-14, US-014). */
 export const staffSummarySchema = z.object({
   staffProfileId: idSchema,
+  /** The sign-in user, as audit entries record the actor (US-090). */
+  userId: idSchema,
   name: z.string(),
   email: z.string(),
   phone: z.string(),
