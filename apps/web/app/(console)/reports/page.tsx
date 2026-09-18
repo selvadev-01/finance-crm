@@ -35,6 +35,12 @@ const REPORTS: readonly ReportEntry[] = [
       "The accounts still being collected past their target completion date: how long each has run over, what is still owed, how far behind the plan it is, and when it was last visited.",
   },
   {
+    href: "/reports/discrepancy",
+    title: "Discrepancies",
+    description:
+      "Cash collected against cash counted out, by line, day and Junior: what is short, what is over, what is still on its way, and the handover behind each difference.",
+  },
+  {
     href: "/reports/investment",
     title: "Investment",
     description:

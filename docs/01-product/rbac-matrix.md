@@ -126,7 +126,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 >
 > **As built (US-080, US-082):** the business overview (`GET /api/dashboards/overview`) and the Admin operational dashboard (`GET /api/dashboards/operations`) are both guarded by "Business totals". S-07 gives Admins the same overview as Super Admins, so no new permission was added. **As built (US-081):** the sector comparison (`GET /api/dashboards/sectors`) is guarded by "Sector totals" (`money.sectorTotals`). **As built (US-083):** the line dashboard (`GET /api/dashboards/line`) is guarded by "Line totals"; a Senior reads only their current line, and another line's id is `404`. It shows no invested or profit figures.
 >
-> **As built (US-084):** the reports (M12) are guarded by "Reports" (`report.view`) — Super Admin, Admin and Senior. The line-wise report (`GET /api/reports/line-wise`) reads the lines through scope, so a Senior gets their own line and another line's or sector's id is `404`; their own line's invested and profit are shown, as the rows above grant them. A Junior is `403`. **As built (US-085):** the investment overview (`GET /api/reports/investment`) is the same permission and the same scope, and shows a Senior their own line's invested, profit and profit earned — the "own line" cells of the invested and profit rows.
+> **As built (US-084):** the reports (M12) are guarded by "Reports" (`report.view`) — Super Admin, Admin and Senior. The line-wise report (`GET /api/reports/line-wise`) reads the lines through scope, so a Senior gets their own line and another line's or sector's id is `404`; their own line's invested and profit are shown, as the rows above grant them. A Junior is `403`. **As built (US-085):** the investment overview (`GET /api/reports/investment`) is the same permission and the same scope, and shows a Senior their own line's invested, profit and profit earned — the "own line" cells of the invested and profit rows. **As built (US-086, US-087):** the collection report (`GET /api/reports/collection`) and the overdue report (`GET /api/reports/overdue`) are the same permission and the same scope — a Senior gets their own line's entries and their own line's overdue accounts, and another line's or sector's id is `404`. No cell changed for either. **As built (discrepancy report):** `GET /api/reports/discrepancy` is the same permission and the same scope again — a Senior sees their own line's Juniors' cash, and another line, sector or Junior is `404`, as a missing one is. No cell changed.
 >
 > Appendix A's "Limited" for Senior investment/profit is interpreted as **their own line only**. The raw ledger is Admin-and-above: it is the audit substrate, and a Senior reading it could infer business-wide figures from cash and capital accounts.
 
@@ -145,11 +145,13 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | ------------------------- | :---------: | :---: | :------: | :------: |
 | List staff                |      ✓      |   ✓   | own line |    —     |
 | Create staff              |      ✓      |   ✓   |    —     |    —     |
+| Update staff details      |      ✓      |   ✓   |    —     |    —     |
 | **Change staff role**     |      ✓      |   —   |    —     |    —     |
 | Suspend staff             |      ✓      |   ✓   |    —     |    —     |
 | Reset another's password  |      ✓      |   ✓   |    —     |    —     |
 | **View audit log**        |      ✓      |   ✓   |    —     |    —     |
 | View an account's history |      ✓      |   ✓   |    —     |    —     |
+| **View settings**         |      ✓      |   —   |    —     |    —     |
 | **Change settings**       |      ✓      |   —   |    —     |    —     |
 | View holidays             |      ✓      |   ✓   | own line | own line |
 | Declare holiday           |      ✓      |   ✓   |    —     |    —     |
@@ -157,6 +159,8 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | View own profile          |      ✓      |   ✓   |    ✓     |    ✓     |
 
 > Role change is Super Admin only — otherwise an Admin could promote themselves. Settings likewise: they alter business rules, and changing one is not an operational act.
+>
+> **Nobody manages a role above their own, and nobody manages themselves out of their own access** (US-092). Creating, updating, suspending or resetting the password of someone senior to you is refused, and so is changing your own role or your own status — the permission cell is only half the rule, and both halves are API-level tests.
 
 ---
 

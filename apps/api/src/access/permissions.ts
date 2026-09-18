@@ -75,10 +75,14 @@ export const PERMISSIONS = {
   // Administration (M01, M13, M15)
   'staff.list': ADMINS_AND_SENIOR,
   'staff.create': ADMINS,
+  'staff.update': ADMINS,
   'staff.changeRole': SUPER_ADMIN,
   'staff.suspend': ADMINS,
   'staff.resetPassword': ADMINS,
   'audit.view': ADMINS,
+  // Reading the settings shows how the business behaves; changing one alters
+  // it for everyone (M15). Both are the owner's alone.
+  'settings.view': SUPER_ADMIN,
   'settings.change': SUPER_ADMIN,
   // Declaring and removing a future holiday are one permission (M06, US-093).
   'holiday.view': ALL,

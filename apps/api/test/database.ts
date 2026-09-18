@@ -98,6 +98,10 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.holiday.deleteMany({
     where: { organization: { name: taggedCode } },
   });
+  // Setting overrides written over HTTP (US-094) reference their organization.
+  await prisma.setting.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
   await prisma.line.deleteMany({ where: { code: taggedCode } });
   await prisma.sector.deleteMany({ where: { code: taggedCode } });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });

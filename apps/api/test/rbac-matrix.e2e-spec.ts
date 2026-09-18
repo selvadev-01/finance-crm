@@ -186,6 +186,11 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'PATCH /api/notification-preferences': 'notification.managePreferences',
   // M01 Identity
   'GET /api/me': 'profile.viewOwn',
+  'POST /api/staff': 'staff.create',
+  'PATCH /api/staff/:staffProfileId': 'staff.update',
+  // Only a Super Admin changes a role — otherwise an Admin promotes themselves.
+  'POST /api/staff/:staffProfileId/role': 'staff.changeRole',
+  'POST /api/staff/:staffProfileId/status': 'staff.suspend',
   'POST /api/staff/:staffProfileId/password-reset': 'staff.resetPassword',
   // M03 Organisation
   'GET /api/sectors': 'organisation.view',
@@ -250,6 +255,11 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /api/reports/collection': 'report.view',
   // M12 Reports (US-087): BR-05's overdue accounts, Admins and a Senior's own line.
   'GET /api/reports/overdue': 'report.view',
+  // M12 Reports (discrepancy): BR-17's cash discrepancies, Admins and a Senior's own line.
+  'GET /api/reports/discrepancy': 'report.view',
+  // M15 Settings (US-094): the owner's alone, both halves.
+  'GET /api/settings': 'settings.view',
+  'PATCH /api/settings/:key': 'settings.change',
   // M06 Working calendar (US-093)
   'GET /api/holidays': 'holiday.view',
   'POST /api/holidays': 'holiday.declare',

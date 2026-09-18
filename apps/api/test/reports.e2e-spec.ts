@@ -19,13 +19,14 @@ import { createTestOrganization, createTestStaff, signIn } from './staff.js';
 
 /**
  * M12 reports over HTTP — the line-wise report (US-084), the investment
- * overview (US-085), the collection report (US-086) and the overdue report
- * (US-087). **Read-only**, on a tagged organization with no accounts: who may
- * call, which lines each role gets, validation, paging shape, and the shape of
- * an empty business. The figures are proven in Tier 1 (`test/reports/`), where
- * disbursements, collections and ledger rows roll back.
+ * overview (US-085), the collection report (US-086), the overdue report
+ * (US-087) and the discrepancy report (BR-17). **Read-only**, on a tagged
+ * organization with no accounts: who may call, which lines each role gets,
+ * validation, paging shape, and the shape of an empty business. The figures
+ * are proven in Tier 1 (`test/reports/`), where disbursements, collections,
+ * handovers and ledger rows roll back.
  */
-describe('M12 reports (US-084, US-085, US-086, US-087, e2e)', () => {
+describe('M12 reports (US-084, US-085, US-086, US-087, discrepancy, e2e)', () => {
   let app: INestApplication<Server>;
   let prisma: PrismaClient;
   let staffed: { id: string; code: string };
@@ -525,6 +526,122 @@ describe('M12 reports (US-084, US-085, US-086, US-087, e2e)', () => {
         `${overdue}?lineId=${foreignLine.id}`,
       ).expect(404);
       expect(foreign.body.code).toBe('LINE_NOT_FOUND');
+    });
+  });
+
+  describe('discrepancy report (BR-17)', () => {
+    const discrepancy = '/api/reports/discrepancy';
+    /** Nothing was collected on this organization, so nobody is answerable. */
+    const emptySummary = {
+      rows: 0,
+      lines: 0,
+      days: 0,
+      collected: '0.00',
+      cash: {
+        handedOver: '0.00',
+        acknowledged: '0.00',
+        awaiting: '0.00',
+        short: '0.00',
+        over: '0.00',
+        net: '0.00',
+        unresolved: 0,
+      },
+    };
+
+    it('answers with a cursor page over the month so far; a Junior is 403 and no session 401', async () => {
+      for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR'] as const) {
+        const response = await get(role, discrepancy).expect(200);
+        expect(response.body).toMatchObject({
+          from: startOfMonth(today),
+          to: today,
+          data: [],
+          nextCursor: null,
+          hasMore: false,
+          // Nothing happened: real zeros, as strings, never nulls.
+          summary: emptySummary,
+        });
+        expect(typeof response.body.generatedAt).toBe('string');
+      }
+
+      const junior = await get('JUNIOR', discrepancy).expect(403);
+      expect(junior.body.code).toBe('PERMISSION_DENIED');
+      const anonymous = await get(null, discrepancy).expect(401);
+      expect(anonymous.body.code).toBe('UNAUTHENTICATED');
+    });
+
+    it('a Senior gets their own line; another line, sector or Junior is 404 (M02)', async () => {
+      const own = await get(
+        'SENIOR',
+        `${discrepancy}?lineId=${staffed.id}`,
+      ).expect(200);
+      expect(own.body.summary).toEqual(emptySummary);
+      // Their own line's Junior is theirs to ask about.
+      await get(
+        'SENIOR',
+        `${discrepancy}?collectedByUserId=${userIds.JUNIOR}`,
+      ).expect(200);
+
+      const otherLine = await get(
+        'SENIOR',
+        `${discrepancy}?lineId=${other.id}`,
+      ).expect(404);
+      expect(otherLine.body.code).toBe('LINE_NOT_FOUND');
+      const elsewhere = await get(
+        'SENIOR',
+        `${discrepancy}?sectorId=${otherSector.id}`,
+      ).expect(404);
+      expect(elsewhere.body.code).toBe('SECTOR_NOT_FOUND');
+      const stranger = await get(
+        'SENIOR',
+        `${discrepancy}?collectedByUserId=${userIds.ADMIN}`,
+      ).expect(404);
+      expect(stranger.body.code).toBe('STAFF_NOT_FOUND');
+
+      const foreign = await get(
+        'ADMIN',
+        `${discrepancy}?lineId=${foreignLine.id}`,
+      ).expect(404);
+      expect(foreign.body.code).toBe('LINE_NOT_FOUND');
+      const foreignStaff = await get(
+        'ADMIN',
+        `${discrepancy}?collectedByUserId=${foreignStaffUserId}`,
+      ).expect(404);
+      expect(foreignStaff.body.code).toBe('STAFF_NOT_FOUND');
+    });
+
+    it('takes both views and a page size, the same range rule as every report, and no cursor it did not issue', async () => {
+      for (const show of ['unresolved', 'all'] as const) {
+        await get('ADMIN', `${discrepancy}?show=${show}&limit=1`).expect(200);
+      }
+      await get('ADMIN', `${discrepancy}?show=discrepancies`).expect(400);
+      await get('ADMIN', `${discrepancy}?limit=500`).expect(400);
+      const cursor = await get('ADMIN', `${discrepancy}?cursor=nonsense`)
+        // Nothing matches, so the cursor names no row.
+        .expect(400);
+      expect(cursor.body.code).toBe('INVALID_CURSOR');
+
+      const to = parseCalendarDate(today);
+      const quarter = await get(
+        'ADMIN',
+        `${discrepancy}?from=${addCalendarDays(to, -92)}&to=${to}`,
+      ).expect(200);
+      expect(quarter.body.to).toBe(to);
+      const tooLong = await get(
+        'ADMIN',
+        `${discrepancy}?from=${addCalendarDays(to, -93)}&to=${to}`,
+      ).expect(400);
+      expect(tooLong.body.code).toBe('INVALID_DATE_RANGE');
+      const reversed = await get(
+        'ADMIN',
+        `${discrepancy}?from=${to}&to=${addCalendarDays(to, -1)}`,
+      ).expect(400);
+      expect(reversed.body.code).toBe('INVALID_DATE_RANGE');
+      await get('ADMIN', `${discrepancy}?from=2026-02-30`).expect(400);
+      const future = await get(
+        'ADMIN',
+        `${discrepancy}?to=${addCalendarDays(to, 1)}`,
+      ).expect(422);
+      expect(future.body.code).toBe('DATE_IN_FUTURE');
     });
   });
 });

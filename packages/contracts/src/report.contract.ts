@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { dayCloseStatusSchema, handoverStatusSchema } from "./cash.contract.js";
 import { classificationSchema } from "./collection.contract.js";
 import { route } from "./route.js";
 import {
@@ -399,6 +400,139 @@ export const overdueReportSchema = pageSchema(overdueAccountSchema).extend({
 /** How the overdue rows are ordered — the two figures M12 names. */
 export const overdueSortSchema = z.enum(["daysOverdue", "outstanding"]);
 
+/**
+ * How a Junior's cash for one line and day stands (BR-17), in the order the
+ * report decides it: a dispute first, then a count that does not match, then
+ * cash still on its way, and only then a day that tallies.
+ */
+export const discrepancyStateSchema = z.enum([
+  /** Every rupee recorded was counted and acknowledged; the difference is zero. */
+  "TALLIED",
+  /** Less cash was counted than Rasi recorded. */
+  "SHORT",
+  /** More cash was counted than Rasi recorded. */
+  "OVER",
+  /** Nothing handed over yet, or a handover still waiting to be acknowledged. */
+  "AWAITING",
+  /** A handover was disputed: the cash never moved and is counted again. */
+  "DISPUTED",
+]);
+
+/**
+ * One handover behind a row (M08, US-061) — the count this discrepancy is
+ * attributable to. Its denomination breakdown is on the day-close screen
+ * (S-05), which the row links to; BR-17's point is that "one ₹200 note short"
+ * is a fact both parties can check, and it is checked there.
+ */
+export const discrepancyHandoverSchema = z.object({
+  handoverId: idSchema,
+  status: handoverStatusSchema,
+  /** The Senior the cash went to. */
+  toUserId: idSchema,
+  toName: z.string(),
+  /** Σ the nine denomination counts, as the sender declared them. */
+  declared: moneyStringSchema,
+  /** What Rasi had recorded for them, less what earlier handovers covered. */
+  recorded: moneyStringSchema,
+  /** `declared − recorded`, stored at the count (BR-17): negative is short. */
+  difference: signedMoneyStringSchema,
+  /** Required when the count differs from the recorded amount (US-061). */
+  note: z.string().nullable(),
+  disputeNote: z.string().nullable(),
+  createdAt: z.string(),
+  acknowledgedAt: z.string().nullable(),
+});
+
+/**
+ * The cash side of a row: what the Junior counted against what they collected.
+ * A disputed handover is in `handovers` but in none of the amounts — disputed
+ * cash never moved (US-063), and the sender counts again.
+ */
+export const discrepancyCashSchema = z.object({
+  /** Σ declared of their pending and acknowledged handovers for the day. */
+  handedOver: moneyStringSchema,
+  /** Σ declared of the acknowledged ones — the only cash that has moved (BR-17). */
+  acknowledged: moneyStringSchema,
+  /** Σ declared of the pending ones: counted, not yet acknowledged. */
+  awaiting: moneyStringSchema,
+  /**
+   * BR-17's discrepancy: `handedOver − collected`, **signed** — negative when
+   * the Junior is short, positive when they handed over more than Rasi
+   * recorded. Never an absolute value: which way it points is the whole
+   * question.
+   */
+  difference: signedMoneyStringSchema,
+  state: discrepancyStateSchema,
+  handovers: z.array(discrepancyHandoverSchema),
+});
+
+/** One line, one business date, one Junior — the unit BR-17 defines. */
+export const discrepancyRowSchema = z.object({
+  businessDate: calendarDateSchema,
+  lineId: idSchema,
+  lineCode: z.string(),
+  lineName: z.string(),
+  sectorId: idSchema,
+  sectorName: z.string(),
+  /** Who collected the money, and so who is answerable for it (BR-17). */
+  collectedByUserId: idSchema,
+  collectedByName: z.string(),
+  /**
+   * Σ their CONFIRMED collections on that line and date (BR-15), approved
+   * corrections included — so a correction that landed on the day moves this
+   * figure and can close the difference.
+   */
+  collected: signedMoneyStringSchema,
+  /** Null when the handovers could not be read (S-07) — never zeros. */
+  cash: discrepancyCashSchema.nullable(),
+  /**
+   * The line's day as it stands: `TALLIED` is resolved, anything else is still
+   * open. Null when the day closes could not be read.
+   */
+  dayCloseStatus: dayCloseStatusSchema.nullable(),
+});
+
+/** The whole matching set, not the page — paging never changes a total. */
+export const discrepancySummarySchema = z.object({
+  /** Rows matched: one per line, day and Junior. */
+  rows: count,
+  /** Lines and business dates those rows cover. */
+  lines: count,
+  days: count,
+  collected: signedMoneyStringSchema,
+  /** Null when the handovers could not be read (S-07). */
+  cash: z
+    .object({
+      handedOver: moneyStringSchema,
+      acknowledged: moneyStringSchema,
+      awaiting: moneyStringSchema,
+      /** Σ of the rows that are short, as a positive amount. */
+      short: moneyStringSchema,
+      /** Σ of the rows that are over, as a positive amount. */
+      over: moneyStringSchema,
+      /** `over − short`: the rows' signed differences summed. */
+      net: signedMoneyStringSchema,
+      /** Rows that are not `TALLIED`. */
+      unresolved: count,
+    })
+    .nullable(),
+});
+
+/**
+ * The discrepancy report (M12, BR-17): cash discrepancies by line, Junior and
+ * date, each traceable to the handover it came from. Rows are unbounded over
+ * time, so they page through the cursor the collection list uses.
+ */
+export const discrepancyReportSchema = pageSchema(discrepancyRowSchema).extend({
+  from: calendarDateSchema,
+  to: calendarDateSchema,
+  generatedAt: z.string(),
+  summary: discrepancySummarySchema,
+});
+
+/** Which rows the report lists: everything, or only what is not yet settled. */
+export const discrepancyShowSchema = z.enum(["unresolved", "all"]);
+
 export const reportContract = {
   getLineWise: route({
     method: "GET",
@@ -492,6 +626,35 @@ export const reportContract = {
       404: errorSchema,
     },
   }),
+  getDiscrepancy: route({
+    method: "GET",
+    path: "/api/reports/discrepancy",
+    summary:
+      "Discrepancy report — cash collected against cash handed over and acknowledged, per line, day and Junior, with the handover behind each difference (BR-17)",
+    query: pageQuerySchema.extend({
+      ...reportRangeQuerySchema.shape,
+      sectorId: idSchema.optional(),
+      lineId: idSchema.optional(),
+      /** One Junior, by their user id: the person the cash is answerable to. */
+      collectedByUserId: idSchema.optional(),
+      /** Blank: only the rows that have not tallied. */
+      show: discrepancyShowSchema.default("unresolved"),
+    }),
+    responses: {
+      200: discrepancyReportSchema,
+      /** A malformed date, a reversed or too long range, or a bad cursor. */
+      400: errorSchema,
+      401: errorSchema,
+      403: errorSchema,
+      /**
+       * A sector, line or staff member that does not exist or is outside the
+       * caller's scope.
+       */
+      404: errorSchema,
+      /** `to` after today. */
+      422: errorSchema,
+    },
+  }),
 } as const;
 
 export type LineWiseReport = z.infer<typeof lineWiseReportSchema>;
@@ -504,3 +667,10 @@ export type OverdueReport = z.infer<typeof overdueReportSchema>;
 export type OverdueAccount = z.infer<typeof overdueAccountSchema>;
 export type OverdueSummary = z.infer<typeof overdueSummarySchema>;
 export type OverdueSort = z.infer<typeof overdueSortSchema>;
+export type DiscrepancyReport = z.infer<typeof discrepancyReportSchema>;
+export type DiscrepancyRow = z.infer<typeof discrepancyRowSchema>;
+export type DiscrepancyCash = z.infer<typeof discrepancyCashSchema>;
+export type DiscrepancyHandover = z.infer<typeof discrepancyHandoverSchema>;
+export type DiscrepancySummary = z.infer<typeof discrepancySummarySchema>;
+export type DiscrepancyState = z.infer<typeof discrepancyStateSchema>;
+export type DiscrepancyShow = z.infer<typeof discrepancyShowSchema>;

@@ -54,7 +54,7 @@ Accounts past `targetCompletionDate` with outstanding remaining, ordered by outs
 
 ### Discrepancy report
 
-Cash discrepancies by line, Junior and date, traceable to the specific handover and its denomination breakdown (M08).
+Cash discrepancies by line, Junior and date, traceable to the specific handover and its denomination breakdown (M08). **Built — see [as built](#as-built--discrepancy-report-2026-09-18).**
 
 ---
 
@@ -62,7 +62,7 @@ Cash discrepancies by line, Junior and date, traceable to the specific handover 
 
 **Every report is date-bounded.** No unbounded query exists — a report with no date range defaults to the current month.
 
-**Paginated where the rows are unbounded.** A report with one row per line (line-wise, line overview, investment and — as built — collection) is bounded by the line count and returns every row with its totals; the reports whose rows are accounts (overdue, discrepancy) page through the API's cursor, as the collection list does.
+**Paginated where the rows are unbounded.** A report with one row per line (line-wise, line overview, investment and — as built — collection) is bounded by the line count and returns every row with its totals; the reports whose rows are not (overdue, one row per account; discrepancy, one per line, day and Junior) page through the API's cursor, as the collection list does.
 
 > An unbounded report over 1,500 accounts and years of collections is a slow query that will be written once and run every morning. Bounding by default costs nothing and removes the failure mode.
 
@@ -87,7 +87,7 @@ Per Appendix A:
 
 Appendix A's "Limited" for Senior is interpreted throughout as **their own line only**.
 
-> **As built (US-084, US-085, US-086):** every report is guarded by one permission, `report.view` (Super Admin, Admin, Senior), with the rows decided by scope — a Senior's report covers their current line, and another line's id is `404`. A Junior is `403`. Invested and profit are on a Senior's own line, as the [money-visibility table](../rbac-matrix.md#money-visibility-m09-m11-m12) grants them; the investment overview shows a Senior their own line's invested, profit and profit earned on the same grant. A filter naming a person is scoped the same way: the collection report's collector must be someone the caller can see, or it is `404`.
+> **As built (US-084, US-085, US-086, US-087, discrepancy):** every report is guarded by one permission, `report.view` (Super Admin, Admin, Senior), with the rows decided by scope — a Senior's report covers their current line, and another line's id is `404`. A Junior is `403`. Invested and profit are on a Senior's own line, as the [money-visibility table](../rbac-matrix.md#money-visibility-m09-m11-m12) grants them; the investment overview shows a Senior their own line's invested, profit and profit earned on the same grant. A filter naming a person is scoped the same way: the collection report's collector must be someone the caller can see, or it is `404`.
 
 ---
 
@@ -160,6 +160,61 @@ Per line, two groups:
 **Web:** `/reports/collection` — From / To / Sector / Line / Collected by / Class in the URL, four stats for the period (expected, collected with its variance, pending, extra), then per line: expected, collected, variance, the four class counts and missed, with a totals footer carrying the entry count and any corrections. It is built on the shared `app/(console)/reports/report-parts.tsx`, whose `ReportFilterBar` gained an `extra` slot so a report's own filters sit after the four every report shares, in the same order on every screen.
 
 **Not built:** export (Phase 2), per-collection rows inside the report (S-16 is that list), and a per-Junior row shape — the collector is a filter, not a row.
+
+## As built — overdue report (US-087, 2026-09-18)
+
+`GET /api/reports/overdue?sectorId=&lineId=&minDaysOverdue=&sort=&cursor=&limit=`, in `apps/api/src/reports/overdue-report.service.ts`, on the same `report.view`, read-only and unaudited. It keeps the pattern's scope rule — `refuseOutOfScopeFilters` before anything is filtered, an out-of-scope sector or line `404` — and breaks its shape deliberately, in the two ways the design above already anticipated.
+
+**It takes no date range, because it is the position now.** The other three answer a question about a period; this one answers "who is behind today". BR-06 regenerates a schedule's tail after every collection, so the plan as it stands cannot reconstruct who was overdue on an earlier day, and a `from`/`to` pair would invite exactly that question and answer it wrongly. There is therefore no `422 DATE_IN_FUTURE` and no `400 INVALID_DATE_RANGE` here; the response carries `asOf`, today's business date, and every figure is measured to it.
+
+**Its rows are accounts, so it pages.** One row per account through the cursor the collection list uses (`pageSchema`), with `platform/pagination.ts` gaining `toPageBy` — the cursor carries the ordering value **and** the account id, because the order is by target completion date or by outstanding rather than by id. M12 names those two orders and `sort` is exactly them; the id settles ties, so a page boundary can neither repeat nor drop a row.
+
+**Which accounts.** BR-05's three conditions, read from the dates rather than from the `isOverdue` flag: `ACTIVE`, `outstandingAmount > 0`, and `targetCompletionDate` before today. The nightly job (`accounts/overdue.service.ts`) sets the same flag from the same three conditions, so the report and the flag cannot mean different things — and an account that fell overdue this morning is listed before the job next runs. `minDaysOverdue` narrows to the accounts at least that many calendar days over.
+
+**Two money figures that are not the same figure.** `outstanding` is `A −` collected, the debt BR-05 completes on. `arrears` is **BR-16's pending, read per account** by `readArrearsByAccount` in `dashboards/business-figures.ts`: for every schedule slot due on or before today, the part of that day's expected amount the day's collections did not cover, summed — taken **per day**, so a day the customer paid double never erases the day they paid nothing. It is `lineRangeFigures`' `shortfall` at a finer grain and with the same predicates (slots not `CANCELLED`, CONFIRMED collections matched on the slot's business date), and a Tier 1 test holds the two equal for a day on which nobody overpaid.
+
+**A Sunday and a declared holiday cannot put anyone in arrears.** They carry no schedule slot at all (BR-02, BR-04), and the figure reads slots — nothing has to exclude them. A worked-example test disburses on Saturday 3 January 2026 with Tuesday 6 declared a holiday: the six-slot account is due on 5, 7, 8, 9, 10 and 12 January, and an account that paid nothing is ₹600 behind over a nine-day span, not ₹1,000.
+
+**Decisions the story did not settle**, each recorded here because the figures are only readable if the rule is known:
+
+- **`arrears` may exceed `outstanding`, and that is the point.** BR-16 clamps each day at zero, so a ₹100 surplus on Wednesday does not cancel Monday's ₹100 shortfall; the two columns answer "what is still owed" and "what the plan asked for and did not get". The screen labels the second **Behind**, never "arrears due".
+- **A correction lands on its own business date.** An approved ADJUSTMENT (US-044) carries the date it was approved, not the date of the visit it corrects — the convention every figure that reads collections by date already follows (BR-15, and the collection report's `adjusted`). Reducing a ₹100 visit to ₹40 therefore adds ₹60 to the day the correction landed on, and a test holds it.
+- **The last collection is the last _visit_.** The latest CONFIRMED `ORIGINAL` entry, a `NO_PAYMENT` included, with its amount and how many days ago — a customer who was visited yesterday and paid nothing is a different problem from one nobody has seen in a fortnight, and both need to be visible (BR-09).
+- **An account belongs to its customer's current line**, as every other per-line figure reads it (`accountScope`), so a transfer moves the account's row to the new line's book.
+- **`summary` covers the whole matching set, not the page**, so paging never changes a total. It reads every matching account; the overdue set is by nature small next to the book, and a band that only covered the first page would be worse than none.
+- **Nulls, never zeros** (S-07). The arrears behind a row and the summary band are read as separate groups: one that fails is `null` on every row, or `null` for the whole band, and the screen leaves those columns out and says so.
+
+**Web:** `/reports/overdue` (S-24) — Sector / Line / Overdue by / Order by kept in the URL, four stats for the whole set (accounts across N lines, outstanding, behind, longest overdue with the customer's name), then per account: customer with the account code, line, target date, days overdue (badged from seven days, critical from thirty), outstanding, behind, and the last collection with its amount. "Show more" follows the API's cursor. The columns do **not** sort in the browser: the API decides the order and the page, and sorting only the rows already loaded would quietly be a different report. It shares `app/(console)/reports/report-parts.tsx`, whose Sector and Line fields moved into a `ReportScopeFilters` the range-less report uses without the dates.
+
+**Not built:** export (Phase 2 — the design's "Export CSV" button is deliberately absent), per-column sorting in the browser (the two orders are a filter), numbered pages (the cursor is "Show more"), and the `Critical` row highlight the design shows — the days-overdue badge carries that weight.
+
+## As built — discrepancy report (2026-09-18)
+
+`GET /api/reports/discrepancy?from=&to=&sectorId=&lineId=&collectedByUserId=&show=&cursor=&limit=`, in `apps/api/src/reports/discrepancy-report.service.ts`, on the same `report.view`, read-only and unaudited. It keeps the pattern — `reportRange`'s bounds, `refuseOutOfScopeFilters` and `refuseOutOfScopeCollector` before anything is filtered, and a group that fails `null` everywhere rather than zero — and pages like the overdue report, because its rows are unbounded over time.
+
+**The row is one line, one business date, one Junior**, because that is the unit BR-17 defines a discrepancy on: `cash declared − collections recorded`, for that Junior, that date. Each row carries:
+
+- **`collected`** — Σ that Junior's CONFIRMED collections on that line and date, by `collection.lineId` frozen at write (BR-15). An approved correction is an ADJUSTMENT row carrying the original's line and collector on the day it was approved (BR-14), so a correction moves this figure on the day it lands and can close a difference.
+- **`cash.handedOver`, `cash.acknowledged`, `cash.awaiting`** — Σ `declaredAmount` of their Junior → Senior handovers for that line-day: pending and acknowledged together, the acknowledged alone (the only cash that has moved, BR-17), and the pending alone. A **disputed** handover is listed but is in no amount: disputed cash never moved (US-063) and the sender counts again.
+- **`cash.difference`** — `handedOver − collected`, **signed**. Negative is short, positive is over, and it is never reduced to an absolute value: which way it points is the whole question.
+- **`cash.state`** — decided in this order: `DISPUTED`, then `SHORT` / `OVER` when cash has been counted and does not match, then `AWAITING`, then `TALLIED`.
+- **`cash.handovers`** — each handover with its stored declared, recorded and signed difference, its note, its dispute note and who acknowledged it.
+- **`dayCloseStatus`** — the line's day as it stands, so "resolved" and "still open" are visible beside the money.
+
+**Decisions the design did not settle**, each recorded here because the figures are only readable if the rule is known:
+
+- **Cash still on its way is `AWAITING`, not `SHORT`.** A Junior who has not handed over yet has a difference of minus everything they collected, and calling that a shortage would accuse them at four in the afternoon. The state separates "not counted yet" from "counted and wrong"; the amount is shown either way, because the cash really is outstanding.
+- **Only the Junior → Senior hop has rows.** BR-17's formula is written per Junior per date, and the office hop is a Senior's aggregate of what they already acknowledged, not one person's own collections. It stays on S-05 and `/cash`, where it is one line of an already-reconciled day.
+- **The denomination breakdown is not repeated here.** BR-17's point is that "one ₹200 note short" is a countable fact, and it is counted on the day-close screen (S-05), which every row links to. Copying nine counts into a report row would give the same fact two homes.
+- **`show=unresolved` is the default**, listing every row that is not `TALLIED`; `show=all` adds the days that tallied, which read `0.00` — a real zero, never a null.
+- **The summary keeps `short` and `over` apart** as well as their `net`. Netting alone would let a ₹200 shortage on one line read as a clean book against a ₹200 surplus on another, which is the same mistake BR-16 forbids a day at a time.
+- **The whole matched range is computed, then paged.** The range is bounded by `MAX_REPORT_DAYS` and the lines in scope, so the cursor names a row — `businessDate|lineId|userId` through `toPageBy` — rather than an offset, the summary covers every matching row rather than the page, and a cursor naming no row is `400 INVALID_CURSOR` instead of silently becoming the first page.
+
+**No new definition of any money figure.** The three readers live beside the others in `cash/line-day-figures.ts` — `readCollectedByCollectorDay`, `readHandoversByCollectorDay` and `readDayCloseStatuses` — with `lineDayFigures`' own predicates, so Σ the Juniors' rows for a line's day is exactly that day close's `collectedTotal`, `cashReceivedTotal` and `discrepancy`. A Tier 1 test holds all three equal.
+
+**Web:** `/reports/discrepancy` — From / To / Sector / Line in the URL, plus Collected by and Show (“Not yet tallied” or “Every day”); four stats for the whole matched set (collected across N days and lines, handed over, short, over with the net as a hint), then one row per line, day and Junior: the Junior with the date beneath, linking to that day's close; line; collected, handed over, acknowledged; the difference as “−₹20.00 short”, “+₹20.00 over” or “Matches”; the cash state as a badge with how many handovers are behind it; and the day's own status. "Show more" follows the API's cursor, and the columns do not sort in the browser. It is built on `app/(console)/reports/report-parts.tsx` with nothing added to it.
+
+**Not built:** export (Phase 2), the office hop as a row, the denomination breakdown inside the report (S-05 has it), and a per-Junior rollup across days — the Junior is a filter and a column, and one bad day is the thing worth seeing.
 
 ## Risks
 

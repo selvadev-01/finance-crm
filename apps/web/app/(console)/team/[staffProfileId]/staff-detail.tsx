@@ -28,6 +28,9 @@ import { StatusBadge } from "../../../../components/status-badge";
 import { formatMobile } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import {
+  canChangeRoleOf,
+  canChangeStatusOf,
+  canEditStaff,
   canManageOrganisation,
   canResetPasswordOf,
   ROLE_LABEL,
@@ -36,9 +39,15 @@ import {
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 import { AssignDialog } from "../../_organisation/assign-dialog";
+import {
+  ChangeRoleDialog,
+  ChangeStatusDialog,
+  EditStaffDialog,
+} from "../staff-dialogs";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 
-type Open = "assign" | "reset" | null;
+type Open =
+  "assign" | "reset" | "edit" | "role" | "suspend" | "reactivate" | null;
 type AssignmentRow = StaffDetail["assignments"][number];
 
 /** A staff member: today's line, contact details and assignment history (US-014, US-015). */
@@ -99,8 +108,26 @@ export function StaffDetailView({
         actions={
           <>
             {assignable ? assignButton : null}
+            {canEditStaff(me, record) ? (
+              <Button onClick={() => setOpen("edit")}>Edit details</Button>
+            ) : null}
+            {canChangeRoleOf(me, record) ? (
+              <Button onClick={() => setOpen("role")}>Change role</Button>
+            ) : null}
             {canResetPasswordOf(me, record) ? (
               <Button onClick={() => setOpen("reset")}>Reset password</Button>
+            ) : null}
+            {/* Last: the destructive action never sits where Enter finds it. */}
+            {canChangeStatusOf(me, record) ? (
+              record.status === "ACTIVE" ? (
+                <Button tone="danger" onClick={() => setOpen("suspend")}>
+                  Suspend
+                </Button>
+              ) : (
+                <Button onClick={() => setOpen("reactivate")}>
+                  Reactivate
+                </Button>
+              )
             ) : null}
           </>
         }
@@ -219,6 +246,37 @@ export function StaffDetailView({
           staffProfileId={record.staffProfileId}
           name={record.name}
           onClose={() => setOpen(null)}
+        />
+      ) : null}
+      {open === "edit" ? (
+        <EditStaffDialog
+          staff={record}
+          onClose={() => setOpen(null)}
+          onSaved={() => {
+            setOpen(null);
+            person.reload();
+          }}
+        />
+      ) : null}
+      {open === "role" ? (
+        <ChangeRoleDialog
+          staff={record}
+          onClose={() => setOpen(null)}
+          onChanged={() => {
+            setOpen(null);
+            person.reload();
+          }}
+        />
+      ) : null}
+      {open === "suspend" || open === "reactivate" ? (
+        <ChangeStatusDialog
+          staff={record}
+          status={open === "suspend" ? "SUSPENDED" : "ACTIVE"}
+          onClose={() => setOpen(null)}
+          onChanged={() => {
+            setOpen(null);
+            person.reload();
+          }}
         />
       ) : null}
     </>

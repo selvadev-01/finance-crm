@@ -30,6 +30,7 @@ export * from "./notification.contract.js";
 export * from "./organisation.contract.js";
 export * from "./report.contract.js";
 export * from "./route.js";
+export * from "./settings.contract.js";
 export * from "./shared.js";
 export * from "./sign-up.contract.js";
 export * from "./staff.contract.js";

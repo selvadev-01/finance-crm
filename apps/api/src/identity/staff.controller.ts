@@ -12,6 +12,8 @@ import {
   ContractRoute,
 } from '../platform/contract/contract-route.js';
 import { Database } from '../platform/database/database.js';
+import { SettingReader } from '../settings/setting-reader.js';
+import { StaffAdminService } from './staff-admin.service.js';
 import { StaffDirectoryService } from './staff-directory.service.js';
 import { StaffPasswordService } from './staff-password.service.js';
 
@@ -21,7 +23,9 @@ export class StaffController {
   constructor(
     private readonly passwords: StaffPasswordService,
     private readonly directory: StaffDirectoryService,
+    private readonly admin: StaffAdminService,
     private readonly database: Database,
+    private readonly settings: SettingReader,
   ) {}
 
   /**
@@ -35,7 +39,7 @@ export class StaffController {
   async me(
     @CurrentContext() context: RequestContext,
   ): Promise<RouteSuccess<typeof api.me>> {
-    const [user, organization] = await Promise.all([
+    const [user, organization, defaultTermDays] = await Promise.all([
       this.database.client.user.findUniqueOrThrow({
         where: { id: context.userId },
         select: { name: true, email: true },
@@ -44,6 +48,9 @@ export class StaffController {
         where: { id: context.organizationId },
         select: { name: true, slug: true },
       }),
+      // M15: what the account form starts N at (US-094). Carried here rather
+      // than read from /api/settings, which is the Super Admin's alone.
+      this.settings.number(context.organizationId, 'account.defaultTermDays'),
     ]);
     return {
       userId: context.userId,
@@ -52,7 +59,7 @@ export class StaffController {
       email: user.email,
       role: context.role,
       currentLineId: context.currentLineId,
-      organization,
+      organization: { ...organization, defaultTermDays },
     };
   }
 
@@ -72,6 +79,42 @@ export class StaffController {
     @ContractInput() { params }: RouteInput<typeof api.getStaff>,
   ): Promise<RouteSuccess<typeof api.getStaff>> {
     return this.directory.get(context, params.staffProfileId);
+  }
+
+  @RequirePermission('staff.create')
+  @ContractRoute(api.createStaff)
+  createStaff(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { body }: RouteInput<typeof api.createStaff>,
+  ): Promise<RouteSuccess<typeof api.createStaff>> {
+    return this.admin.create(context, body);
+  }
+
+  @RequirePermission('staff.update')
+  @ContractRoute(api.updateStaff)
+  updateStaff(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: RouteInput<typeof api.updateStaff>,
+  ): Promise<RouteSuccess<typeof api.updateStaff>> {
+    return this.admin.update(context, params.staffProfileId, body);
+  }
+
+  @RequirePermission('staff.changeRole')
+  @ContractRoute(api.changeStaffRole)
+  changeStaffRole(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: RouteInput<typeof api.changeStaffRole>,
+  ): Promise<RouteSuccess<typeof api.changeStaffRole>> {
+    return this.admin.changeRole(context, params.staffProfileId, body.role);
+  }
+
+  @RequirePermission('staff.suspend')
+  @ContractRoute(api.changeStaffStatus)
+  changeStaffStatus(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: RouteInput<typeof api.changeStaffStatus>,
+  ): Promise<RouteSuccess<typeof api.changeStaffStatus>> {
+    return this.admin.changeStatus(context, params.staffProfileId, body);
   }
 
   @RequirePermission('staff.resetPassword')

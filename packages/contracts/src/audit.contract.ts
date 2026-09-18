@@ -28,6 +28,8 @@ export const AUDITED_TABLES = [
   "cash_handover",
   "ledger_account",
   "holiday",
+  "organization",
+  "setting",
 ] as const;
 
 export const auditActionSchema = z.enum([

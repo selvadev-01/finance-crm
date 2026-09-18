@@ -13,6 +13,7 @@ import {
   Path,
   Receipt,
   SignOut,
+  SlidersHorizontal,
   SquaresFour,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
@@ -28,6 +29,7 @@ import {
   ROLE_LABEL,
   type Role,
   seesReports,
+  seesSettings,
 } from "../../lib/roles";
 import { LANDING, SignedInContext, useMe } from "../../lib/use-me";
 
@@ -48,9 +50,8 @@ const everyone = () => true;
 /**
  * navigation-ia.md#navigation-by-role — only the areas that exist so far,
  * grouped by what a person is doing: running today's money, looking after the
- * records, or the system itself. Settings joins when its screen is built; a
- * link to an unbuilt page is not added early. Hidden, not
- * disabled: a role without the area does not see the link.
+ * records, or the system itself. A link to an unbuilt page is not added early.
+ * Hidden, not disabled: a role without the area does not see the link.
  */
 const NAV: NavGroup[] = [
   {
@@ -118,6 +119,13 @@ const NAV: NavGroup[] = [
         label: "Audit log",
         icon: ClipboardText,
         shownTo: canManageOrganisation,
+      },
+      // M15: the business's own settings, the Super Admin's alone (US-094).
+      {
+        href: "/settings",
+        label: "Business settings",
+        icon: SlidersHorizontal,
+        shownTo: seesSettings,
       },
     ],
   },

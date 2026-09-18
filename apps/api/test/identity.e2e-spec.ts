@@ -133,7 +133,12 @@ describe('admin password reset (US-003, e2e)', () => {
       email: junior.email,
       role: 'JUNIOR',
       currentLineId: null,
-      organization: { name: expect.any(String), slug: expect.any(String) },
+      organization: {
+        name: expect.any(String),
+        slug: expect.any(String),
+        // M15's default term, carried to the account form (US-094).
+        defaultTermDays: 100,
+      },
     });
 
     const { temporaryPassword } = (

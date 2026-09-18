@@ -30,6 +30,8 @@ export const TABLE_LABEL: Record<AuditedTable, string> = {
   cash_handover: "Cash handover",
   ledger_account: "Ledger account",
   holiday: "Holiday",
+  organization: "Business",
+  setting: "Business setting",
 };
 
 export function tableLabel(table: string): string {

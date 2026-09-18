@@ -1,27 +1,47 @@
 import { Injectable } from '@nestjs/common';
-import { type CalendarDate, toUtcMidnight } from '@repo/domain';
+import {
+  addCalendarDays,
+  type CalendarDate,
+  toUtcMidnight,
+} from '@repo/domain';
 
 import type { SystemContext } from '../platform/context/system-context.js';
 import { Database } from '../platform/database/database.js';
+import { SettingReader } from '../settings/setting-reader.js';
 
 /**
  * BR-05 — `isOverdue` is a flag on an `ACTIVE` account, set the day after its
- * target completion date passes with money still outstanding, with no grace
- * period (open question 3). Cleared when that stops being true — a regenerated
- * tail moved the target out, or the account is no longer active.
+ * target completion date passes with money still outstanding. Cleared when
+ * that stops being true — a regenerated tail moved the target out, or the
+ * account is no longer active.
+ *
+ * `account.overdueGraceDays` (M15, US-094) shifts the line: zero by default,
+ * which is open question 3's answer. Changing it restates nothing — the flag
+ * is derived from the dates and recomputed on the next run — so the setting is
+ * freely editable, unlike the values a schedule was generated from.
  *
  * Idempotent: it sets the flag to what the dates say, so a second run changes
  * nothing. Not audited per account — it is a derived flag, recomputed nightly.
  */
 @Injectable()
 export class OverdueService {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly settings: SettingReader,
+  ) {}
 
   async flag(
     system: SystemContext,
     today: CalendarDate,
   ): Promise<{ flagged: number; cleared: number }> {
-    const day = toUtcMidnight(today);
+    const grace = await this.settings.number(
+      system.organizationId,
+      'account.overdueGraceDays',
+    );
+    // An account is behind only once its target is more than `grace` days past.
+    const day = toUtcMidnight(
+      grace === 0 ? today : addCalendarDays(today, -grace),
+    );
     return this.database.transaction(async (tx) => {
       const flagged = await tx.accountLoan.updateMany({
         where: {

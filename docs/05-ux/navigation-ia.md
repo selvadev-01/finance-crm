@@ -149,8 +149,8 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /lines                /lines/:id            /lines/:id/day-closes/:date
 /collections          /collections/:id      /collections/pending-approval
 /team                 /team/:id
-/reports              /reports/line-wise    /reports/investment    /reports/collection    (/reports/overdue and the rest join as they are built)
-/settings/holidays    /settings/audit
+/reports              /reports/line-wise    /reports/investment    /reports/collection    /reports/overdue    /reports/discrepancy    (the rest join as they are built)
+/settings             /settings/holidays    /settings/audit
 
 /route                            Junior home (S-01)
 /route#collect/:customerId        entry (S-02), every account of that customer
@@ -169,20 +169,23 @@ Resource-oriented, bookmarkable, shareable.
 
 The page's server component reads them (`readListParams`), and the list keeps them in step (`useListState`).
 
-| Page                  | Parameters                                                         |
-| --------------------- | ------------------------------------------------------------------ |
-| `/dashboard/sectors`  | `date`. Blank means today                                          |
-| `/sectors`            | `inactive=show`                                                    |
-| `/lines`              | `sectorId`, `inactive=show`                                        |
-| `/team`               | `role`, `status`                                                   |
-| `/customers`          | `line`                                                             |
-| `/customers/:id`      | `tab` = `profile` or `accounts`                                    |
-| `/collections`        | `from`, `to`, `line`, `show`. Blank dates mean the last seven days |
-| `/reports/line-wise`  | `from`, `to`, `sector`, `line`. Blank dates mean the month so far  |
-| `/reports/investment` | The same four, read by the same `report-parts.tsx`                 |
-| `/reports/collection` | The same four, plus `junior` and `classification`                  |
-| `/cash`               | `line`, `date` (the day close to open)                             |
-| `/settings/audit`     | `action`, `entityTable`, `entityId`, `actorUserId`, `from`, `to`   |
+| Page                   | Parameters                                                                  |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `/dashboard/sectors`   | `date`. Blank means today                                                   |
+| `/sectors`             | `inactive=show`                                                             |
+| `/lines`               | `sectorId`, `inactive=show`                                                 |
+| `/team`                | `role`, `status`                                                            |
+| `/customers`           | `line`                                                                      |
+| `/customers/:id`       | `tab` = `profile` or `accounts`                                             |
+| `/collections`         | `from`, `to`, `line`, `show`. Blank dates mean the last seven days          |
+| `/reports/line-wise`   | `from`, `to`, `sector`, `line`. Blank dates mean the month so far           |
+| `/reports/investment`  | The same four, read by the same `report-parts.tsx`                          |
+| `/reports/collection`  | The same four, plus `junior` and `classification`                           |
+| `/reports/overdue`     | `sector`, `line`, `overdue` (7, 30 or 60 days), `sort`. No dates            |
+| `/reports/discrepancy` | The four shared, plus `junior` and `show` (`all`; blank is not yet tallied) |
+| `/cash`                | `line`, `date` (the day close to open)                                      |
+| `/settings/audit`      | `action`, `entityTable`, `entityId`, `actorUserId`, `from`, `to`            |
+| `/settings`            | None. One list of settings — no filter, no tab (US-094)                     |
 
 Paging is not in the URL. "Show more" follows the API's cursor, and a reload starts again from the first page.
 

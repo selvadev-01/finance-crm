@@ -6,6 +6,7 @@ import type {
   CustomerSummary,
   DayCloseView,
   DayKind,
+  DiscrepancyState,
   Handover,
   JuniorSync,
   ScheduleSlotView,
@@ -124,6 +125,19 @@ export const STATUS = {
     ACKNOWLEDGED: { label: "Acknowledged", tone: "positive" },
     DISPUTED: { label: "Disputed", tone: "critical" },
   } satisfies Table<Handover["status"]>,
+
+  /**
+   * How a Junior's cash for one line and day stands (BR-17, M12). `OVER` is
+   * not good news and not bad news — money Rasi never recorded arrived — so it
+   * is `info`, the same reading the handover screen gives it.
+   */
+  cash: {
+    TALLIED: { label: "Tallied", tone: "positive" },
+    SHORT: { label: "Short", tone: "critical" },
+    OVER: { label: "Over", tone: "info" },
+    AWAITING: { label: "Awaiting", tone: "warning" },
+    DISPUTED: { label: "Disputed", tone: "critical" },
+  } satisfies Table<DiscrepancyState>,
 
   auditAction: {
     CREATE: { label: "Created", tone: "positive" },

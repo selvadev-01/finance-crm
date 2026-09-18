@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { CollectionReportService } from './collection-report.service.js';
+import { DiscrepancyReportService } from './discrepancy-report.service.js';
 import { InvestmentReportService } from './investment-report.service.js';
 import { LineWiseReportService } from './line-wise-report.service.js';
 import { OverdueReportService } from './overdue-report.service.js';
@@ -19,6 +20,7 @@ import { ReportController } from './report.controller.js';
     InvestmentReportService,
     CollectionReportService,
     OverdueReportService,
+    DiscrepancyReportService,
   ],
 })
 export class ReportsModule {}

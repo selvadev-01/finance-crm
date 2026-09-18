@@ -1,4 +1,4 @@
-import type { Prisma } from '@repo/db';
+import type { DayCloseStatus, HandoverStatus, Prisma } from '@repo/db';
 import {
   type CalendarDate,
   fromUtcMidnight,
@@ -211,4 +211,185 @@ export async function lineRangeFigures(
     if (gap.lessThan(0)) line.surplus = line.surplus.minus(gap);
   }
   return figures;
+}
+
+/**
+ * One line, one business date, one collector — the unit BR-17 defines a cash
+ * discrepancy on ("cash declared − collections recorded, for that Junior, that
+ * date"). The key is `lineId|YYYY-MM-DD|userId`.
+ */
+export const collectorDayKey = (
+  lineId: string,
+  businessDate: CalendarDate,
+  userId: string,
+) => `${lineId}|${businessDate}|${userId}`;
+
+/** The three parts of a {@link collectorDayKey}, in order. */
+export function readCollectorDayKey(key: string): {
+  lineId: string;
+  businessDate: CalendarDate;
+  userId: string;
+} {
+  const [lineId = '', businessDate = '', userId = ''] = key.split('|');
+  return { lineId, businessDate: businessDate as CalendarDate, userId };
+}
+
+/** What one Junior collected on one line and date (BR-15), corrections included. */
+export interface CollectorDayCollected {
+  lineId: string;
+  businessDate: CalendarDate;
+  userId: string;
+  collected: Decimal;
+}
+
+/**
+ * Σ each collector's CONFIRMED collections per line and business date over a
+ * range — `lineDayFigures`' `collected` at a finer grain and with the same
+ * predicates, so the collectors of one line-day add up to that line-day's
+ * collected exactly (M12, the discrepancy report).
+ *
+ * Approved corrections (US-044) are ADJUSTMENT rows carrying the original's
+ * line and collector on the date they were approved (BR-14), so they move the
+ * collector's figure on that date, as every other figure that reads
+ * collections by date does.
+ *
+ * The caller has already scoped `lineIds` (M02).
+ */
+export async function readCollectedByCollectorDay(
+  tx: Tx,
+  lineIds: readonly string[],
+  from: CalendarDate,
+  to: CalendarDate,
+  filters: { collectedByUserId?: string | undefined } = {},
+): Promise<CollectorDayCollected[]> {
+  if (lineIds.length === 0) return [];
+  const groups = await tx.collection.groupBy({
+    by: ['lineId', 'businessDate', 'collectedByUserId'],
+    where: {
+      lineId: { in: [...lineIds] },
+      businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+      status: 'CONFIRMED',
+      ...(filters.collectedByUserId === undefined
+        ? {}
+        : { collectedByUserId: filters.collectedByUserId }),
+    },
+    _sum: { amount: true },
+  });
+  return groups.map((group) => ({
+    lineId: group.lineId,
+    businessDate: fromUtcMidnight(group.businessDate),
+    userId: group.collectedByUserId,
+    collected: toMoney((group._sum.amount ?? 0).toString()),
+  }));
+}
+
+/** One Junior → Senior handover as the discrepancy report reads it (BR-17). */
+export interface HandoverFact {
+  id: string;
+  status: HandoverStatus;
+  toUserId: string;
+  declared: Decimal;
+  /** What Rasi recorded for the sender, less what earlier handovers covered. */
+  recorded: Decimal;
+  /** `declared − recorded`, stored at the count. */
+  difference: Decimal;
+  note: string | null;
+  disputeNote: string | null;
+  createdAt: Date;
+  acknowledgedAt: Date | null;
+}
+
+/**
+ * Every Junior → Senior handover for the lines' days in a range, grouped by
+ * {@link collectorDayKey} on the **sender** — the Junior who counted the cash.
+ * Oldest first within a day, so a row reads in the order the counts happened.
+ *
+ * The office hop (Senior → office) is deliberately not here: it is a Senior's
+ * aggregate of what they acknowledged, not one Junior's own cash, and BR-17's
+ * formula is written per Junior per date. It stays on S-05 and `/cash`.
+ */
+export async function readHandoversByCollectorDay(
+  tx: Tx,
+  lineIds: readonly string[],
+  from: CalendarDate,
+  to: CalendarDate,
+  filters: { collectedByUserId?: string | undefined } = {},
+): Promise<Map<string, HandoverFact[]>> {
+  const byKey = new Map<string, HandoverFact[]>();
+  if (lineIds.length === 0) return byKey;
+  const rows = await tx.cashHandover.findMany({
+    where: {
+      hop: 'JUNIOR_TO_SENIOR',
+      dayClose: {
+        lineId: { in: [...lineIds] },
+        businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+      },
+      ...(filters.collectedByUserId === undefined
+        ? {}
+        : { fromUserId: filters.collectedByUserId }),
+    },
+    select: {
+      id: true,
+      status: true,
+      fromUserId: true,
+      toUserId: true,
+      declaredAmount: true,
+      systemAmount: true,
+      discrepancy: true,
+      note: true,
+      disputeNote: true,
+      createdAt: true,
+      acknowledgedAt: true,
+      dayClose: { select: { lineId: true, businessDate: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  for (const row of rows) {
+    const key = collectorDayKey(
+      row.dayClose.lineId,
+      fromUtcMidnight(row.dayClose.businessDate),
+      row.fromUserId,
+    );
+    const found = byKey.get(key) ?? [];
+    found.push({
+      id: row.id,
+      status: row.status,
+      toUserId: row.toUserId,
+      declared: toMoney(row.declaredAmount.toString()),
+      recorded: toMoney(row.systemAmount.toString()),
+      difference: toMoney(row.discrepancy.toString()),
+      note: row.note,
+      disputeNote: row.disputeNote,
+      createdAt: row.createdAt,
+      acknowledgedAt: row.acknowledgedAt,
+    });
+    byKey.set(key, found);
+  }
+  return byKey;
+}
+
+/**
+ * The `day_close` status of each line's day in a range, keyed
+ * `lineId|YYYY-MM-DD`. A day with no row has never been closed and is `OPEN`,
+ * which is what `DayCloseService.view` reports for it.
+ */
+export async function readDayCloseStatuses(
+  tx: Tx,
+  lineIds: readonly string[],
+  from: CalendarDate,
+  to: CalendarDate,
+): Promise<Map<string, DayCloseStatus>> {
+  const byKey = new Map<string, DayCloseStatus>();
+  if (lineIds.length === 0) return byKey;
+  const rows = await tx.dayClose.findMany({
+    where: {
+      lineId: { in: [...lineIds] },
+      businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+    },
+    select: { lineId: true, businessDate: true, status: true },
+  });
+  for (const row of rows) {
+    byKey.set(`${row.lineId}|${fromUtcMidnight(row.businessDate)}`, row.status);
+  }
+  return byKey;
 }

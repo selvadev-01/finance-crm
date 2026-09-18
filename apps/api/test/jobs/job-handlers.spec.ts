@@ -9,6 +9,7 @@ import { IdempotencyPurgeService } from '../../src/collections/idempotency-purge
 import { ReconciliationService } from '../../src/ledger/reconciliation.service.js';
 import type { SystemContext } from '../../src/platform/context/system-context.js';
 import { Database } from '../../src/platform/database/database.js';
+import { SettingReader } from '../../src/settings/setting-reader.js';
 import { cashWorld } from '../cash/world.js';
 import { createTestPrismaClient } from '../database.js';
 import { testNotifications } from '../notifications/notices.js';
@@ -51,7 +52,7 @@ describe('scheduled job handlers (M14, US-095)', () => {
         logger,
         testNotifications(database).notices,
       ),
-      overdue: new OverdueService(database),
+      overdue: new OverdueService(database, new SettingReader(database)),
       purge: new IdempotencyPurgeService(database),
     };
   }

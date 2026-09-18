@@ -46,6 +46,15 @@ const WRITE_ROUTES: Record<string, Decision> = {
       ['line_assignment', 'UPDATE'],
     ],
   },
+  // M15 settings (US-094): an override row, or the organisation's own record.
+  'PATCH /api/settings/:key': {
+    audits: [
+      ['setting', 'CREATE'],
+      ['setting', 'UPDATE'],
+      ['setting', 'DELETE'],
+      ['organization', 'UPDATE'],
+    ],
+  },
   // M06 working calendar (US-093)
   'POST /api/holidays': { audits: [['holiday', 'CREATE']] },
   'DELETE /api/holidays/:holidayId': { audits: [['holiday', 'DELETE']] },
@@ -57,6 +66,17 @@ const WRITE_ROUTES: Record<string, Decision> = {
     ],
   },
   'POST /api/staff/:staffProfileId/password-reset': {
+    audits: [['staff_profile', 'UPDATE']],
+  },
+  // M01 staff administration (US-092)
+  'POST /api/staff': { audits: [['staff_profile', 'CREATE']] },
+  'PATCH /api/staff/:staffProfileId': {
+    audits: [['staff_profile', 'UPDATE']],
+  },
+  'POST /api/staff/:staffProfileId/role': {
+    audits: [['staff_profile', 'UPDATE']],
+  },
+  'POST /api/staff/:staffProfileId/status': {
     audits: [['staff_profile', 'UPDATE']],
   },
   // M04, M05

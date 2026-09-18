@@ -126,7 +126,9 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       accountAmount: "",
       investedAmount: "",
       dailyAmount: "",
-      termDays: "100",
+      // M15's `account.defaultTermDays` (US-094), forward-only: it starts the
+      // field for a new account and never touches one that already exists.
+      termDays: String(me.organization.defaultTermDays),
       disbursementDate: today,
       collectedToDate: undefined,
     },

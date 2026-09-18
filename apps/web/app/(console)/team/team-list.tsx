@@ -14,6 +14,7 @@ import {
   PageHeader,
   Select,
 } from "@repo/ui";
+import { useState } from "react";
 
 import {
   displayColumn,
@@ -23,10 +24,15 @@ import {
 import { ListFallback } from "../../../components/list-state";
 import { STATUS, StatusBadge } from "../../../components/status-badge";
 import { LIST_LIMIT } from "../../../lib/list-limit";
-import { canManageOrganisation, ROLE_LABEL } from "../../../lib/roles";
+import {
+  canCreateStaff,
+  canManageOrganisation,
+  ROLE_LABEL,
+} from "../../../lib/roles";
 import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
 import { usePagedQuery } from "../../../lib/use-paged-query";
+import { AddStaffDialog } from "./staff-dialogs";
 
 export const TEAM_FILTERS = { role: "", status: "" };
 
@@ -44,6 +50,8 @@ export function TeamList({
 }) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
+  const creates = canCreateStaff(me.role);
+  const [adding, setAdding] = useState(false);
   const { filters, setFilter, reset, filtered } = useListState(
     TEAM_FILTERS,
     initial,
@@ -68,6 +76,13 @@ export function TeamList({
           manages
             ? "Everyone who works for the business, and the line each works today."
             : "The staff working your line today."
+        }
+        actions={
+          creates ? (
+            <Button tone="primary" onClick={() => setAdding(true)}>
+              Add staff
+            </Button>
+          ) : null
         }
       />
 
@@ -178,7 +193,14 @@ export function TeamList({
             ) : manages ? (
               <NothingYet
                 title="No staff yet"
-                description="Staff accounts are created by an administrator. Adding staff from this screen arrives with staff management."
+                description="Everyone who works for the business is added here. They sign in with a temporary password you pass on."
+                action={
+                  creates ? (
+                    <Button tone="primary" onClick={() => setAdding(true)}>
+                      Add staff
+                    </Button>
+                  ) : undefined
+                }
               />
             ) : (
               <NothingYet
@@ -189,6 +211,17 @@ export function TeamList({
           }
         />
       )}
+
+      {adding ? (
+        <AddStaffDialog
+          myRole={me.role}
+          onClose={() => setAdding(false)}
+          onAdded={() => {
+            setAdding(false);
+            staff.reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }

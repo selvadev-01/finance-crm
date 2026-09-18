@@ -86,9 +86,9 @@ In `apps/api/src/auth/` (`sign-in-policy.ts`, `sign-in-audit.ts`), as Better Aut
 
 **A sign-in that cannot be audited does not happen**: if the `SUCCESS` write fails, the new session is deleted and the request fails with `500 SIGN_IN_AUDIT_FAILED`.
 
-**Better Auth's sign-up is disabled** (`disableSignUp`). Users with credentials are created server-side: organization sign-up (below) writes them in its own transaction, and US-092 staff creation will do the same.
+**Better Auth's sign-up is disabled** (`disableSignUp`). Users with credentials are created server-side: organization sign-up (below) and staff creation (US-092) each write them in their own transaction.
 
-Staff who become non-`ACTIVE` after signing in are refused on their next request by M02's `PolicyGuard`; revoking their sessions at suspension is part of US-092.
+Staff who become non-`ACTIVE` after signing in are refused on their next request by M02's `PolicyGuard`; their sessions are deleted at the moment they stop being `ACTIVE` ([US-092](#as-built--staff-administration-us-092-2026-09-18)).
 
 ## As built — organization sign-up (US-006)
 
@@ -143,11 +143,54 @@ While `mustChangePassword` is set, the temporary password signs in but **every R
 - The detail adds their assignment history, newest first, with `upcoming` set on rows that start after today.
 - Scope is `staffScope`: Admins see their organization; a Senior sees staff whose assignment in effect today is on their line, and only that line's history rows (`assignmentScope`).
 - Soft-deleted staff are never returned. Anything out of scope is `404 STAFF_NOT_FOUND`, identical to a missing id.
-- Creating, updating and suspending staff (US-092) is not built.
+- Changing any of it is [US-092](#as-built--staff-administration-us-092-2026-09-18), below.
 
 Better Auth checks the `Origin` header on its POST endpoints (`trustedOrigins` is the web origin). A request without it gets `403 MISSING_OR_NULL_ORIGIN`, so test sign-in or change-password with curl by sending `Origin` explicitly.
 
 **Sign-out (US-002)** is Better Auth's `POST /api/auth/sign-out`, unchanged: it deletes that device's session row, so a retained cookie is refused afterwards, and leaves the staff member's other sessions alone. The rule that sign-out is blocked while unsynced collections are queued belongs to the client and arrives with the offline outbox (Phase 3).
+
+## As built — staff administration (US-092, 2026-09-18)
+
+In `apps/api/src/identity/staff-admin.service.ts`, on the Team read model above. Four routes, each audited as `staff_profile` inside its own transaction, each returning the same `StaffDetail` the Team screens already read:
+
+| Route                                    | Permission         | Roles       |
+| ---------------------------------------- | ------------------ | ----------- |
+| `POST /api/staff`                        | `staff.create`     | Admin+      |
+| `PATCH /api/staff/:staffProfileId`       | `staff.update`     | Admin+      |
+| `POST /api/staff/:staffProfileId/role`   | `staff.changeRole` | Super Admin |
+| `POST /api/staff/:staffProfileId/status` | `staff.suspend`    | Admin+      |
+
+`staff.update` is a **new permission and a new matrix row** ("Update staff details"), for what the Operations table above already assigned to Admin+.
+
+**Four safety rules**, each an API-level test and none of them a hidden button:
+
+1. **Never a role above your own.** Roles rank `SUPER_ADMIN < ADMIN < SENIOR < JUNIOR`. Creating or granting a role senior to the caller's is `403 ROLE_ABOVE_OWN`; acting on someone who holds one is `403 CANNOT_MANAGE_HIGHER_ROLE`. So an Admin may create another Admin but not a Super Admin, and may not edit, suspend or reset the owner. Without this, `staff.create` alone is a self-promotion.
+2. **Never yourself.** `422 CANNOT_CHANGE_OWN_ROLE` and `422 CANNOT_CHANGE_OWN_STATUS` — a Super Admin cannot demote themselves, and nobody can sign themselves out of their own access. Correcting your own name or mobile number is allowed; it grants nothing.
+3. **Losing access is never silent.** Leaving `ACTIVE` deletes every session the staff member holds, so an outbox still on their phone can never be drained. If they hold a line assignment in effect or starting later, or `device_sync_report.unsentCount > 0`, the change is `422 STAFF_ON_DUTY` with one `details` entry per reason. Resending with `acknowledgeOnDuty: true` proceeds, and what was left open comes back in the response (`openAssignment`, `unsyncedWork`) and in the audit entry (`openAssignmentLeft`, `unsyncedAtChange`). **The assignment is reported, not closed** — closing it on the day of suspension would move a date collections are already attributed by (M03, BR-15), so reassigning the line stays a deliberate M03 act.
+4. **One password flow.** A new staff member is created with a temporary password from `generateTemporaryPassword`, returned once and `mustChangePassword` set — the same forced change an Admin reset uses (US-003). No password is ever chosen by the Admin or sent in a request body.
+
+**Creating** writes the `user`, its `credential` account and the `staff_profile` in one transaction, with `createdByUserId` and a generated staff code (`JR-…`, `SR-…`, `AD-…`, `SA-…`, globally unique like the owner's `OWNER-…`). Codes are **not chosen by the Admin**: a business with its own numbering has no rule the system could honour. `joinedAt` defaults to today's business date and may be earlier but never later (`422 JOINED_IN_FUTURE`), because an assignment cannot begin before it (M03). A taken email is `409 EMAIL_TAKEN` and a taken mobile `409 PHONE_TAKEN`, checked before the transaction and again if a race reaches the unique index — the same answers sign-up gives.
+
+**Changing a role** is refused while a line assignment the new role could not hold is still open: `422 STAFF_HAS_OPEN_ASSIGNMENT`, naming the line. `line_assignment.assignmentRole` is fixed from the staff member's role when it is made, so a Senior turned Junior would otherwise remain a line's Senior. Read inside the transaction, so a concurrent assignment either loses or is seen. Nothing is revoked: `RequestContextResolver` reads the role on every request, so the change is already immediate.
+
+| Refusal                               | Status | When                                                      |
+| ------------------------------------- | ------ | --------------------------------------------------------- |
+| `STAFF_NOT_FOUND`                     | `404`  | Another organization, soft-deleted, missing               |
+| `ROLE_ABOVE_OWN`                      | `403`  | Creating or granting a role senior to your own            |
+| `CANNOT_MANAGE_HIGHER_ROLE`           | `403`  | Acting on someone senior to you                           |
+| `CANNOT_CHANGE_OWN_ROLE`              | `422`  | Your own role                                             |
+| `CANNOT_CHANGE_OWN_STATUS`            | `422`  | Your own status                                           |
+| `STAFF_ON_DUTY`                       | `422`  | Open assignment or unsynced collections, not acknowledged |
+| `STAFF_HAS_OPEN_ASSIGNMENT`           | `422`  | The new role contradicts an open assignment               |
+| `ROLE_UNCHANGED` / `STATUS_UNCHANGED` | `422`  | Already that role or status                               |
+| `JOINED_IN_FUTURE`                    | `422`  | `joinedAt` after today's business date                    |
+| `EMAIL_TAKEN` / `PHONE_TAKEN`         | `409`  | Already a user, or already a staff member's mobile        |
+
+**The console** is S-14, extended rather than duplicated: "Add staff" on `/team` (Admin+) opens a dialog whose second step shows the temporary password once; `/team/:staffProfileId` adds "Edit details", "Change role" (Super Admin), and "Suspend"/"Reactivate" last in the header, each behind a confirmation naming the consequence. `STAFF_ON_DUTY` becomes a second dialog listing each reason before `acknowledgeOnDuty` is offered.
+
+**`INACTIVE` has no console control yet.** The endpoint accepts it — "they have left the business", as distinct from a suspension — but the screen offers only Suspend and Reactivate, which is what the matrix names.
+
+**Notifications are not raised.** M01's `staff.created`, `staff.suspended` and `staff.role_changed` events have no consumer besides M13, which is served by the audit entry; adding notices is an M10 decision, not an implicit one.
 
 ---
 

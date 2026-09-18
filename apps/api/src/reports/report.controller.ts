@@ -12,6 +12,7 @@ import {
   ContractRoute,
 } from '../platform/contract/contract-route.js';
 import { CollectionReportService } from './collection-report.service.js';
+import { DiscrepancyReportService } from './discrepancy-report.service.js';
 import { InvestmentReportService } from './investment-report.service.js';
 import { LineWiseReportService } from './line-wise-report.service.js';
 import { OverdueReportService } from './overdue-report.service.js';
@@ -29,6 +30,7 @@ export class ReportController {
     private readonly investment: InvestmentReportService,
     private readonly collections: CollectionReportService,
     private readonly overdue: OverdueReportService,
+    private readonly discrepancies: DiscrepancyReportService,
   ) {}
 
   /** US-084, PDF §14. */
@@ -69,5 +71,15 @@ export class ReportController {
     @ContractInput() { query }: RouteInput<typeof api.getOverdue>,
   ): Promise<RouteSuccess<typeof api.getOverdue>> {
     return this.overdue.view(context, query);
+  }
+
+  /** The discrepancy report, BR-17 — cash counted against cash recorded. */
+  @RequirePermission('report.view')
+  @ContractRoute(api.getDiscrepancy)
+  getDiscrepancy(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { query }: RouteInput<typeof api.getDiscrepancy>,
+  ): Promise<RouteSuccess<typeof api.getDiscrepancy>> {
+    return this.discrepancies.view(context, query);
   }
 }

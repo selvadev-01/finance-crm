@@ -35,6 +35,60 @@ export function canResetPasswordOf(
   return target.role !== "SUPER_ADMIN" || me.role === "SUPER_ADMIN";
 }
 
+/**
+ * Seniority, most senior first — the client half of the API's own rank rule
+ * (US-092). A role may never create one above it, nor act on someone holding
+ * one; the API refuses either way, this only keeps the button off the screen.
+ */
+const RANK: Record<Role, number> = {
+  SUPER_ADMIN: 0,
+  ADMIN: 1,
+  SENIOR: 2,
+  JUNIOR: 3,
+};
+
+/** `staff.create`: Admin and Super Admin. */
+export function canCreateStaff(role: Role): boolean {
+  return canManageOrganisation(role);
+}
+
+/** The roles this person may bring into existence: their own and below. */
+export function creatableRoles(role: Role): Role[] {
+  return (Object.keys(RANK) as Role[]).filter(
+    (each) => RANK[each] >= RANK[role],
+  );
+}
+
+/**
+ * `staff.update` and `staff.suspend`, with the API's two extra rules: never
+ * someone senior to you, and — for status — never yourself.
+ */
+export function canEditStaff(
+  me: { role: Role },
+  target: { role: Role },
+): boolean {
+  return canManageOrganisation(me.role) && RANK[target.role] >= RANK[me.role];
+}
+
+export function canChangeStatusOf(
+  me: { role: Role; staffProfileId: string },
+  target: { role: Role; staffProfileId: string },
+): boolean {
+  return (
+    canEditStaff(me, target) && me.staffProfileId !== target.staffProfileId
+  );
+}
+
+/** `staff.changeRole`: Super Admin only, and never their own role. */
+export function canChangeRoleOf(
+  me: { role: Role; staffProfileId: string },
+  target: { staffProfileId: string },
+): boolean {
+  return (
+    me.role === "SUPER_ADMIN" && me.staffProfileId !== target.staffProfileId
+  );
+}
+
 /** `customer.create` and `account.create`: Admin and Super Admin. */
 export function canOnboard(role: Role): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN";
@@ -60,6 +114,15 @@ export function seesSectorTotals(role: Role): boolean {
  */
 export function seesReports(role: Role): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN" || role === "SENIOR";
+}
+
+/**
+ * `settings.view` and `settings.change`: Super Admin alone (M15, US-094).
+ * Settings alter how the system behaves for everyone, so changing one is not
+ * an operational act — the API refuses every other role at both routes.
+ */
+export function seesSettings(role: Role): boolean {
+  return role === "SUPER_ADMIN";
 }
 
 /** Only Seniors and Juniors work lines (M03). */

@@ -15,6 +15,7 @@ import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
 import { CollectionReportService } from '../../src/reports/collection-report.service.js';
+import { DiscrepancyReportService } from '../../src/reports/discrepancy-report.service.js';
 import { InvestmentReportService } from '../../src/reports/investment-report.service.js';
 import { LineWiseReportService } from '../../src/reports/line-wise-report.service.js';
 import { OverdueReportService } from '../../src/reports/overdue-report.service.js';
@@ -145,6 +146,8 @@ export async function businessWorld(tx: PrismaClient) {
     accounts,
     account,
     collect,
+    /** Another Junior on a line — the discrepancy report is per Junior (BR-17). */
+    addJunior: junior,
     superAdmin,
     overview: new BusinessOverviewService(database, asLogger),
     operations: new OperationsDashboardService(database, asLogger),
@@ -153,6 +156,7 @@ export async function businessWorld(tx: PrismaClient) {
     investment: new InvestmentReportService(database, asLogger),
     collectionReport: new CollectionReportService(database, asLogger),
     overdue: new OverdueReportService(database, asLogger),
+    discrepancies: new DiscrepancyReportService(database, asLogger),
     logger,
   };
 }

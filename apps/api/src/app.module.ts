@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { OrganisationModule } from './organisation/organisation.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { SettingsModule } from './settings/settings.module.js';
 
 /**
  * The application root.
@@ -32,6 +33,7 @@ import { ReportsModule } from './reports/reports.module.js';
     NotificationsModule,
     RasiAuthModule,
     AccessModule,
+    SettingsModule,
     IdentityModule,
     OrganisationModule,
     CalendarModule,
