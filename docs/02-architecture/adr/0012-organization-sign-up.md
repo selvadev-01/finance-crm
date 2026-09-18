@@ -13,6 +13,7 @@ The owner asked for businesses to sign up from the app, the way B2B SaaS product
 - **What in the schema assumed one business?** Sector codes, line codes, setting keys and the business-wide holiday date were unique across the whole database.
 
 How others do it, checked on 2026-09-15:
+
 - One shared schema with an organization key on every table, and uniqueness scoped to the organization ([WorkOS](https://workos.com/blog/developers-guide-saas-multi-tenant-architecture)).
 - A unique slug per organization, used in URLs, which never authorizes anything on its own ([Clerk](https://clerk.com/docs/guides/organizations/org-slugs-in-urls), [Better Auth organization plugin](https://better-auth.com/docs/plugins/organization)).
 - Reserved words kept out of slugs ([GitHub](https://github.com/Mottie/github-reserved-names)).
@@ -66,6 +67,7 @@ A first version gated sign-up behind a deployment setup key. The owner rejected 
 **The owner types the slug.** Rejected by the owner. It asks them to invent an identifier for no benefit, and makes them fix collisions by hand.
 
 **Slugs in every URL (`/<slug>/customers`) or as subdomains.** Rejected for now:
+
 - Every console route and link would move.
 - The offline service worker's `/route` scope would have to move with them, the highest-risk path in the system.
 - Subdomains add wildcard DNS and per-subdomain cookies.

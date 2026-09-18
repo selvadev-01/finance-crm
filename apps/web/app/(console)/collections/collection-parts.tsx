@@ -6,18 +6,18 @@ import {
   type CollectionListItem,
 } from "@repo/contracts";
 import {
-  Badge,
-  Button,
-  Dialog,
-  DialogActions,
-  Field,
-  FormMessage,
+  DialogForm,
+  FormField,
   formatCurrency,
   Textarea,
+  toast,
+  useZodForm,
 } from "@repo/ui";
-import { useState } from "react";
 
+import { signedCurrency } from "../../../components/money";
 import { apiWrite } from "../../../lib/api-write";
+import { applyWriteFailure } from "../../../lib/form-errors";
+import { absMoney, isNegativeMoney } from "../../../lib/money";
 import type { Role } from "../../../lib/roles";
 
 /**
@@ -28,43 +28,16 @@ export function canApproveCorrections(role: Role): boolean {
   return role !== "JUNIOR";
 }
 
-const CLASSIFICATION = {
-  CORRECT: { label: "Correct", tone: "positive" },
-  LOW: { label: "Low", tone: "warning" },
-  EXTRA: { label: "Extra", tone: "info" },
-  NO_PAYMENT: { label: "No payment", tone: "critical" },
-} as const;
-
-export function ClassificationBadge({
-  classification,
-}: {
-  classification: CollectionListItem["classification"];
-}) {
-  const { label, tone } = CLASSIFICATION[classification];
-  return <Badge tone={tone}>{label}</Badge>;
-}
-
-/** An original is simply recorded; only an adjustment has a decision to show. */
-export function EntryBadge({ entry }: { entry: CollectionListItem }) {
-  if (entry.entryType === "ORIGINAL") return <ClassificationBadge classification={entry.classification} />;
-  switch (entry.status) {
-    case "PENDING_APPROVAL":
-      return <Badge tone="warning">Correction · awaiting approval</Badge>;
-    case "CONFIRMED":
-      return <Badge tone="neutral">Correction · approved</Badge>;
-    case "REJECTED":
-      return <Badge tone="neutral">Correction · rejected</Badge>;
-    case "REVERSED":
-      return <Badge tone="neutral">Reversed</Badge>;
-  }
-}
-
-/** A signed amount: an adjustment reads `−₹20.00` or `+₹20.00`. */
-export function signedAmount(entry: Pick<CollectionListItem, "entryType" | "amount">): string {
-  if (entry.entryType === "ORIGINAL") return formatCurrency(entry.amount);
-  return entry.amount.startsWith("-")
-    ? `−${formatCurrency(entry.amount.slice(1))}`
-    : `+${formatCurrency(entry.amount)}`;
+/**
+ * A collection's amount as the console shows it: an original as recorded,
+ * unsigned; an adjustment as a signed change, `−₹20.00` or `+₹20.00`.
+ */
+export function signedAmount(
+  entry: Pick<CollectionListItem, "entryType" | "amount">,
+): string {
+  return entry.entryType === "ORIGINAL"
+    ? formatCurrency(entry.amount)
+    : signedCurrency(entry.amount);
 }
 
 /**
@@ -83,56 +56,60 @@ export function DecisionDialog({
   onClose: () => void;
   onDecided: () => void;
 }) {
-  const [note, setNote] = useState("");
-  const [pending, setPending] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // The decision is the prop, carried as a value; only the note is a field.
+  const form = useZodForm(collectionContract.decideApproval.body, {
+    defaultValues: { decision, note: "" },
+  });
   const { adjustment, original } = item;
-  const change = adjustment.amount.startsWith("-") ? adjustment.amount.slice(1) : adjustment.amount;
-  const rises = adjustment.amount.startsWith("-");
-
-  async function decide() {
-    setPending(true);
-    setProblem(null);
-    const result = await apiWrite(collectionContract.decideApproval, {
-      params: { approvalId: item.id },
-      body: { decision, ...(note.trim() ? { note } : {}) },
-    });
-    setPending(false);
-    if (!result.ok) return setProblem(result.form ?? "The decision was not saved.");
-    onDecided();
-  }
+  const change = absMoney(adjustment.amount);
+  const rises = isNegativeMoney(adjustment.amount);
+  const approving = decision === "APPROVED";
 
   const from = formatCurrency(original.netAmount);
   const to = formatCurrency(item.correctedAmount);
   return (
-    <Dialog
-      open
-      onClose={() => {
-        if (!pending) onClose();
-      }}
+    <DialogForm
+      form={form}
+      onClose={onClose}
       title={
-        decision === "APPROVED"
+        approving
           ? `Approve ${adjustment.accountCode}: ${from} becomes ${to}`
           : `Reject the correction of ${adjustment.accountCode}`
       }
       description={
-        decision === "APPROVED"
+        approving
           ? `${adjustment.customerName}'s outstanding ${rises ? "rises" : "falls"} by ${formatCurrency(change)}, and ${adjustment.collectedByName}'s cash in hand ${rises ? "falls" : "rises"} by the same. The original collection stays in history.`
           : `The collection stays at ${from}. Nothing moves, and the request stays in history as rejected.`
       }
+      submitLabel={approving ? "Approve" : "Reject"}
+      pendingLabel="Saving…"
+      tone={approving ? "primary" : "danger"}
+      onSubmit={async (body) => {
+        const result = await apiWrite(collectionContract.decideApproval, {
+          params: { approvalId: item.id },
+          body,
+        });
+        if (!result.ok) {
+          return applyWriteFailure(form.setError, result, {
+            fields: ["note"],
+            fallback: "The decision was not saved.",
+          });
+        }
+        toast({
+          title: approving
+            ? `Correction of ${adjustment.accountCode} approved`
+            : `Correction of ${adjustment.accountCode} rejected`,
+        });
+        onDecided();
+      }}
     >
-      <Field label="Note (optional)" hint="Recorded with the decision.">
-        <Textarea rows={2} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
-      </Field>
-      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      <DialogActions>
-        <Button tone="ghost" onClick={onClose} disabled={pending}>
-          Cancel
-        </Button>
-        <Button tone={decision === "APPROVED" ? "primary" : "danger"} onClick={() => void decide()} disabled={pending}>
-          {pending ? "Saving…" : decision === "APPROVED" ? "Approve" : "Reject"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      <FormField
+        name="note"
+        label="Note (optional)"
+        hint="Recorded with the decision."
+      >
+        <Textarea rows={2} maxLength={500} />
+      </FormField>
+    </DialogForm>
   );
 }

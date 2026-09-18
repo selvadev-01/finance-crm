@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretLeft, CloudSlash } from "@phosphor-icons/react/dist/ssr";
+import { CloudSlash } from "@phosphor-icons/react/dist/ssr";
 import { notificationContract, type NotificationView } from "@repo/contracts";
 import { Button, FormMessage } from "@repo/ui";
 import { useCallback, useEffect, useState } from "react";
@@ -12,7 +12,7 @@ import {
 } from "../../lib/notifications/notification-list";
 import { PushToggle } from "../../lib/notifications/push-toggle";
 import { SW_SCOPE, SW_URL } from "../../lib/offline/client";
-import { backToRoute } from "./hash-view";
+import { BackToRoute } from "./sync-marks";
 
 const FIELD_WORKER = { url: SW_URL, scope: SW_SCOPE } as const;
 
@@ -57,24 +57,29 @@ export function NotificationsScreen({ connected }: { connected: boolean }) {
       className="flex flex-col gap-[var(--stack-gap)]"
       data-testid="notifications"
     >
-      <div>
-        <Button tone="ghost" onClick={backToRoute} className="-ml-3">
-          <CaretLeft aria-hidden size={20} weight="regular" />
-          Route
-        </Button>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-ink">Notifications</h1>
+      <div className="flex items-center justify-between gap-2">
+        <BackToRoute />
         {unread > 0 ? (
           <Button
-            tone="secondary"
+            tone="ghost"
             onClick={async () => {
               await markAllRead();
               await load();
             }}
+            className="-mr-3"
           >
             Mark all read
           </Button>
+        ) : null}
+      </div>
+      <div className="flex items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          Notifications
+        </h1>
+        {unread > 0 ? (
+          <span className="text-sm text-ink-muted" data-numeric>
+            {unread} unread
+          </span>
         ) : null}
       </div>
 
@@ -92,7 +97,9 @@ export function NotificationsScreen({ connected }: { connected: boolean }) {
       ) : null}
 
       {notifications?.length === 0 ? (
-        <p className="text-sm text-ink-muted">No notifications yet.</p>
+        <p className="rounded-surface border border-border bg-surface-raised p-4 text-base text-ink-muted shadow-raised">
+          No notifications yet.
+        </p>
       ) : null}
       {notifications && notifications.length > 0 ? (
         <NotificationList
@@ -103,7 +110,9 @@ export function NotificationsScreen({ connected }: { connected: boolean }) {
       ) : null}
 
       {connected ? (
-        <PushToggle worker={FIELD_WORKER} deviceLabel="Field phone" />
+        <div className="mt-2 rounded-surface border border-border bg-surface-raised p-4 shadow-raised">
+          <PushToggle worker={FIELD_WORKER} deviceLabel="Field phone" />
+        </div>
       ) : null}
     </div>
   );

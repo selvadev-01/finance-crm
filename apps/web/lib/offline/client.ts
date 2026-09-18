@@ -1,6 +1,10 @@
 "use client";
 
-import { cashContract, collectionContract, type RouteView } from "@repo/contracts";
+import {
+  cashContract,
+  collectionContract,
+  type RouteView,
+} from "@repo/contracts";
 
 import { api } from "../api-client";
 import { type FieldDb, openFieldDb } from "./db";
@@ -12,7 +16,12 @@ import {
   retryEntry,
   SYNC_TAG,
 } from "./drain";
-import { queueReport, recordCollection, type RecordRequest, storeRoute } from "./outbox";
+import {
+  queueReport,
+  recordCollection,
+  type RecordRequest,
+  storeRoute,
+} from "./outbox";
 
 export const SW_URL = "/serwist/sw.js";
 export const SW_SCOPE = "/route";
@@ -82,9 +91,11 @@ async function requestBackgroundSync(): Promise<void> {
   // from /sign-in, outside the worker's scope — so it never resolves.
   const registration = await navigator.serviceWorker.getRegistration(SW_SCOPE);
   if (!registration) return;
-  const sync = (registration as ServiceWorkerRegistration & {
-    sync?: { register(tag: string): Promise<void> };
-  }).sync;
+  const sync = (
+    registration as ServiceWorkerRegistration & {
+      sync?: { register(tag: string): Promise<void> };
+    }
+  ).sync;
   await sync?.register(SYNC_TAG).catch(() => undefined);
 }
 
@@ -129,7 +140,10 @@ export function startDrainTriggers(
  * Record at the door: saved on the phone first, then — without waiting —
  * a sync is requested and, if there is signal, a drain started (US-050).
  */
-export async function recordAtDoor(request: RecordRequest, onChange: () => void) {
+export async function recordAtDoor(
+  request: RecordRequest,
+  onChange: () => void,
+) {
   const db = await fieldDb();
   const entry = await recordCollection(db, request);
   onChange();

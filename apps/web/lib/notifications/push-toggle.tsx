@@ -48,7 +48,7 @@ export function PushToggle({
   if (state === null) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-surface-raised px-4 py-3">
       <p className="text-sm text-ink-muted" role="status">
         {EXPLAIN[state]}
       </p>

@@ -1,42 +1,35 @@
 "use client";
 
 import { organisationContract as org } from "@repo/contracts";
-import {
-  Button,
-  DataTableSkeleton,
-  NothingYet,
-  PageHeader,
-} from "@repo/ui";
-import Link from "next/link";
+import { Button, ListFooter, NothingYet, PageHeader, Section } from "@repo/ui";
 import { useState } from "react";
 
+import { ListFallback } from "../../../../components/list-state";
+import { PageTrail } from "../../../../components/page-trail";
+import { RecordFallback } from "../../../../components/query-state";
+import { ActivityBadge } from "../../../../components/status-badge";
+import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
+import { usePagedQuery } from "../../../../lib/use-paged-query";
 import { LineTable, staffingByLine } from "../../_organisation/line-table";
-import {
-  LIST_LIMIT,
-  LoadFailed,
-  RecordNotFound,
-  Surface,
-  TruncatedNote,
-} from "../../_organisation/list-controls";
 import {
   CreateLineDialog,
   DeactivateDialog,
   RenameDialog,
 } from "../../_organisation/organisation-dialogs";
-import { StatusBadge } from "../../_organisation/status-badge";
 
 type Open = "rename" | "deactivate" | "new-line" | null;
 
+/** A sector and its lines (US-010, US-011). */
 export function SectorDetail({ sectorId }: { sectorId: string }) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
   const [open, setOpen] = useState<Open>(null);
 
   const sector = useApiQuery(org.getSector, { params: { sectorId } });
-  const lines = useApiQuery(org.listLines, {
+  const lines = usePagedQuery(org.listLines, {
     query: { sectorId, includeInactive: "true", limit: LIST_LIMIT },
   });
   const staffing = useApiQuery(org.listLineStaffing, {
@@ -45,15 +38,8 @@ export function SectorDetail({ sectorId }: { sectorId: string }) {
   const staffingMap =
     staffing.status === "ready" ? staffingByLine(staffing.data.data) : null;
 
-  if (sector.status === "loading") {
-    return <DataTableSkeleton columns={4} rows={3} />;
-  }
-  if (sector.status === "not-found" || sector.status === "not-permitted") {
-    return <RecordNotFound noun="Sector" />;
-  }
-  if (sector.status === "error") {
-    return <LoadFailed message={sector.message} onRetry={sector.reload} />;
-  }
+  if (sector.status !== "ready")
+    return <RecordFallback query={sector} noun="Sector" />;
 
   const record = sector.data;
   const afterChange = () => {
@@ -62,80 +48,82 @@ export function SectorDetail({ sectorId }: { sectorId: string }) {
     lines.reload();
     staffing.reload();
   };
+  const newLine =
+    manages && record.isActive ? (
+      <Button tone="primary" onClick={() => setOpen("new-line")}>
+        New line
+      </Button>
+    ) : null;
 
   return (
     <>
       <PageHeader
-        eyebrow={
-          manages ? (
-            <Link href="/sectors" className="hover:text-ink hover:underline">
-              Sectors
-            </Link>
-          ) : (
-            "Sector"
-          )
+        trail={
+          <PageTrail
+            steps={
+              manages
+                ? [
+                    { label: "Sectors", href: "/sectors" },
+                    { label: record.name },
+                  ]
+                : [{ label: "Sector" }]
+            }
+          />
         }
         title={record.name}
-        description={
-          <span className="flex items-center gap-2">
+        meta={
+          <>
             <span className="font-mono">{record.code}</span>
-            <StatusBadge isActive={record.isActive} />
-          </span>
+            <ActivityBadge isActive={record.isActive} />
+          </>
         }
         actions={
           manages ? (
             <>
               <Button onClick={() => setOpen("rename")}>Rename</Button>
               {record.isActive ? (
-                <Button onClick={() => setOpen("deactivate")}>Deactivate</Button>
+                <Button tone="danger" onClick={() => setOpen("deactivate")}>
+                  Deactivate
+                </Button>
               ) : null}
             </>
           ) : null
         }
       />
 
-      <section aria-labelledby="sector-lines" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="sector-lines" className="text-base font-semibold text-ink">
-            Lines
-          </h2>
-          {manages && record.isActive ? (
-            <Button tone="primary" onClick={() => setOpen("new-line")}>
-              New line
-            </Button>
-          ) : null}
-        </div>
-
-        {lines.status === "loading" ? <DataTableSkeleton columns={5} rows={3} /> : null}
-        {lines.status === "error" ? (
-          <LoadFailed message={lines.message} onRetry={lines.reload} />
-        ) : null}
-        {lines.status === "ready" && lines.data.data.length === 0 ? (
-          <Surface>
-            <NothingYet
-              title="No lines in this sector"
-              description={
-                record.isActive
-                  ? "Add the collection lines that belong to this sector."
-                  : "This sector is inactive, so it takes no new lines."
-              }
-              action={
-                manages && record.isActive ? (
-                  <Button tone="primary" onClick={() => setOpen("new-line")}>
-                    New line
-                  </Button>
-                ) : undefined
-              }
-            />
-          </Surface>
-        ) : null}
-        {lines.status === "ready" && lines.data.data.length > 0 ? (
-          <>
-            <LineTable lines={lines.data.data} staffing={staffingMap} />
-            {lines.data.hasMore ? <TruncatedNote noun="lines" /> : null}
-          </>
-        ) : null}
-      </section>
+      <Section title="Lines" actions={newLine}>
+        {lines.status === "ready" && lines.rows.length > 0 ? (
+          <LineTable
+            lines={lines.rows}
+            staffing={staffingMap}
+            complete={!lines.hasMore}
+            footer={
+              <ListFooter
+                shown={lines.rows.length}
+                noun={lines.rows.length === 1 ? "line" : "lines"}
+                onMore={lines.loadMore}
+                loadingMore={lines.loadingMore}
+              />
+            }
+          />
+        ) : (
+          <ListFallback
+            query={lines}
+            columns={5}
+            empty={
+              <NothingYet
+                title="No lines in this sector"
+                description={
+                  record.isActive
+                    ? "Add the collection lines that belong to this sector."
+                    : "This sector is inactive, so it takes no new lines."
+                }
+                action={newLine ?? undefined}
+              />
+            }
+          />
+        )}
+      </Section>
 
       {open === "rename" ? (
         <RenameDialog

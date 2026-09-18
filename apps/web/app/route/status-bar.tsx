@@ -20,12 +20,12 @@ export function StatusBar({
 }) {
   return (
     <header
-      className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border bg-surface-raised px-4 py-2"
+      className="sticky top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border bg-surface-raised px-4 py-1.5 shadow-raised"
       data-testid="status-bar"
     >
       <span
         className={cn(
-          "flex items-center gap-1.5 text-sm font-medium",
+          "flex items-center gap-1.5 justify-self-start text-base font-medium",
           // Amber text on white is 3.31:1; the icon carries the colour.
           connected ? "text-positive" : "text-ink",
         )}
@@ -43,37 +43,26 @@ export function StatusBar({
         )}
         <span data-testid="connection">{connected ? "Online" : "Offline"}</span>
       </span>
-      <span className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => openView("#notifications")}
-          aria-label={
-            unread ? `Notifications, ${unread} unread` : "Notifications"
-          }
-          className="relative flex min-h-[var(--control-height)] items-center rounded-[var(--radius-control)] px-3 text-ink hover:bg-surface-sunken"
-          data-testid="bell"
-        >
-          <Bell aria-hidden size={22} weight="regular" />
-          {unread ? (
-            <span
-              aria-hidden
-              data-numeric
-              className="absolute top-1 right-1 min-w-4 rounded-full bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse"
-            >
-              {unread > 99 ? "99+" : unread}
-            </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => openView("#sync")}
+      <button
+        type="button"
+        onClick={() => openView("#sync")}
+        className="flex min-h-[var(--control-height)] items-center justify-self-center rounded-pill px-1"
+      >
+        <span
           className={cn(
-            "flex min-h-[var(--control-height)] items-center gap-2 rounded-[var(--radius-control)] px-3 text-sm font-medium",
+            "flex items-center gap-1.5 rounded-pill border px-3 py-1 text-sm font-medium",
             unsynced > 0
-              ? "border border-warning bg-warning-subtle text-ink"
-              : "border border-transparent bg-positive-subtle text-positive",
+              ? "border-warning-border bg-warning-subtle text-ink"
+              : "border-positive-border bg-positive-subtle text-positive",
           )}
         >
+          <span
+            aria-hidden
+            className={cn(
+              "size-2 shrink-0 rounded-pill",
+              unsynced > 0 ? "bg-warning-bright" : "bg-positive-bright",
+            )}
+          />
           <span
             data-testid="unsynced-count"
             data-numeric
@@ -82,8 +71,28 @@ export function StatusBar({
             {unsynced}
           </span>
           not sent
-        </button>
-      </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => openView("#notifications")}
+        aria-label={
+          unread ? `Notifications, ${unread} unread` : "Notifications"
+        }
+        className="relative flex min-h-[var(--control-height)] items-center justify-self-end rounded-control px-3 text-ink hover:bg-surface-sunken"
+        data-testid="bell"
+      >
+        <Bell aria-hidden size={24} weight="regular" />
+        {unread ? (
+          <span
+            aria-hidden
+            data-numeric
+            className="absolute top-1 right-1 min-w-4 rounded-pill bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse"
+          >
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : null}
+      </button>
     </header>
   );
 }

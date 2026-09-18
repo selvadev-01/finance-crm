@@ -37,6 +37,11 @@ export {
 } from "./ledger/profit.js";
 export { MAX_MONEY, type MoneyInput, toMoney } from "./money/money.js";
 export {
+  type HolidayShiftInput,
+  shiftForHolidayChange,
+  type SlotDate,
+} from "./schedule/holiday-shift.js";
+export {
   type MidTermInput,
   type MidTermPlan,
   type MidTermSlot,

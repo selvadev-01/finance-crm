@@ -24,6 +24,7 @@ import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { ConflictError, DomainError } from '../platform/errors/errors.js';
 import { HandoverViews } from './handover-views.js';
+import { lineDayFigures } from './line-day-figures.js';
 
 type Tx = Prisma.TransactionClient;
 type Decimal = ReturnType<typeof toMoney>;
@@ -444,34 +445,13 @@ export class DayCloseService {
     return missed;
   }
 
-  /** BR-16's figures for a line's day, as they stand now. */
+  /**
+   * BR-16's figures for a line's day, as they stand now — the same function
+   * the Admin dashboard reads (US-082), so the two always agree.
+   */
   private async totals(tx: Tx, lineId: string, businessDate: CalendarDate) {
-    const day = toUtcMidnight(businessDate);
-    const expected = await tx.accountSchedule.aggregate({
-      where: {
-        dueDate: day,
-        status: { not: 'CANCELLED' },
-        accountLoan: { customer: { lineId } },
-      },
-      _sum: { expectedAmount: true },
-    });
-    const collected = await tx.collection.aggregate({
-      where: { lineId, businessDate: day, status: 'CONFIRMED' },
-      _sum: { amount: true },
-    });
-    const received = await tx.cashHandover.aggregate({
-      where: {
-        dayClose: { lineId, businessDate: day },
-        hop: 'JUNIOR_TO_SENIOR',
-        status: 'ACKNOWLEDGED',
-      },
-      _sum: { declaredAmount: true },
-    });
-    return {
-      expected: toMoney((expected._sum.expectedAmount ?? 0).toString()),
-      collected: toMoney((collected._sum.amount ?? 0).toString()),
-      cashReceived: toMoney((received._sum.declaredAmount ?? 0).toString()),
-    };
+    const figures = await lineDayFigures(tx, [lineId], businessDate);
+    return figures.get(lineId)!;
   }
 
   /**

@@ -1,45 +1,45 @@
 "use client";
 
-import { type Account, accountContract } from "@repo/contracts";
+import {
+  type Account,
+  accountContract,
+  type ScheduleSlotView,
+} from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
-  Badge,
   Button,
-  DataTable,
-  DataTableSkeleton,
+  DataView,
   Dialog,
   DialogActions,
   FormMessage,
   formatBusinessDate,
   formatCurrency,
+  NothingYet,
   PageHeader,
+  Section,
+  Stat,
+  StatGrid,
 } from "@repo/ui";
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
+import {
+  displayColumn,
+  moneyColumn,
+  valueColumn,
+} from "../../../../components/columns";
+import { ListFallback } from "../../../../components/list-state";
+import { PageTrail } from "../../../../components/page-trail";
+import { RecordFallback } from "../../../../components/query-state";
+import {
+  AccountStatusBadge,
+  StatusBadge,
+} from "../../../../components/status-badge";
 import { apiWrite } from "../../../../lib/api-write";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
-import { LoadFailed, RecordNotFound } from "../../_organisation/list-controls";
-import { AccountStatusBadge } from "../account-parts";
 import { AccountHistory } from "./account-history";
-
-const SLOT_TONE = {
-  PENDING: "neutral",
-  COLLECTED: "positive",
-  PARTIAL: "warning",
-  MISSED: "critical",
-  CANCELLED: "neutral",
-} as const;
-
-const SLOT_LABEL = {
-  PENDING: "Pending",
-  COLLECTED: "Collected",
-  PARTIAL: "Partial",
-  MISSED: "Missed",
-  CANCELLED: "Cancelled",
-} as const;
 
 export function AccountDetailView({ accountId }: { accountId: string }) {
   const me = useSignedIn();
@@ -51,13 +51,8 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
     params: { accountId },
   });
 
-  if (account.status === "loading")
-    return <DataTableSkeleton columns={4} rows={4} />;
-  if (account.status === "not-found" || account.status === "not-permitted") {
-    return <RecordNotFound noun="Account" />;
-  }
-  if (account.status === "error") {
-    return <LoadFailed message={account.message} onRetry={account.reload} />;
+  if (account.status !== "ready") {
+    return <RecordFallback query={account} noun="Account" />;
   }
 
   const record = account.data;
@@ -68,17 +63,21 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
   return (
     <>
       <PageHeader
-        eyebrow={
-          <Link
-            href={`/customers/${record.customerId}`}
-            className="hover:text-ink hover:underline"
-          >
-            {record.customerName}
-          </Link>
+        trail={
+          <PageTrail
+            steps={[
+              { label: "Customers", href: "/customers" },
+              {
+                label: record.customerName,
+                href: `/customers/${record.customerId}`,
+              },
+              { label: record.accountCode },
+            ]}
+          />
         }
         title={<span className="font-mono">{record.accountCode}</span>}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
+        meta={
+          <>
             <AccountStatusBadge account={record} />
             <span>
               on{" "}
@@ -89,11 +88,11 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
                 {record.lineName}
               </Link>
             </span>
-          </span>
+          </>
         }
         actions={
           canDisburse && record.disbursementDate > today ? (
-            <p className="text-sm text-ink-muted">
+            <p className="text-body text-ink-muted">
               Can be disbursed from{" "}
               {formatBusinessDate(record.disbursementDate)}
             </p>
@@ -105,77 +104,77 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
         }
       />
 
-      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Figure label="Account amount">
+      <StatGrid columns={4}>
+        <Stat label="Account amount">
           {formatCurrency(record.accountAmount)}
-        </Figure>
+        </Stat>
         {record.investedAmount !== null ? (
-          <Figure label="Invested">
-            {formatCurrency(record.investedAmount)}
-          </Figure>
+          <Stat label="Invested">{formatCurrency(record.investedAmount)}</Stat>
         ) : null}
         {record.profitAmount !== null ? (
-          <Figure label="Profit">{formatCurrency(record.profitAmount)}</Figure>
+          <Stat label="Profit">{formatCurrency(record.profitAmount)}</Stat>
         ) : null}
-        <Figure label="Daily amount">
-          {formatCurrency(record.dailyAmount)} · {record.termDays} days
-        </Figure>
-        <Figure label="Collected">
-          {formatCurrency(record.collectedAmount)}
-        </Figure>
-        <Figure label="Outstanding">
+        <Stat label="Daily amount" hint={`${record.termDays} days`}>
+          {formatCurrency(record.dailyAmount)}
+        </Stat>
+        <Stat label="Collected">{formatCurrency(record.collectedAmount)}</Stat>
+        <Stat label="Outstanding">
           {formatCurrency(record.outstandingAmount)}
-        </Figure>
-        <Figure label="Disbursement">
+        </Stat>
+        <Stat label="Disbursement">
           {formatBusinessDate(record.disbursementDate)}
-        </Figure>
-        <Figure label="Target completion">
+        </Stat>
+        <Stat label="Target completion">
           {formatBusinessDate(record.targetCompletionDate)}
-        </Figure>
-      </dl>
+        </Stat>
+      </StatGrid>
 
-      <section
-        aria-labelledby="account-schedule"
-        className="flex flex-col gap-3"
-      >
-        <h2 id="account-schedule" className="text-base font-semibold text-ink">
-          Schedule
-        </h2>
-        {schedule.status === "loading" ? (
-          <DataTableSkeleton columns={4} />
-        ) : null}
-        {schedule.status === "error" ? (
-          <LoadFailed message={schedule.message} onRetry={schedule.reload} />
-        ) : null}
-        {schedule.status === "ready" ? (
-          <DataTable
+      <Section title="Schedule">
+        {schedule.status === "ready" && schedule.data.slots.length > 0 ? (
+          <DataView
             caption="Schedule"
             rows={schedule.data.slots}
-            rowKey={(slot) => String(slot.sequence)}
+            getRowId={(slot) => String(slot.sequence)}
+            complete
             columns={[
-              { header: "Day", align: "end", cell: (slot) => slot.sequence },
-              {
-                header: "Date",
-                cell: (slot) => formatBusinessDate(slot.dueDate),
-              },
-              {
-                header: "Expected",
+              valueColumn<ScheduleSlotView>({
+                id: "day",
+                header: "Day",
                 align: "end",
-                cell: (slot) => formatCurrency(slot.expectedAmount),
-              },
-              {
+                value: (slot) => slot.sequence,
+              }),
+              valueColumn<ScheduleSlotView>({
+                id: "date",
+                header: "Date",
+                value: (slot) => slot.dueDate,
+                cell: (slot) => formatBusinessDate(slot.dueDate),
+              }),
+              moneyColumn<ScheduleSlotView>({
+                id: "expected",
+                header: "Expected",
+                amount: (slot) => slot.expectedAmount,
+              }),
+              displayColumn<ScheduleSlotView>({
+                id: "status",
                 header: "Status",
                 align: "end",
-                cell: (slot) => (
-                  <Badge tone={SLOT_TONE[slot.status]}>
-                    {SLOT_LABEL[slot.status]}
-                  </Badge>
-                ),
-              },
+                cell: (slot) => <StatusBadge kind="slot" value={slot.status} />,
+              }),
             ]}
           />
-        ) : null}
-      </section>
+        ) : (
+          <ListFallback
+            query={schedule}
+            columns={4}
+            empty={
+              <NothingYet
+                title="No schedule slots"
+                description="The schedule appears once the account's days are generated."
+              />
+            }
+          />
+        )}
+      </Section>
 
       {/* US-091: the audit substrate is Admin-and-above (M13). */}
       {canManageOrganisation(me.role) ? (
@@ -259,18 +258,5 @@ function DisburseDialog({
         </Button>
       </DialogActions>
     </Dialog>
-  );
-}
-
-function Figure({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
-      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">
-        {label}
-      </dt>
-      <dd className="text-base font-semibold text-ink" data-numeric>
-        {children}
-      </dd>
-    </div>
   );
 }

@@ -1,7 +1,12 @@
 import { cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 
-import type { PushPayload, PushProvider, PushResult, PushTarget } from "./types.js";
+import type {
+  PushPayload,
+  PushProvider,
+  PushResult,
+  PushTarget,
+} from "./types.js";
 
 export interface FcmCredentials {
   projectId: string;
@@ -84,8 +89,13 @@ export class FcmProvider implements PushProvider {
     } catch (error) {
       const code = (error as { code?: unknown }).code;
       const reason = error instanceof Error ? error.message : String(error);
-      if (typeof code === "string" && GONE.has(code)) return { status: "gone", reason: code };
-      if (typeof code !== "string" || RETRY.has(code)) return { status: "retry", reason: typeof code === "string" ? code : reason };
+      if (typeof code === "string" && GONE.has(code))
+        return { status: "gone", reason: code };
+      if (typeof code !== "string" || RETRY.has(code))
+        return {
+          status: "retry",
+          reason: typeof code === "string" ? code : reason,
+        };
       return { status: "failed", reason: `${code} ${reason}` };
     }
   }

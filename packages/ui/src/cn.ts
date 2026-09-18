@@ -1,5 +1,20 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/**
+ * tailwind-merge only knows Tailwind's default scales. Without these, a role
+ * size such as `text-label` reads as a text *colour* and silently removes the
+ * `text-ink` beside it. Keep in step with the `@theme` block in theme.css.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    theme: {
+      text: ["display", "title", "heading", "body", "label", "caption", "2xs"],
+      shadow: ["raised", "popover", "overlay"],
+      radius: ["control", "surface", "overlay", "pill"],
+    },
+  },
+});
 
 /**
  * Merge class names, with later Tailwind utilities winning over earlier ones.

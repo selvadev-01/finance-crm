@@ -14,7 +14,10 @@ const BACKOFF_CAP_MS = 5 * 60_000;
 
 /** offline-sync.md#sync — 2s, 4s, 8s … capped at five minutes. */
 export function backoffMs(attempts: number): number {
-  return Math.min(BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1), BACKOFF_CAP_MS);
+  return Math.min(
+    BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1),
+    BACKOFF_CAP_MS,
+  );
 }
 
 export interface DrainOptions {
@@ -159,7 +162,9 @@ async function drainOnce(
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry.payload),
-        signal: AbortSignal.timeout(options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(
+          options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS,
+        ),
       });
     } catch (error) {
       await retryLater(db, entry, now(), null, "NETWORK", String(error));
@@ -196,12 +201,23 @@ async function drainOnce(
         ...entry,
         status: "FAILED",
         attempts: entry.attempts + 1,
-        lastError: { status: response.status, code: error.code, message: error.message },
+        lastError: {
+          status: response.status,
+          code: error.code,
+          message: error.message,
+        },
       });
       report.failed += 1;
       continue;
     }
-    await retryLater(db, entry, now(), response.status, error.code, error.message);
+    await retryLater(
+      db,
+      entry,
+      now(),
+      response.status,
+      error.code,
+      error.message,
+    );
     blockedAccounts.add(account);
     report.retrying += 1;
   }
@@ -254,7 +270,10 @@ export async function resumeAfterSignIn(db: FieldDb): Promise<number> {
  * "Retry one" (S-03): an entry waiting out its backoff becomes due now.
  * Only a queued entry — a refused one cannot be retried into success.
  */
-export async function retryEntry(db: FieldDb, idempotencyKey: string): Promise<boolean> {
+export async function retryEntry(
+  db: FieldDb,
+  idempotencyKey: string,
+): Promise<boolean> {
   const tx = db.transaction("outbox", "readwrite");
   const entry = await tx.store.get(idempotencyKey);
   const queued = entry?.status === "QUEUED";

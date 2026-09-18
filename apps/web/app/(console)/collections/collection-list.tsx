@@ -1,48 +1,88 @@
 "use client";
 
-import { collectionContract, organisationContract as org } from "@repo/contracts";
-import { addCalendarDays, parseCalendarDate, toBusinessDate } from "@repo/domain";
+import { collectionContract, type CollectionListItem } from "@repo/contracts";
 import {
-  buttonClass,
+  addCalendarDays,
+  parseCalendarDate,
+  toBusinessDate,
+} from "@repo/domain";
+import {
   Button,
-  DataTable,
-  DataTableSkeleton,
+  buttonClass,
+  DataView,
+  EmptyFrame,
+  FilterBar,
+  FilterField,
   formatBusinessDate,
+  FormMessage,
   Input,
+  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
   Select,
 } from "@repo/ui";
 import Link from "next/link";
-import { useState } from "react";
 
+import {
+  displayColumn,
+  identityColumn,
+  moneyColumn,
+  valueColumn,
+} from "../../../components/columns";
+import { LineFilter } from "../../../components/line-filter";
+import { ListFallback } from "../../../components/list-state";
+import { CollectionEntryBadge } from "../../../components/status-badge";
+import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
-import { useApiQuery } from "../../../lib/use-api-query";
+import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
-import { LIST_LIMIT, LoadFailed, Surface, TruncatedNote } from "../_organisation/list-controls";
-import { canApproveCorrections, EntryBadge, signedAmount } from "./collection-parts";
+import { usePagedQuery } from "../../../lib/use-paged-query";
+import { canApproveCorrections, signedAmount } from "./collection-parts";
 
 /** The API allows a quarter per request; the default is the last week. */
 const DEFAULT_DAYS = 7;
+/** Inclusive business dates, at most 93 days apart (S-16). */
+const MAX_RANGE_DAYS = 93;
+
+/**
+ * `from` and `to` are `""` by default, meaning "the last seven days up to
+ * today" — worked out on the page, so the URL stays clean and a shared link
+ * without dates follows the calendar.
+ */
+export const COLLECTION_FILTERS = { from: "", to: "", line: "", show: "" };
+
+type Show = "" | "ORIGINAL" | "ADJUSTMENT";
 
 /**
  * S-16 · Collection list — date-bounded, in the caller's scope (M02): the
  * organisation for Admins, their line for a Senior. Originals and corrections
  * side by side, so a correction is never out of sight of what it corrects.
  */
-export function CollectionList() {
+export function CollectionList({
+  initial,
+}: {
+  initial: Partial<typeof COLLECTION_FILTERS>;
+}) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
   const today = toBusinessDate(new Date());
-  const [from, setFrom] = useState<string>(addCalendarDays(parseCalendarDate(today), -(DEFAULT_DAYS - 1)));
-  const [to, setTo] = useState<string>(today);
-  const [lineId, setLineId] = useState("");
-  const [kind, setKind] = useState<"" | "ORIGINAL" | "ADJUSTMENT">("");
+  const { filters, setFilter, setFilters } = useListState(
+    COLLECTION_FILTERS,
+    initial,
+  );
+  const from =
+    filters.from ||
+    addCalendarDays(parseCalendarDate(today), -(DEFAULT_DAYS - 1));
+  const to = filters.to || today;
+  const lineId = manages ? filters.line : "";
+  const kind = (
+    ["ORIGINAL", "ADJUSTMENT"].includes(filters.show) ? filters.show : ""
+  ) as Show;
   const filtered = lineId !== "" || kind !== "";
 
-  const validRange = from !== "" && to !== "" && from <= to;
-  const collections = useApiQuery(
+  const validRange = isValidRange(from, to);
+  const collections = usePagedQuery(
     collectionContract.listCollections,
     validRange
       ? {
@@ -56,128 +96,173 @@ export function CollectionList() {
         }
       : null,
   );
-  const lines = useApiQuery(
-    org.listLines,
-    manages ? { query: { limit: LIST_LIMIT, includeInactive: "true" } } : null,
-  );
+
+  const showToday = () => setFilters({ from: today, to: today });
+  const clearFilters = () => setFilters({ line: "", show: "" });
 
   return (
     <>
       <PageHeader
         title="Collections"
-        description={manages ? "Every collection and correction, by business date." : "Collections and corrections on your line."}
+        description={
+          manages
+            ? "Every collection and correction, by business date."
+            : "Collections and corrections on your line."
+        }
         actions={
           canApproveCorrections(me.role) ? (
-            <Link href="/collections/pending-approval" className={buttonClass("secondary")}>
+            <Link
+              href="/collections/pending-approval"
+              className={buttonClass("secondary")}
+            >
               Pending approvals
             </Link>
           ) : null
         }
       />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-44">
-          From
-          <Input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} />
-        </label>
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-44">
-          To
-          <Input type="date" value={to} min={from} max={today} onChange={(event) => setTo(event.target.value)} />
-        </label>
+      <FilterBar>
+        <FilterField label="From" width="sm">
+          <Input
+            type="date"
+            value={from}
+            max={to}
+            onChange={(event) => setFilter("from", event.target.value)}
+          />
+        </FilterField>
+        <FilterField label="To" width="sm">
+          <Input
+            type="date"
+            value={to}
+            min={from}
+            max={today}
+            onChange={(event) => setFilter("to", event.target.value)}
+          />
+        </FilterField>
         {manages ? (
-          <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-56">
-            Line
-            <Select value={lineId} onChange={(event) => setLineId(event.target.value)}>
-              <option value="">All lines</option>
-              {lines.status === "ready"
-                ? lines.data.data.map((line) => (
-                    <option key={line.id} value={line.id}>
-                      {line.name}
-                      {line.isActive ? "" : " (inactive)"}
-                    </option>
-                  ))
-                : null}
-            </Select>
-          </label>
+          <LineFilter
+            value={lineId}
+            onChange={(value) => setFilter("line", value)}
+          />
         ) : null}
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-64">
-          Show
-          <Select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+        <FilterField label="Show" width="lg">
+          <Select
+            value={kind}
+            onChange={(event) => setFilter("show", event.target.value)}
+          >
             <option value="">Collections and corrections</option>
             <option value="ORIGINAL">Collections only</option>
             <option value="ADJUSTMENT">Corrections only</option>
           </Select>
-        </label>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       {!validRange ? (
-        <Surface>
+        <EmptyFrame>
           <NoMatches
             title="Choose a date range"
             description="“From” must be on or before “To”, within 93 days."
-            action={<Button onClick={() => { setFrom(today); setTo(today); }}>Show today</Button>}
+            action={<Button onClick={showToday}>Show today</Button>}
           />
-        </Surface>
-      ) : null}
-      {collections.status === "loading" ? <DataTableSkeleton columns={5} /> : null}
-      {collections.status === "error" ? (
-        <LoadFailed message={collections.message} onRetry={collections.reload} />
-      ) : null}
-
-      {collections.status === "ready" && collections.data.data.length === 0 ? (
-        <Surface>
-          {filtered ? (
-            <NoMatches
-              title="Nothing matches these filters"
-              description="Try every line, or collections and corrections together."
-              action={
-                <Button onClick={() => { setLineId(""); setKind(""); }}>
-                  Clear filters
-                </Button>
-              }
-            />
-          ) : (
-            <NothingYet
-              title="No collections in these dates"
-              description="Collections appear here once Juniors record them and they reach the office."
-            />
-          )}
-        </Surface>
-      ) : null}
-
-      {collections.status === "ready" && collections.data.data.length > 0 ? (
+        </EmptyFrame>
+      ) : collections.status === "ready" && collections.rows.length > 0 ? (
         <>
-          <DataTable
+          <DataView
             caption="Collections"
-            rows={collections.data.data}
-            rowKey={(entry) => entry.id}
+            rows={collections.rows}
+            getRowId={(entry) => entry.id}
+            complete={!collections.hasMore}
             columns={[
-              {
+              identityColumn<CollectionListItem>({
                 header: "Customer",
-                cell: (entry) => (
-                  <Link
-                    href={`/collections/${entry.adjustsCollectionId ?? entry.id}`}
-                    className="flex flex-col font-medium text-ink hover:text-accent hover:underline"
-                  >
-                    {entry.customerName}
-                    <span className="font-mono text-2xs font-normal text-ink-muted">{entry.accountCode}</span>
-                  </Link>
-                ),
-              },
-              { header: "Date", cell: (entry) => formatBusinessDate(entry.businessDate) },
-              ...(manages ? [{ header: "Line", cell: (entry: (typeof collections.data.data)[number]) => entry.lineName }] : []),
-              { header: "Collected by", cell: (entry) => entry.collectedByName },
-              {
+                name: (entry) => entry.customerName,
+                code: (entry) => entry.accountCode,
+                href: (entry) =>
+                  `/collections/${entry.adjustsCollectionId ?? entry.id}`,
+              }),
+              valueColumn<CollectionListItem>({
+                id: "date",
+                header: "Date",
+                value: (entry) => entry.businessDate,
+                cell: (entry) => formatBusinessDate(entry.businessDate),
+              }),
+              ...(manages
+                ? [
+                    valueColumn<CollectionListItem>({
+                      id: "line",
+                      header: "Line",
+                      value: (entry) => entry.lineName,
+                    }),
+                  ]
+                : []),
+              valueColumn<CollectionListItem>({
+                id: "collectedBy",
+                header: "Collected by",
+                value: (entry) => entry.collectedByName,
+              }),
+              moneyColumn<CollectionListItem>({
+                id: "amount",
                 header: "Amount",
+                amount: (entry) => entry.amount,
+                render: (entry) => (
+                  <span className="tabular-nums" data-numeric>
+                    {signedAmount(entry)}
+                  </span>
+                ),
+              }),
+              displayColumn<CollectionListItem>({
+                id: "status",
+                header: "Status",
                 align: "end",
-                cell: (entry) => <span data-numeric>{signedAmount(entry)}</span>,
-              },
-              { header: "Status", align: "end", cell: (entry) => <EntryBadge entry={entry} /> },
+                cell: (entry) => <CollectionEntryBadge entry={entry} />,
+              }),
             ]}
+            footer={
+              <ListFooter
+                shown={collections.rows.length}
+                noun={collections.rows.length === 1 ? "entry" : "entries"}
+                onMore={collections.loadMore}
+                loadingMore={collections.loadingMore}
+              />
+            }
           />
-          {collections.data.hasMore ? <TruncatedNote noun="collections" /> : null}
+          {collections.moreError ? (
+            <FormMessage tone="critical">{collections.moreError}</FormMessage>
+          ) : null}
         </>
-      ) : null}
+      ) : (
+        <ListFallback
+          query={collections}
+          columns={manages ? 6 : 5}
+          empty={
+            filtered ? (
+              <NoMatches
+                title="Nothing matches these filters"
+                description="Try every line, or collections and corrections together."
+                action={<Button onClick={clearFilters}>Clear filters</Button>}
+              />
+            ) : (
+              <NothingYet
+                title="No collections in these dates"
+                description="Collections appear here once Juniors record them and they reach the office."
+              />
+            )
+          }
+        />
+      )}
     </>
   );
+}
+
+/** `from` on or before `to`, and at most 93 days apart — the API's own rule. */
+function isValidRange(from: string, to: string): boolean {
+  if (from === "" || to === "" || from > to) return false;
+  try {
+    return (
+      from >= addCalendarDays(parseCalendarDate(to), -(MAX_RANGE_DAYS - 1))
+    );
+  } catch {
+    // A hand-edited URL with a malformed date.
+    return false;
+  }
 }

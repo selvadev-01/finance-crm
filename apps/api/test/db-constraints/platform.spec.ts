@@ -205,7 +205,8 @@ describe('platform constraints (M10, M13, M15)', () => {
       await expect(
         withRollback(prisma, async (tx) => {
           const { organization, sector } = await createLine(tx);
-          const date = new Date('2199-01-27');
+          // A Tuesday: 27 January 2199 is a Sunday, which holiday_not_sunday_check refuses.
+          const date = new Date('2199-01-29');
           await tx.holiday.create({
             data: {
               organizationId: organization.id,
@@ -239,6 +240,51 @@ describe('platform constraints (M10, M13, M15)', () => {
           }
         }),
       ).resolves.toBeUndefined();
+    });
+
+    it('rejects a holiday on a Sunday — Sundays are excluded by rule, never stored (M06)', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { organization } = await createLine(tx);
+          await tx.holiday.create({
+            data: {
+              organizationId: organization.id,
+              date: new Date('2199-01-27'),
+              name: 'Sunday',
+            },
+          });
+        }),
+      ).rejects.toThrow(/holiday_not_sunday_check/);
+    });
+
+    it('accepts a Saturday, which is a working day', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { organization } = await createLine(tx);
+          await tx.holiday.create({
+            data: {
+              organizationId: organization.id,
+              date: new Date('2199-01-26'),
+              name: 'Saturday',
+            },
+          });
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it.each(['', '   '])('rejects the blank name %j (US-093)', async (name) => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { organization } = await createLine(tx);
+          await tx.holiday.create({
+            data: {
+              organizationId: organization.id,
+              date: new Date('2199-01-30'),
+              name,
+            },
+          });
+        }),
+      ).rejects.toThrow(/holiday_name_not_blank_check/);
     });
   });
 

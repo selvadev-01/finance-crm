@@ -1,12 +1,18 @@
 "use client";
 
 import { staffContract } from "@repo/contracts";
-import { Button, Field, FormMessage, Input } from "@repo/ui";
+import { Button, Form, FormField, FormRootError, Input } from "@repo/ui";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { api } from "../../../lib/api-client";
 import { authClient } from "../../../lib/auth-client";
+
+interface SignInValues {
+  email: string;
+  password: string;
+}
 
 /**
  * US-001 sign-in, and a business's own sign-in link (US-006).
@@ -20,6 +26,10 @@ import { authClient } from "../../../lib/auth-client";
  * business, and signs a staff member of another business straight back out.
  * That keeps people on their own link; it is not access control — every
  * request is still scoped to the caller's own organization by the API (M02).
+ *
+ * Better Auth's client sends the request, not a contract route, so the form
+ * has no schema: the browser checks only that both fields are filled in
+ * (ADR-0013 form layer, with `register` rules).
  */
 export function SignInForm({
   organizationSlug,
@@ -27,78 +37,73 @@ export function SignInForm({
   organizationSlug?: string;
 }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Stays set once sign-in succeeded, so the button cannot submit again while
+  // the next screen loads.
+  const [leaving, setLeaving] = useState(false);
+  const form = useForm<SignInValues>({
+    mode: "onTouched",
+    shouldFocusError: true,
+    defaultValues: { email: "", password: "" },
+  });
+  form.register("email", {
+    required: "is required",
+    validate: (value) => value.includes("@") || "must be an email address",
+  });
+  form.register("password", { required: "is required" });
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setPending(true);
-    setProblem(null);
+  const problem = (message: string) =>
+    form.setError("root.server", { type: "server", message });
 
+  async function submit({ email, password }: SignInValues) {
     try {
-      const { error } = await authClient.signIn.email({
-        email: String(form.get("email")),
-        password: String(form.get("password")),
-      });
+      const { error } = await authClient.signIn.email({ email, password });
       if (!error) {
         if (organizationSlug && !(await belongsTo(organizationSlug))) {
           await authClient.signOut();
-          setProblem(
+          problem(
             "This account belongs to a different business. Use your own business’s sign-in link.",
           );
-          setPending(false);
           return;
         }
+        setLeaving(true);
         router.replace("/home");
         return;
       }
       if (error.status === 403 && error.message) {
-        setProblem(error.message);
+        problem(error.message);
       } else if (error.status === 401) {
-        setProblem(
+        problem(
           "That email and password don’t match. Check both and try again.",
         );
       } else {
-        setProblem("Sign-in didn’t work just now. Try again in a moment.");
+        problem("Sign-in didn’t work just now. Try again in a moment.");
       }
     } catch {
-      setProblem("Could not reach Rasi. Check your connection and try again.");
+      problem("Could not reach Rasi. Check your connection and try again.");
     }
-    setPending(false);
   }
 
+  const pending = form.formState.isSubmitting || leaving;
+
   return (
-    <form onSubmit={submit} className="flex flex-col gap-[var(--stack-gap)]">
-      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      <Field label="Email">
-        <Input
-          name="email"
-          type="email"
-          autoComplete="username"
-          inputMode="email"
-          required
-          disabled={pending}
-        />
-      </Field>
-      <Field label="Password">
-        <Input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          disabled={pending}
-        />
-      </Field>
+    <Form form={form} onSubmit={submit}>
+      <FormRootError />
+      <FormField<SignInValues> name="email" label="Email">
+        <Input type="email" autoComplete="username" inputMode="email" />
+      </FormField>
+      <FormField<SignInValues> name="password" label="Password">
+        <Input type="password" autoComplete="current-password" />
+      </FormField>
       <Button
         tone="primary"
         type="submit"
         disabled={pending}
+        aria-busy={pending || undefined}
         className="w-full"
       >
         {pending ? "Signing in…" : "Sign in"}
       </Button>
-    </form>
+    </Form>
   );
 }
 

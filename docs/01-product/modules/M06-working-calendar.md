@@ -82,7 +82,7 @@ Negative or non-integer counts, and a `to` before `from`, throw `RangeError` rat
 
 ## Holiday declaration side effects
 
-Declaring a holiday emits `holiday.declared`, and M05 shifts every affected `PENDING` slot forward. Collected slots are never touched. Affected customers' target completion dates move out by the number of working days lost.
+Declaring a holiday shifts every affected `PENDING` slot forward, in the declaring transaction (as built: a direct call, not a `holiday.declared` event — see [As built](#as-built--holidays-us-093-2026-09-17)). Collected slots are never touched. Affected customers' target completion dates move out by the number of working days lost.
 
 Staff on affected lines are notified, since a declared holiday changes tomorrow's route.
 
@@ -90,11 +90,33 @@ Staff on affected lines are notified, since a declared holiday changes tomorrow'
 
 ## Operations
 
-| Operation               | Actor                                   |
-| ----------------------- | --------------------------------------- |
-| Declare holiday         | Admin+ (open question 1)                |
-| Remove a future holiday | Admin+ — triggers schedule regeneration |
-| List holidays           | All roles                               |
+| Operation               | Actor                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| Declare holiday         | Admin+ (open question 1)                                                      |
+| Remove a future holiday | Admin+ — triggers schedule regeneration                                       |
+| List holidays           | All roles — Seniors and Juniors see business-wide and their own line's sector |
+
+---
+
+## As built — holidays (US-093, 2026-09-17)
+
+In `apps/api/src/calendar/` (`HolidayService`, `HolidayController`), `packages/domain/src/schedule/holiday-shift.ts` and `apps/web/app/(console)/settings/holidays/`. Status is in the [backlog](../../06-delivery/backlog.md).
+
+- **Routes.** `GET /api/holidays` (`holiday.view`, every role): `period=upcoming` (default; today onwards, soonest first) or `past` (before today, latest first), optional `year`, cursor paging on `(date, id)`. Each row carries its sector (or null for business-wide), who added it, and `removable` (date after today). `POST /api/holidays` and `DELETE /api/holidays/:holidayId` (`holiday.declare`, Admin and Super Admin) return the holiday with `accountsShifted`. Out of scope is `404` ([M02](M02-access-control.md)): a Senior or Junior sees business-wide holidays and their current line's sector's, and nothing without a current line.
+- **Rules decided.**
+  - _Future dates only, both ways._ A date on or before today's business date (`toBusinessDate`) is `422 HOLIDAY_NOT_IN_FUTURE` with a `date` detail, for declaring and for removing. Today counts as past: the day is under way. Past holidays are never changed or deleted.
+  - _Not a Sunday._ `422 HOLIDAY_ON_SUNDAY`; the database refuses it too (`holiday_not_sunday_check`).
+  - _One per scope and date._ The same date twice business-wide, or twice for one sector, is `409 HOLIDAY_EXISTS` with a `date` detail naming the existing holiday. A sector holiday on a business-wide holiday's date is allowed, as the unique index allows it; it moves nothing, and removing one of the two leaves the other in force.
+  - _Sector._ An inactive sector is `422 SECTOR_INACTIVE`; a sector outside the organization `404 SECTOR_NOT_FOUND`. A blank `sectorId` means business-wide.
+  - _Removal is a delete_, audited `DELETE` with the holiday as `before`. Declaring is audited `CREATE` with `accountsShifted`. Individual accounts' date changes are not audited, as a schedule regeneration after a collection is not.
+- **Schedules follow, in the same transaction** (BR-02, US-034). `shiftForHolidayChange` takes an account's `PENDING` slots and lays every one due on or after the date again on consecutive working days from the first working day on or after it (never on or before disbursement), with the sector's holidays after the change. Sequences and amounts are kept, answered slots and balances never change, and only slots whose date changes are written (one `UPDATE … FROM (VALUES …)` per 2,000). The account's `targetCompletionDate` becomes its last slot's date, and `firstCollectionDate` moves when slot 1 moves. Covered accounts are `PENDING` and `ACTIVE` accounts whose customer is in the sector (or any, business-wide): on declaring, those with a pending slot on the date; on removing, those disbursed before it with a pending slot after it. A domain property test holds that the shifted schedule is exactly the one generated with the holiday known, and that declaring then removing restores every date.
+- **Concurrency.** Holiday changes lock the organization row, so two never interleave. Covered accounts are locked in id order before their slots are read, and the set is re-read until it stops growing, so a collection settling one of them either finished first or waits and then sees the new holiday. A business-wide change gets a 60-second transaction.
+- **Notices.** `HOLIDAY_DECLARED` / `HOLIDAY_REMOVED` (`WARNING`, so pushed) to the Seniors and Juniors assigned today to the active lines covered ([M10](M10-notifications.md#as-built)); not to the Admin who made the change.
+- **Web.** `/settings/holidays` (S-27), in the System group for every console role: an upcoming/past switch kept in the URL, Date, Day, Name, Applies to, Added by; "Add holiday" (date, name, applies to) and a per-row "Remove" for future holidays, both Admin and Super Admin only, with the API's refusals at the field; the toast says how many accounts' schedules moved.
+
+**Tests.** Domain: US-034 worked example both ways, Sunday neighbours, a run of holidays, overlapping scopes, the disbursement anchor, and three fast-check properties. Tier 1 `test/calendar/holiday.service.spec.ts`: the US-034 scenarios against real disbursed accounts (the 15 January slot and every later one move a working day, target 27 → 28 January, the collected slot and the balance unchanged; removing restores them; closing the holiday marks nothing `MISSED` and raises no alert), sector scoping, a pending account's first collection date, every refusal, list order, paging and Senior/Junior scope, audit rows and notices. HTTP `test/holidays.e2e-spec.ts` and the RBAC matrix cover the three routes; Tier 2 declares holidays only in a tagged organization with no accounts, and `deleteTestRunData` removes them. Constraint specs cover both CHECKs.
+
+**Not built:** a Junior-side list of upcoming holidays (the route only says "Today is a holiday"), editing a holiday's name (remove and declare again).
 
 ---
 

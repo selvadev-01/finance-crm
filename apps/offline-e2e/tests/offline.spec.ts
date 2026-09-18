@@ -1,4 +1,10 @@
-import { type BrowserContext, chromium, expect, type Page, test } from "@playwright/test";
+import {
+  type BrowserContext,
+  chromium,
+  expect,
+  type Page,
+  test,
+} from "@playwright/test";
 import { getPrismaClient } from "@repo/db";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,7 +49,8 @@ async function underServiceWorker(page: Page): Promise<void> {
     .poll(
       () =>
         page.evaluate(async () => {
-          const registration = await navigator.serviceWorker.getRegistration("/route");
+          const registration =
+            await navigator.serviceWorker.getRegistration("/route");
           return registration?.active?.state ?? null;
         }),
       { timeout: 60_000 },
@@ -51,7 +58,9 @@ async function underServiceWorker(page: Page): Promise<void> {
     .toBe("activated");
   await page.reload();
   await expect
-    .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+    .poll(() =>
+      page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+    )
     .toBe(true);
   await expect(page.getByTestId("route")).toBeVisible();
 }
@@ -61,7 +70,10 @@ async function underServiceWorker(page: Page): Promise<void> {
  * `navigator.onLine` for a page under a service worker, so the `online` event a
  * phone fires on reconnecting is dispatched here.
  */
-async function signalReturns(context: BrowserContext, page: Page): Promise<void> {
+async function signalReturns(
+  context: BrowserContext,
+  page: Page,
+): Promise<void> {
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 }
@@ -71,9 +83,15 @@ function row(page: Page, index: number) {
 }
 
 /** S-01 → S-02 → confirm the pre-filled expected amount: the one-tap case. */
-async function recordExpected(page: Page, index: number, tap: "single" | "double" = "single"): Promise<void> {
+async function recordExpected(
+  page: Page,
+  index: number,
+  tap: "single" | "double" = "single",
+): Promise<void> {
   await row(page, index).click();
-  const confirm = page.getByTestId(`collect-${account(index).code}`).getByRole("button", { name: /^Confirm/ });
+  const confirm = page
+    .getByTestId(`collect-${account(index).code}`)
+    .getByRole("button", { name: /^Confirm/ });
   await (tap === "double" ? confirm.dblclick() : confirm.click());
   // One account: back on the route with the row marked.
   await expect(page.getByTestId("route")).toBeVisible();
@@ -84,7 +102,11 @@ const stateOf = (page: Page, index: number) => row(page, index);
 
 /** S-03, opened from the status bar. */
 async function openSync(page: Page): Promise<void> {
-  await page.getByTestId("status-bar").getByRole("button").click();
+  // The bar holds two buttons since the bell arrived; the sync one names its count.
+  await page
+    .getByTestId("status-bar")
+    .getByRole("button", { name: /not sent/ })
+    .click();
   await expect(page.getByTestId("sync")).toBeVisible();
 }
 
@@ -122,15 +144,24 @@ test.describe.serial("offline field app (E06)", () => {
     await expect(page.getByTestId("route")).toBeVisible();
     await expect(page.getByTestId("connection")).toHaveText("Offline");
 
-    await page.screenshot({ path: "test-results/screens/s01-route-offline.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/screens/s01-route-offline.png",
+      fullPage: true,
+    });
     await row(page, 0).click();
     await expect(page.getByTestId(`collect-${account(0).code}`)).toBeVisible();
-    await page.screenshot({ path: "test-results/screens/s02-record.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/screens/s02-record.png",
+      fullPage: true,
+    });
     await backToRoute(page);
 
     await recordExpected(page, 0);
     await expect(stateOf(page, 0)).toHaveAttribute("data-state", "SAVED");
-    await page.screenshot({ path: "test-results/screens/s01-saved-on-phone.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/screens/s01-saved-on-phone.png",
+      fullPage: true,
+    });
     await expect(row(page, 0)).toContainText("Saved on phone");
     await expect(page.getByText(/^Saved on phone: ₹/)).toBeVisible();
     await expect(page.getByTestId("unsynced-count")).toHaveText("1");
@@ -139,19 +170,27 @@ test.describe.serial("offline field app (E06)", () => {
 
     await openSync(page);
     await expect(entryFor(page, 0)).toHaveAttribute("data-status", "QUEUED");
-    await page.screenshot({ path: "test-results/screens/s03-not-sent.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/screens/s03-not-sent.png",
+      fullPage: true,
+    });
     await backToRoute(page);
 
     await signalReturns(context, page);
     // Well inside the one-minute periodic drain: reconnecting sends at once.
-    await expect(stateOf(page, 0)).toHaveAttribute("data-state", "SYNCED", { timeout: 20_000 });
+    await expect(stateOf(page, 0)).toHaveAttribute("data-state", "SYNCED", {
+      timeout: 20_000,
+    });
     await expect(row(page, 0)).toContainText("Sent to office");
     await expect(page.getByTestId("unsynced-count")).toHaveText("0");
     expect(await collectionsFor(account(0).id)).toBe(1);
 
     await openSync(page);
     await expect(page.getByTestId("all-synced")).toContainText("Last sent");
-    await page.screenshot({ path: "test-results/screens/s03-all-sent.png", fullPage: true });
+    await page.screenshot({
+      path: "test-results/screens/s03-all-sent.png",
+      fullPage: true,
+    });
     await backToRoute(page);
   });
 
@@ -171,10 +210,14 @@ test.describe.serial("offline field app (E06)", () => {
     await context.unroute("**/api/collections");
     await page.waitForTimeout(2_500); // past the first backoff
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await expect(stateOf(page, 1)).toHaveAttribute("data-state", "SYNCED", { timeout: 60_000 });
+    await expect(stateOf(page, 1)).toHaveAttribute("data-state", "SYNCED", {
+      timeout: 60_000,
+    });
 
     expect(await collectionsFor(account(1).id)).toBe(1);
-    const stored = await prisma.accountLoan.findUniqueOrThrow({ where: { id: account(1).id } });
+    const stored = await prisma.accountLoan.findUniqueOrThrow({
+      where: { id: account(1).id },
+    });
     expect(stored.outstandingAmount.toFixed(2)).toBe("900.00");
   });
 
@@ -185,24 +228,38 @@ test.describe.serial("offline field app (E06)", () => {
     await expect(stateOf(page, 2)).toHaveAttribute("data-state", "SAVED");
 
     // The session ends while the phone is offline.
-    await prisma.session.deleteMany({ where: { userId: fixture.junior.userId } });
+    await prisma.session.deleteMany({
+      where: { userId: fixture.junior.userId },
+    });
     await signalReturns(context, page);
-    await expect(page.getByText("Your sign-in has expired.")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Your sign-in has expired.")).toBeVisible({
+      timeout: 60_000,
+    });
     await openSync(page);
-    await expect(entryFor(page, 2)).toHaveAttribute("data-status", "PAUSED_AUTH");
+    await expect(entryFor(page, 2)).toHaveAttribute(
+      "data-status",
+      "PAUSED_AUTH",
+    );
     await expect(page.getByTestId("unsynced-count")).toHaveText("1");
     // Sign-out is refused while the collection is on the phone.
     await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page.getByText("1 collection is still on this phone.")).toBeVisible();
+    await expect(
+      page.getByText("1 collection is still on this phone."),
+    ).toBeVisible();
     expect(await collectionsFor(account(2).id)).toBe(0);
 
     await signIn(page);
-    await expect(stateOf(page, 2)).toHaveAttribute("data-state", "SYNCED", { timeout: 60_000 });
+    await expect(stateOf(page, 2)).toHaveAttribute("data-state", "SYNCED", {
+      timeout: 60_000,
+    });
     expect(await collectionsFor(account(2).id)).toBe(1);
   });
 
   test("US-042: a customer with two accounts is recorded one account at a time — no combined amount, one collection each", async () => {
-    const [first, second] = fixture.split.accounts as [Fixture["split"]["accounts"][number], Fixture["split"]["accounts"][number]];
+    const [first, second] = fixture.split.accounts as [
+      Fixture["split"]["accounts"][number],
+      Fixture["split"]["accounts"][number],
+    ];
     const rowOf = (code: string) => page.getByTestId(`account-${code}`);
 
     // S-01 shows the customer as a group with a row per account.
@@ -215,24 +272,49 @@ test.describe.serial("offline field app (E06)", () => {
     await expect(collect.getByText("Record each one separately")).toBeVisible();
     // One amount field per account, and nothing else to type a total into.
     await expect(collect.getByLabel("Amount collected (₹)")).toHaveCount(2);
-    await expect(page.getByTestId(`collect-${first.code}`).getByLabel("Amount collected (₹)")).toHaveValue(first.daily);
-    await expect(page.getByTestId(`collect-${second.code}`).getByLabel("Amount collected (₹)")).toHaveValue(second.daily);
+    await expect(
+      page
+        .getByTestId(`collect-${first.code}`)
+        .getByLabel("Amount collected (₹)"),
+    ).toHaveValue(first.daily);
+    await expect(
+      page
+        .getByTestId(`collect-${second.code}`)
+        .getByLabel("Amount collected (₹)"),
+    ).toHaveValue(second.daily);
 
     // Confirming the first keeps the screen open: the second is still due.
-    await page.getByTestId(`collect-${first.code}`).getByRole("button", { name: /^Confirm/ }).click();
-    await expect(page.getByTestId(`collect-${first.code}`).getByTestId("collected-today")).toBeVisible();
+    await page
+      .getByTestId(`collect-${first.code}`)
+      .getByRole("button", { name: /^Confirm/ })
+      .click();
+    await expect(
+      page.getByTestId(`collect-${first.code}`).getByTestId("collected-today"),
+    ).toBeVisible();
     await expect(collect).toBeVisible();
-    await page.getByTestId(`collect-${second.code}`).getByRole("button", { name: /^Confirm/ }).click();
+    await page
+      .getByTestId(`collect-${second.code}`)
+      .getByRole("button", { name: /^Confirm/ })
+      .click();
     await expect(page.getByTestId("route")).toBeVisible();
 
-    await expect(rowOf(first.code)).toHaveAttribute("data-state", "SYNCED", { timeout: 30_000 });
-    await expect(rowOf(second.code)).toHaveAttribute("data-state", "SYNCED", { timeout: 30_000 });
+    await expect(rowOf(first.code)).toHaveAttribute("data-state", "SYNCED", {
+      timeout: 30_000,
+    });
+    await expect(rowOf(second.code)).toHaveAttribute("data-state", "SYNCED", {
+      timeout: 30_000,
+    });
     const recorded = await prisma.collection.findMany({
       where: { accountLoanId: { in: [first.id, second.id] } },
       select: { accountLoanId: true, amount: true },
     });
-    expect(recorded.map((row) => [row.accountLoanId, row.amount.toFixed(2)]).sort()).toEqual(
-      [[first.id, "100.00"], [second.id, "150.00"]].sort(),
+    expect(
+      recorded.map((row) => [row.accountLoanId, row.amount.toFixed(2)]).sort(),
+    ).toEqual(
+      [
+        [first.id, "100.00"],
+        [second.id, "150.00"],
+      ].sort(),
     );
   });
 });
@@ -259,7 +341,9 @@ test("the queue survives closing the app: a collection saved offline is sent aft
   context = await launch();
   page = context.pages()[0] ?? (await context.newPage());
   await page.goto("/route");
-  await expect(stateOf(page, 3)).toHaveAttribute("data-state", "SYNCED", { timeout: 60_000 });
+  await expect(stateOf(page, 3)).toHaveAttribute("data-state", "SYNCED", {
+    timeout: 60_000,
+  });
   expect(await collectionsFor(account(3).id)).toBe(1);
   await context.close();
 });

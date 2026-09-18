@@ -9,7 +9,12 @@ import { errorSchema, idSchema, pageQuerySchema } from "./shared.js";
  * accelerates it.
  */
 
-export const notificationCategorySchema = z.enum(["INFORMATION", "SUCCESS", "WARNING", "ALERT"]);
+export const notificationCategorySchema = z.enum([
+  "INFORMATION",
+  "SUCCESS",
+  "WARNING",
+  "ALERT",
+]);
 export const notificationEventSchema = z.enum([
   "NEW_ASSIGNMENT",
   "LOW_COLLECTION",
@@ -23,6 +28,8 @@ export const notificationEventSchema = z.enum([
   "HANDOVER_DISPUTED",
   "DAY_REOPENED",
   "RECONCILIATION_MISMATCH",
+  "HOLIDAY_DECLARED",
+  "HOLIDAY_REMOVED",
 ]);
 
 export const notificationSchema = z.object({
@@ -43,7 +50,12 @@ export const notificationSchema = z.object({
   createdAt: z.string(),
 });
 
-const errors = { 400: errorSchema, 401: errorSchema, 403: errorSchema, 404: errorSchema };
+const errors = {
+  400: errorSchema,
+  401: errorSchema,
+  403: errorSchema,
+  404: errorSchema,
+};
 
 export const pushSubscriptionBodySchema = z.discriminatedUnion("provider", [
   z.object({
@@ -87,7 +99,8 @@ export const notificationContract = {
   listNotifications: route({
     method: "GET",
     path: "/api/notifications",
-    summary: "The caller's notifications, newest first, with the unread count (US-070)",
+    summary:
+      "The caller's notifications, newest first, with the unread count (US-070)",
     query: pageQuerySchema.extend({
       unread: z.enum(["true", "false"]).optional(),
       category: notificationCategorySchema.optional(),
@@ -123,7 +136,8 @@ export const notificationContract = {
   getPushConfig: route({
     method: "GET",
     path: "/api/push/config",
-    summary: "Which push provider this deployment uses, and the VAPID public key",
+    summary:
+      "Which push provider this deployment uses, and the VAPID public key",
     responses: {
       200: z.object({
         provider: z.enum(["WEB_PUSH", "FCM", "BOTH", "NONE"]),
@@ -137,7 +151,10 @@ export const notificationContract = {
     method: "GET",
     path: "/api/push-subscriptions",
     summary: "The caller's registered push devices",
-    responses: { 200: z.object({ data: z.array(pushDeviceSchema) }), ...errors },
+    responses: {
+      200: z.object({ data: z.array(pushDeviceSchema) }),
+      ...errors,
+    },
   }),
 
   registerDevice: route({
@@ -151,7 +168,8 @@ export const notificationContract = {
   deregisterDevice: route({
     method: "DELETE",
     path: "/api/push-subscriptions/:subscriptionId",
-    summary: "Stop pushing to a device — the caller's own, or anyone's for an Admin",
+    summary:
+      "Stop pushing to a device — the caller's own, or anyone's for an Admin",
     pathParams: z.object({ subscriptionId: idSchema }),
     responses: { 200: pushDeviceSchema, ...errors },
   }),
@@ -169,7 +187,12 @@ export const notificationContract = {
     summary: "Switch categories on or off; ALERT stays on (US-073)",
     body: z.object({
       categories: z
-        .array(z.object({ category: notificationCategorySchema, enabled: z.boolean() }))
+        .array(
+          z.object({
+            category: notificationCategorySchema,
+            enabled: z.boolean(),
+          }),
+        )
         .min(1)
         .max(4),
     }),

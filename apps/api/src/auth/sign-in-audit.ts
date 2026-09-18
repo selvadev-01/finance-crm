@@ -27,7 +27,10 @@ export const UNKNOWN_USER = 'unknown';
  * Builds the `audit_log` row for an attempt. Separate from the write so the
  * row's shape is testable, and so tests can prove it satisfies the table.
  */
-export function signInAuditRow(attempt: SignInAttempt, organizationId: string | null = null) {
+export function signInAuditRow(
+  attempt: SignInAttempt,
+  organizationId: string | null = null,
+) {
   return {
     organizationId,
     actorUserId: attempt.userId,
@@ -47,9 +50,14 @@ export async function writeSignInAudit(
   // The organization of the staff member the email matched (US-090); none
   // for an unknown email, which stays outside every organization's log.
   const staff = attempt.userId
-    ? await client.staffProfile.findUnique({ where: { userId: attempt.userId }, select: { organizationId: true } })
+    ? await client.staffProfile.findUnique({
+        where: { userId: attempt.userId },
+        select: { organizationId: true },
+      })
     : null;
-  await client.auditLog.create({ data: signInAuditRow(attempt, staff?.organizationId ?? null) });
+  await client.auditLog.create({
+    data: signInAuditRow(attempt, staff?.organizationId ?? null),
+  });
 }
 
 /**

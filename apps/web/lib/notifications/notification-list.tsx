@@ -12,11 +12,13 @@ import {
   Button,
   cn,
   formatBusinessDate,
+  FormMessage,
 } from "@repo/ui";
 import Link from "next/link";
 import { useState } from "react";
 
 import { apiWrite } from "../api-write";
+import { formatTimestamp } from "../format";
 import { announceUnreadChanged } from "./use-unread-count";
 
 export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
@@ -35,12 +37,6 @@ const CATEGORY_TONE: Record<
   SUCCESS: "positive",
   INFORMATION: "info",
 };
-
-/** Notifications are timestamps, shown in the business time zone. */
-const TIME = new Intl.DateTimeFormat("en-IN", {
-  timeZone: "Asia/Kolkata",
-  timeStyle: "short",
-});
 
 /** Newest first, grouped by business day (navigation-ia.md#notifications). */
 function byDay(notifications: NotificationView[]) {
@@ -86,11 +82,7 @@ export function NotificationList({
 
   return (
     <>
-      {failed ? (
-        <p role="alert" className="text-sm text-critical">
-          {failed}
-        </p>
-      ) : null}
+      {failed ? <FormMessage tone="critical">{failed}</FormMessage> : null}
       <div className="flex flex-col gap-4" data-testid="notification-list">
         {byDay(notifications).map((day) => (
           <section
@@ -98,7 +90,7 @@ export function NotificationList({
             className="flex flex-col gap-2"
             aria-label={formatBusinessDate(day.date)}
           >
-            <h3 className="text-2xs font-medium uppercase tracking-wide text-ink-muted">
+            <h3 className="text-2xs font-medium tracking-wider text-ink-subtle uppercase">
               {formatBusinessDate(day.date)}
             </h3>
             <ul className="flex flex-col gap-2">
@@ -113,16 +105,12 @@ export function NotificationList({
                           className="size-2 shrink-0 rounded-full bg-accent"
                         />
                       ) : null}
-                      {/* Warning and info text fail AA on their subtle fills (design-system.md). */}
-                      <Badge
-                        tone={CATEGORY_TONE[notification.category]}
-                        className="text-ink"
-                      >
+                      <Badge tone={CATEGORY_TONE[notification.category]}>
                         {CATEGORY_LABEL[notification.category]}
                       </Badge>
                       <span
                         className={cn(
-                          "text-sm text-ink",
+                          "text-body text-ink",
                           unread ? "font-semibold" : "font-medium",
                         )}
                       >
@@ -132,18 +120,18 @@ export function NotificationList({
                         <span className="sr-only">(unread)</span>
                       ) : null}
                     </span>
-                    <span className="text-sm text-ink-muted">
+                    <span className="text-body text-ink-muted">
                       {notification.body}
                     </span>
-                    <span className="text-2xs text-ink-muted">
-                      {TIME.format(new Date(notification.createdAt))}
+                    <span className="text-caption text-ink-muted tabular-nums">
+                      {formatTimestamp(notification.createdAt, "short")}
                     </span>
                   </>
                 );
                 const rowClass = cn(
-                  "flex w-full flex-col items-start gap-1 rounded-[var(--radius-surface)] border px-4 py-3 text-left",
+                  "flex w-full flex-col items-start gap-1 rounded-surface border px-4 py-3 text-left transition-colors",
                   unread
-                    ? "border-border-strong bg-surface-raised"
+                    ? "border-border-strong bg-surface-raised shadow-raised"
                     : "border-border bg-surface",
                 );
                 return (
@@ -151,7 +139,7 @@ export function NotificationList({
                     {linkable && notification.link ? (
                       <Link
                         href={notification.link.url}
-                        className={cn(rowClass, "hover:bg-surface-sunken")}
+                        className={cn(rowClass, "hover:bg-surface-sunken/70")}
                         onClick={() => void markRead(notification)}
                       >
                         {content}

@@ -203,9 +203,7 @@ describe('OrganizationSignUpService (US-006)', () => {
         status: 'PENDING',
         subject: `Welcome to Rasi — ${input.organizationName}`,
       });
-      expect(email.textBody).toContain(
-        `https://rasi.example/${slug}/sign-in`,
-      );
+      expect(email.textBody).toContain(`https://rasi.example/${slug}/sign-in`);
       // A name is user input: escaped in the HTML part.
       expect(email.htmlBody).toContain('Lakshmi &lt;Owner&gt;');
       expect(email.htmlBody).not.toContain('<Owner>');

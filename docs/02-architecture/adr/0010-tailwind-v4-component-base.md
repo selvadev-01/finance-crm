@@ -1,6 +1,8 @@
 # ADR-0010 — Tailwind v4 and an owned component base
 
-**Status:** Accepted · **Date:** 2026-09-13
+**Status:** Accepted, partly superseded by [ADR-0013](0013-console-re-theme-and-headless-libraries.md) · **Date:** 2026-09-13
+
+> ADR-0013 (2026-09-16) replaces the token values, the "no webfont" consequence, and the hand-built-versus-shadcn question: Radix, TanStack Table and react-hook-form are now adopted. Tailwind v4, the token file, density variables, explicit variants and Phosphor icons stand as decided here.
 
 ## Context
 

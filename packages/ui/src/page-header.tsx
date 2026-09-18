@@ -3,15 +3,23 @@ import type { ReactNode } from "react";
 import { cn } from "./cn";
 
 /**
- * The top of a console page: what this is, and the page's own actions.
+ * The top of a console page: where this is, what it is, and the page's own
+ * actions.
  *
- * `eyebrow` carries the level above — the sector a line belongs to — so the
- * rollup chain (navigation-ia.md#drill-down-follows-the-rollup-chain) is
- * visible without breadcrumbs three levels deep.
+ * `trail` carries the levels above — `Breadcrumbs` built from the rollup chain
+ * (navigation-ia.md#drill-down-follows-the-rollup-chain). `meta` is the
+ * record's code and status, on one line under the title; `description` is a
+ * sentence about the page.
+ *
+ * `eyebrow` is the older name for `trail`, kept while screens move over
+ * (ADR-0013 roll-out).
  */
 export interface PageHeaderProps {
   title: ReactNode;
+  trail?: ReactNode;
+  /** @deprecated Use `trail`. */
   eyebrow?: ReactNode;
+  meta?: ReactNode;
   description?: ReactNode;
   /** Buttons for this page. They wrap under the title on a narrow screen. */
   actions?: ReactNode;
@@ -20,26 +28,40 @@ export interface PageHeaderProps {
 
 export function PageHeader({
   title,
+  trail,
   eyebrow,
+  meta,
   description,
   actions,
   className,
 }: PageHeaderProps) {
+  const above = trail ?? eyebrow;
   return (
     <header
       className={cn(
-        "flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
+        "flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-border pb-5",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-col gap-1">
-        {eyebrow ? <div className="text-sm text-ink-muted">{eyebrow}</div> : null}
-        <h1 className="text-xl font-semibold text-ink">{title}</h1>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        {above ? (
+          <div className="text-label text-ink-muted">{above}</div>
+        ) : null}
+        <h1 className="text-display text-balance text-ink">{title}</h1>
+        {meta ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-ink-muted">
+            {meta}
+          </div>
+        ) : null}
         {description ? (
-          <div className="text-sm text-ink-muted">{description}</div>
+          <div className="max-w-[70ch] text-body text-ink-muted">
+            {description}
+          </div>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      ) : null}
     </header>
   );
 }

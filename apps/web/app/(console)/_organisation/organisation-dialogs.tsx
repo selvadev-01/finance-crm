@@ -9,45 +9,29 @@ import {
   Button,
   Dialog,
   DialogActions,
-  Field,
+  DialogForm,
+  FormField,
   FormMessage,
   Input,
   Select,
+  toast,
+  useZodForm,
 } from "@repo/ui";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 
-import type { FieldErrors } from "../../../lib/api-errors";
 import { apiWrite } from "../../../lib/api-write";
-
-interface FormState {
-  pending: boolean;
-  fields: FieldErrors;
-  form: string | null;
-}
-
-const IDLE: FormState = { pending: false, fields: {}, form: null };
+import { applyWriteFailure } from "../../../lib/form-errors";
 
 const CODE_HINT = "Letters, digits and hyphens. It can’t be changed later.";
 
 /**
- * The dialogs behind every sector and line write (US-010, US-011). Each keeps
- * itself open while its request is pending, so a double click or an Escape
- * cannot leave the screen unsure whether the change happened. Refusals from the
- * API are shown inside the dialog, where the person can still act on them.
+ * The dialogs behind every sector and line write (US-010, US-011). Each is
+ * validated against the contract's own body schema before it is sent, keeps
+ * itself open while its request is pending (so a double click or an Escape
+ * cannot leave the screen unsure whether the change happened), and shows the
+ * API's refusals inside the dialog, where the person can still act on them.
  */
-function useFormState() {
-  const [state, setState] = useState<FormState>(IDLE);
-  return {
-    state,
-    start: () => setState({ pending: true, fields: {}, form: null }),
-    fail: (fields: FieldErrors, form: string | null) =>
-      setState({ pending: false, fields, form }),
-    reset: () => setState(IDLE),
-  };
-}
-
 export function CreateSectorDialog({
-  open,
   onClose,
   onCreated,
 }: {
@@ -55,59 +39,40 @@ export function CreateSectorDialog({
   onClose: () => void;
   onCreated: (sector: Sector) => void;
 }) {
-  const { state, start, fail, reset } = useFormState();
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    start();
-    const result = await apiWrite(org.createSector, {
-      body: {
-        code: String(form.get("code")),
-        name: String(form.get("name")),
-      },
-    });
-    if (!result.ok) return fail(result.fields, result.form);
-    reset();
-    onCreated(result.body);
-  }
-
-  const close = () => {
-    if (state.pending) return;
-    reset();
-    onClose();
-  };
+  const form = useZodForm(org.createSector.body, {
+    defaultValues: { code: "", name: "" },
+  });
 
   return (
-    <Dialog
-      open={open}
-      onClose={close}
+    <DialogForm
+      form={form}
+      onClose={onClose}
       title="New sector"
       description="A sector groups lines by area."
+      submitLabel="Create sector"
+      pendingLabel="Creating…"
+      onSubmit={async (body) => {
+        const result = await apiWrite(org.createSector, { body });
+        if (!result.ok) {
+          return applyWriteFailure(form.setError, result, {
+            fields: ["code", "name"],
+          });
+        }
+        toast({ title: `Sector ${result.body.code} created` });
+        onCreated(result.body);
+      }}
     >
-      <form onSubmit={submit} className="flex flex-col gap-[var(--stack-gap)]">
-        {state.form ? <FormMessage tone="critical">{state.form}</FormMessage> : null}
-        <Field label="Code" hint={CODE_HINT} error={state.fields.code}>
-          <Input name="code" required minLength={2} maxLength={80} autoComplete="off" disabled={state.pending} />
-        </Field>
-        <Field label="Name" error={state.fields.name}>
-          <Input name="name" required maxLength={120} autoComplete="off" disabled={state.pending} />
-        </Field>
-        <DialogActions>
-          <Button tone="ghost" onClick={close} disabled={state.pending}>
-            Cancel
-          </Button>
-          <Button tone="primary" type="submit" disabled={state.pending}>
-            {state.pending ? "Creating…" : "Create sector"}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+      <FormField name="code" label="Code" hint={CODE_HINT}>
+        <Input autoComplete="off" maxLength={80} />
+      </FormField>
+      <FormField name="name" label="Name">
+        <Input autoComplete="off" maxLength={120} />
+      </FormField>
+    </DialogForm>
   );
 }
 
 export function CreateLineDialog({
-  open,
   onClose,
   onCreated,
   sectors,
@@ -121,76 +86,55 @@ export function CreateLineDialog({
   /** Preselected, when the dialog is opened from a sector. */
   sectorId?: string;
 }) {
-  const { state, start, fail, reset } = useFormState();
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    start();
-    const result = await apiWrite(org.createLine, {
-      body: {
-        sectorId: String(form.get("sectorId")),
-        code: String(form.get("code")),
-        name: String(form.get("name")),
-      },
-    });
-    if (!result.ok) return fail(result.fields, result.form);
-    reset();
-    onCreated(result.body);
-  }
-
-  const close = () => {
-    if (state.pending) return;
-    reset();
-    onClose();
-  };
+  const form = useZodForm(org.createLine.body, {
+    defaultValues: { sectorId: sectorId ?? "", code: "", name: "" },
+  });
 
   return (
-    <Dialog
-      open={open}
-      onClose={close}
+    <DialogForm
+      form={form}
+      onClose={onClose}
       title="New line"
       description="A line is a collection route within one sector."
+      submitLabel="Create line"
+      pendingLabel="Creating…"
+      onSubmit={async (body) => {
+        const result = await apiWrite(org.createLine, { body });
+        if (!result.ok) {
+          return applyWriteFailure(form.setError, result, {
+            fields: ["sectorId", "code", "name"],
+          });
+        }
+        toast({ title: `Line ${result.body.code} created` });
+        onCreated(result.body);
+      }}
     >
-      <form onSubmit={submit} className="flex flex-col gap-[var(--stack-gap)]">
-        {state.form ? <FormMessage tone="critical">{state.form}</FormMessage> : null}
-        <Field label="Sector" error={state.fields.sectorId}>
-          <Select name="sectorId" required defaultValue={sectorId ?? ""} disabled={state.pending}>
-            <option value="" disabled>
-              Choose a sector
+      <FormField name="sectorId" label="Sector">
+        <Select>
+          <option value="" disabled>
+            Choose a sector
+          </option>
+          {sectors.map((sector) => (
+            <option key={sector.id} value={sector.id}>
+              {sector.name} ({sector.code})
             </option>
-            {sectors.map((sector) => (
-              <option key={sector.id} value={sector.id}>
-                {sector.name} ({sector.code})
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Code" hint={CODE_HINT} error={state.fields.code}>
-          <Input name="code" required minLength={2} maxLength={80} autoComplete="off" disabled={state.pending} />
-        </Field>
-        <Field label="Name" error={state.fields.name}>
-          <Input name="name" required maxLength={120} autoComplete="off" disabled={state.pending} />
-        </Field>
-        <DialogActions>
-          <Button tone="ghost" onClick={close} disabled={state.pending}>
-            Cancel
-          </Button>
-          <Button tone="primary" type="submit" disabled={state.pending}>
-            {state.pending ? "Creating…" : "Create line"}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+          ))}
+        </Select>
+      </FormField>
+      <FormField name="code" label="Code" hint={CODE_HINT}>
+        <Input autoComplete="off" maxLength={80} />
+      </FormField>
+      <FormField name="name" label="Name">
+        <Input autoComplete="off" maxLength={120} />
+      </FormField>
+    </DialogForm>
   );
 }
 
 type Renameable =
-  | { kind: "sector"; record: Sector }
-  | { kind: "line"; record: Line };
+  { kind: "sector"; record: Sector } | { kind: "line"; record: Line };
 
 export function RenameDialog({
-  open,
   onClose,
   onRenamed,
   target,
@@ -200,63 +144,40 @@ export function RenameDialog({
   onRenamed: () => void;
   target: Renameable;
 }) {
-  const { state, start, fail, reset } = useFormState();
   const noun = target.kind === "sector" ? "sector" : "line";
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const name = String(new FormData(event.currentTarget).get("name"));
-    start();
-    const result =
-      target.kind === "sector"
-        ? await apiWrite(org.updateSector, {
-            params: { sectorId: target.record.id },
-            body: { name },
-          })
-        : await apiWrite(org.updateLine, {
-            params: { lineId: target.record.id },
-            body: { name },
-          });
-    if (!result.ok) return fail(result.fields, result.form);
-    reset();
-    onRenamed();
-  }
-
-  const close = () => {
-    if (state.pending) return;
-    reset();
-    onClose();
-  };
+  const form = useZodForm(org.updateSector.body, {
+    defaultValues: { name: target.record.name },
+  });
 
   return (
-    <Dialog
-      open={open}
-      onClose={close}
+    <DialogForm
+      form={form}
+      onClose={onClose}
       title={`Rename ${noun} ${target.record.code}`}
       description="The code stays the same. Past records keep pointing at this."
+      submitLabel="Save name"
+      pendingLabel="Saving…"
+      onSubmit={async (body) => {
+        const result =
+          target.kind === "sector"
+            ? await apiWrite(org.updateSector, {
+                params: { sectorId: target.record.id },
+                body,
+              })
+            : await apiWrite(org.updateLine, {
+                params: { lineId: target.record.id },
+                body,
+              });
+        if (!result.ok)
+          return applyWriteFailure(form.setError, result, { fields: ["name"] });
+        toast({ title: `Renamed to ${body.name}` });
+        onRenamed();
+      }}
     >
-      <form onSubmit={submit} className="flex flex-col gap-[var(--stack-gap)]">
-        {state.form ? <FormMessage tone="critical">{state.form}</FormMessage> : null}
-        <Field label="Name" error={state.fields.name}>
-          <Input
-            name="name"
-            required
-            maxLength={120}
-            autoComplete="off"
-            defaultValue={target.record.name}
-            disabled={state.pending}
-          />
-        </Field>
-        <DialogActions>
-          <Button tone="ghost" onClick={close} disabled={state.pending}>
-            Cancel
-          </Button>
-          <Button tone="primary" type="submit" disabled={state.pending}>
-            {state.pending ? "Saving…" : "Save name"}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+      <FormField name="name" label="Name">
+        <Input autoComplete="off" maxLength={120} />
+      </FormField>
+    </DialogForm>
   );
 }
 
@@ -264,9 +185,9 @@ export function RenameDialog({
  * Names the consequence (design-system.md rule 7). Deactivation is refused by
  * the API while a sector has active lines or a line has active accounts; that
  * refusal is shown here, with its count, rather than guessed in advance.
+ * There is nothing to fill in, so this is a plain confirming dialog.
  */
 export function DeactivateDialog({
-  open,
   onClose,
   onDeactivated,
   target,
@@ -276,11 +197,13 @@ export function DeactivateDialog({
   onDeactivated: () => void;
   target: Renameable;
 }) {
-  const { state, start, fail, reset } = useFormState();
+  const [pending, setPending] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const { code, name } = target.record;
 
   async function confirm() {
-    start();
+    setPending(true);
+    setProblem(null);
     const result =
       target.kind === "sector"
         ? await apiWrite(org.deactivateSector, {
@@ -289,15 +212,17 @@ export function DeactivateDialog({
         : await apiWrite(org.deactivateLine, {
             params: { lineId: target.record.id },
           });
-    if (!result.ok) return fail(result.fields, result.form);
-    reset();
+    setPending(false);
+    if (!result.ok)
+      return setProblem(result.form ?? "The change was not saved.");
+    toast({
+      title: `${target.kind === "sector" ? "Sector" : "Line"} ${code} deactivated`,
+    });
     onDeactivated();
   }
 
   const close = () => {
-    if (state.pending) return;
-    reset();
-    onClose();
+    if (!pending) onClose();
   };
 
   const consequence =
@@ -307,18 +232,18 @@ export function DeactivateDialog({
 
   return (
     <Dialog
-      open={open}
+      open
       onClose={close}
       title={`Deactivate ${target.kind} ${code}`}
       description={consequence}
     >
-      {state.form ? <FormMessage tone="critical">{state.form}</FormMessage> : null}
+      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
       <DialogActions>
-        <Button tone="ghost" onClick={close} disabled={state.pending}>
+        <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="danger" onClick={confirm} disabled={state.pending}>
-          {state.pending ? "Deactivating…" : `Deactivate ${code}`}
+        <Button tone="danger" onClick={() => void confirm()} disabled={pending}>
+          {pending ? "Deactivating…" : `Deactivate ${code}`}
         </Button>
       </DialogActions>
     </Dialog>

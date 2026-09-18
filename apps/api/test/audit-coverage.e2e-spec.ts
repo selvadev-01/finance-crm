@@ -46,6 +46,9 @@ const WRITE_ROUTES: Record<string, Decision> = {
       ['line_assignment', 'UPDATE'],
     ],
   },
+  // M06 working calendar (US-093)
+  'POST /api/holidays': { audits: [['holiday', 'CREATE']] },
+  'DELETE /api/holidays/:holidayId': { audits: [['holiday', 'DELETE']] },
   // M01 identity
   'POST /api/organizations': {
     audits: [

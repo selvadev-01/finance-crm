@@ -105,6 +105,26 @@ export function assignmentScope(
   return { lineId: context.currentLineId };
 }
 
+/**
+ * Holidays the caller observes (US-093, "View holidays: own line"): all of the
+ * organization's for Admins; for a Senior or Junior, the business-wide ones
+ * and those of their current line's sector.
+ */
+export function holidayScope(
+  context: RequestContext,
+): Prisma.HolidayWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  if (context.currentLineId === null) return NO_ROWS;
+  return {
+    organizationId: context.organizationId,
+    OR: [
+      { sectorId: null },
+      { sector: { lines: { some: { id: context.currentLineId } } } },
+    ],
+  };
+}
+
 /** Customers on the caller's current line, or all in the organization for Admins. */
 export function customerScope(
   context: RequestContext,

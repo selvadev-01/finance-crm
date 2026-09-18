@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /**
- * Rasi design tokens.
+ * Rasi design tokens (ADR-0013, which re-themes ADR-0010).
  *
  * Tailwind v4 has no `presets` mechanism — the shared layer is CSS, not a JS
  * config object, so this file IS the preset. Import it once from the app's
@@ -12,81 +12,135 @@
  * scans the importing project by default. Without it every class used by a
  * @repo/ui component is purged from the production build and the components
  * render unstyled — which looks like a component bug, not a config one.
+ *
+ * `theme.test.ts` holds every text/background pair below to WCAG AA. Change a
+ * colour and run it.
  */
 @source "../../ui/src";
 
 @theme {
   /* ---------------------------------------------------------------------
-   * Colour
+   * Colour — "soft teal": calm, fresh, easy on the eye for a long day
+   * (palette revised 2026-09-17).
    *
-   * One accent, locked for the whole product. Neutrals are a single cool
-   * grey family — never mixed warm and cool in one interface.
+   * Neutrals are a light mint-grey carrying a trace of the accent's hue, so
+   * the page feels of a piece rather than plain grey. Text is a deep slate.
+   * The one accent is a teal, for the primary action and the current place
+   * only.
    *
-   * Deep green rather than the default blue: this is a cash-handling tool
-   * where the recurring semantic is money reconciling correctly, and green
-   * is already the "tallied" signal. Status colours are reserved for
-   * status, so the accent must not be red, amber, or a green close enough
-   * to be confused with "collected".
+   * Status colours are reserved for status (BR-08 classification, sync, day
+   * state) and are held apart from the accent: positive is a yellow-green,
+   * far enough round the wheel from teal not to read as "the button colour";
+   * critical is a coral rather than a hard red; info is violet.
    * ------------------------------------------------------------------- */
-  --color-surface: oklch(99% 0.002 250);
+  --color-surface: oklch(98.3% 0.006 190);
   --color-surface-raised: oklch(100% 0 0);
-  --color-surface-sunken: oklch(96.5% 0.004 250);
-  --color-border: oklch(90% 0.006 250);
-  --color-border-strong: oklch(80% 0.008 250);
+  --color-surface-sunken: oklch(96.3% 0.009 190);
+  --color-surface-overlay: oklch(100% 0 0);
+  --color-border: oklch(91.5% 0.012 195);
+  /* Input and control outlines: 3:1 against white (WCAG 1.4.11). */
+  --color-border-strong: oklch(64% 0.02 205);
 
-  --color-ink: oklch(23% 0.012 250);
-  --color-ink-muted: oklch(48% 0.012 250);
-  --color-ink-subtle: oklch(62% 0.01 250);
-  --color-ink-inverse: oklch(99% 0.002 250);
+  --color-ink: oklch(25% 0.025 225);
+  --color-ink-muted: oklch(44% 0.022 220);
+  --color-ink-subtle: oklch(51% 0.018 215);
+  --color-ink-inverse: oklch(99% 0.004 190);
 
-  --color-accent: oklch(48% 0.11 165);
-  --color-accent-hover: oklch(42% 0.11 165);
-  --color-accent-subtle: oklch(95% 0.03 165);
-  --color-accent-ink: oklch(99% 0.002 250);
+  --color-accent: oklch(50% 0.09 192);
+  --color-accent-hover: oklch(44% 0.085 194);
+  --color-accent-subtle: oklch(95.5% 0.03 185);
+  --color-accent-ink: oklch(99% 0.004 190);
 
-  /* Status. These map to collection classification (BR-08) and must stay
-   * distinguishable from the accent and from each other at a glance, in
-   * sunlight, on a mid-range phone. */
-  --color-positive: oklch(52% 0.13 150);
-  --color-positive-subtle: oklch(95% 0.04 150);
-  --color-warning: oklch(65% 0.14 75);
-  --color-warning-subtle: oklch(96% 0.05 75);
-  --color-critical: oklch(52% 0.18 25);
-  --color-critical-subtle: oklch(95% 0.04 25);
-  --color-info: oklch(55% 0.11 250);
-  --color-info-subtle: oklch(95% 0.03 250);
+  /* Status. Four roles per tone:
+   *   bare     — text on white or on `-subtle`, and a solid fill under
+   *              `ink-inverse`. Always ≥ 4.5:1 in all three.
+   *   -subtle  — the tinted background of a badge or message.
+   *   -border  — the outline of that tinted background.
+   *   -bright  — a dot or indicator with no text; ≥ 3:1 on white.
+   * These map to collection classification (BR-08) and must stay
+   * distinguishable at a glance, in sunlight, on a mid-range phone. */
+  --color-positive: oklch(47% 0.11 140);
+  --color-positive-subtle: oklch(95.8% 0.045 135);
+  --color-positive-border: oklch(85% 0.08 138);
+  --color-positive-bright: oklch(62% 0.16 140);
+
+  --color-warning: oklch(49% 0.1 65);
+  --color-warning-subtle: oklch(96.5% 0.045 85);
+  --color-warning-border: oklch(86% 0.09 78);
+  --color-warning-bright: oklch(64% 0.15 62);
+
+  --color-critical: oklch(51% 0.15 30);
+  --color-critical-subtle: oklch(96.2% 0.022 30);
+  --color-critical-border: oklch(87% 0.06 30);
+  --color-critical-bright: oklch(62% 0.17 32);
+
+  --color-info: oklch(48% 0.12 300);
+  --color-info-subtle: oklch(96% 0.028 300);
+  --color-info-border: oklch(87% 0.05 300);
+  --color-info-bright: oklch(58% 0.14 300);
 
   /* ---------------------------------------------------------------------
    * Type
    *
-   * System stack, deliberately. The Junior app loads over a poor connection
-   * on a mid-range Android; a webfont is a render-blocking request that buys
-   * nothing a collector notices. Tabular figures everywhere numbers are
-   * compared down a column — which in this product is most places.
+   * IBM Plex Sans in the console and the sign-in screens: an engineered,
+   * even face with true tabular figures, loaded by `next/font` with the
+   * variable `--font-plex`. The Junior's field app sets
+   * `data-font="system"` and never downloads it — a webfont buys nothing a collector notices on a
+   * poor connection.
+   *
+   * Role sizes, not a numeric scale: a screen asks for `text-title`, not
+   * `text-xl`. Tailwind's own sizes remain for the field app.
    * ------------------------------------------------------------------- */
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  --font-system:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  /* The fallback matters: without it an unset `--font-plex` voids the whole
+   * declaration and the page falls back to the browser's serif. */
+  --font-sans: var(--font-plex, ui-sans-serif), var(--font-system);
   --font-mono:
-    ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo,
-    Consolas, monospace;
+    var(--font-plex-mono, ui-monospace), ui-monospace, "Cascadia Mono",
+    "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
 
+  --text-display: 1.625rem;
+  --text-display--line-height: 2.125rem;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.015em;
+  --text-title: 1.1875rem;
+  --text-title--line-height: 1.625rem;
+  --text-title--font-weight: 600;
+  --text-title--letter-spacing: -0.01em;
+  --text-heading: 0.9375rem;
+  --text-heading--line-height: 1.375rem;
+  --text-heading--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.125rem;
+  --text-label--font-weight: 500;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  /* Column headers and badges only. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
 
   /* ---------------------------------------------------------------------
    * Shape and elevation
    *
-   * One radius scale, applied consistently. Shadows are tinted to the
-   * background hue rather than pure black, and kept shallow — this is a
-   * dense data tool, not a marketing page.
+   * Gently rounded: soft enough to feel friendly, still tidy in a dense
+   * table. Borders do most of the separating, and shadows are only for what
+   * floats. Shadows are tinted with the ink hue, never pure black.
    * ------------------------------------------------------------------- */
   --radius-control: 0.5rem;
   --radius-surface: 0.75rem;
+  --radius-overlay: 1rem;
+  --radius-pill: 9999px;
 
-  --shadow-raised: 0 1px 2px oklch(23% 0.012 250 / 0.06);
+  --shadow-raised: 0 1px 2px oklch(25% 0.025 225 / 0.05);
+  --shadow-popover:
+    0 8px 24px oklch(25% 0.025 225 / 0.1), 0 1px 3px oklch(25% 0.025 225 / 0.06);
   --shadow-overlay:
-    0 12px 32px oklch(23% 0.012 250 / 0.14), 0 2px 8px oklch(23% 0.012 250 / 0.08);
+    0 24px 48px oklch(25% 0.025 225 / 0.16),
+    0 2px 8px oklch(25% 0.025 225 / 0.06);
 
   /* ---------------------------------------------------------------------
    * Touch targets
@@ -97,13 +151,22 @@
    * ------------------------------------------------------------------- */
   --spacing-touch: 2.75rem;
   --spacing-touch-lg: 3.25rem;
+
+  --animate-in: rasi-in 120ms ease-out;
+}
+
+@keyframes rasi-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
 }
 
 /**
  * Two density modes, because this product is genuinely two products.
  *
- * `data-density="comfortable"` — the Junior's field app at 360px. Large
- * targets, generous spacing, high contrast.
+ * `data-density="comfortable"` — the Junior's field app at 360px, and the
+ * sign-in screens. Large targets, generous spacing, high contrast.
  * `data-density="compact"` — the admin console, where information density is
  * a feature and a Senior scans hundreds of rows.
  *
@@ -113,20 +176,49 @@
 :root,
 [data-density="comfortable"] {
   --control-height: var(--spacing-touch);
+  --control-height-sm: 2.25rem;
   --control-padding-x: 1rem;
   /* 16px in the field app — below that, iOS zooms the page on focus. */
   --control-font-size: 1rem;
+  --cell-padding-x: 1rem;
   --row-padding-y: 0.875rem;
+  --field-gap: 0.375rem;
   --stack-gap: 1rem;
+  --section-gap: 2rem;
+  --page-padding: 1rem;
+  --header-height: 3.5rem;
 }
 
 [data-density="compact"] {
   --control-height: 2.25rem;
+  --control-height-sm: 1.75rem;
   --control-padding-x: 0.75rem;
   /* Matches the console's 14px body text, so controls don't shout. */
   --control-font-size: 0.875rem;
-  --row-padding-y: 0.5rem;
-  --stack-gap: 0.625rem;
+  --cell-padding-x: 0.875rem;
+  --row-padding-y: 0.625rem;
+  --field-gap: 0.375rem;
+  --stack-gap: 0.75rem;
+  --section-gap: 1.75rem;
+  --page-padding: 1rem;
+  --header-height: 3.25rem;
+}
+
+@media (width >= 48rem) {
+  [data-density="compact"] {
+    --page-padding: 2rem;
+  }
+}
+
+/* The field app never uses the webfont. `--font-sans` and `--font-mono` are
+ * resolved where they are declared (the root), so the subtree has to declare
+ * them again — resetting `--font-plex` alone would change nothing. */
+[data-font="system"] {
+  --font-sans: var(--font-system);
+  --font-mono:
+    ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo,
+    Consolas, monospace;
+  font-family: var(--font-system);
 }
 
 /* Seniors open the console on a phone too; keep 16px there so focusing an
@@ -148,6 +240,13 @@
     background-color: var(--color-surface);
     color: var(--color-ink);
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-subtle);
+    color: var(--color-ink);
   }
 
   /* Numbers line up in columns. Money is compared vertically constantly. */

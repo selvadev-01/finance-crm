@@ -17,6 +17,7 @@ import { openView } from "./hash-view";
 import { formatClockTime, RowStateMark } from "./sync-marks";
 
 type Customer = RouteView["customers"][number];
+type Account = Customer["accounts"][number];
 
 /**
  * S-01 · Today's route. Read-only: who to visit and what to ask for, with each
@@ -48,13 +49,15 @@ export function RouteScreen({
   return (
     <div className="flex flex-col gap-[var(--stack-gap)]">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="text-xl font-semibold text-ink">Today’s route</h1>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
+            Today’s route
+          </h1>
           <p className="text-sm text-ink-muted">
             {formatBusinessDate(businessDate)} · {name}
           </p>
           {local ? (
-            <p className="text-xs text-ink-muted" data-testid="route-fetched">
+            <p className="text-sm text-ink-muted" data-testid="route-fetched">
               {connected ? "Updated" : "Phone copy from"}{" "}
               {formatClockTime(local.fetchedAt)}
               {local.optimistic ? " · includes collections not yet sent" : ""}
@@ -66,6 +69,7 @@ export function RouteScreen({
           onClick={onRefresh}
           disabled={refreshing}
           aria-label="Refresh route"
+          className="px-3"
         >
           <ArrowClockwise
             aria-hidden
@@ -78,7 +82,7 @@ export function RouteScreen({
 
       {!local ? (
         <p
-          className="rounded-[var(--radius-surface)] border border-border bg-surface-raised p-4 text-ink"
+          className="rounded-surface border border-border bg-surface-raised p-4 text-base text-ink shadow-raised"
           data-testid="no-route"
         >
           Connect once to load today’s route. It stays on this phone after that.
@@ -91,19 +95,27 @@ export function RouteScreen({
         <DayMessage>No collections due today</DayMessage>
       ) : (
         <>
-          <p className="text-sm text-ink-muted" data-numeric>
-            {left === 0
-              ? "Everyone on the route is visited."
-              : `${left} of ${customers.length} customers left to visit`}
-          </p>
-          <ul className="flex flex-col gap-2" data-testid="route">
+          <div className="flex flex-wrap items-center gap-2" data-numeric>
+            <SummaryChip label="To visit" value={left} />
+            <SummaryChip label="Done" value={customers.length - left} />
+            {left === 0 ? (
+              <p className="text-sm text-ink-muted">
+                Everyone on the route is visited.
+              </p>
+            ) : null}
+          </div>
+          <ul className="flex flex-col gap-3" data-testid="route">
             {customers.map((customer) => (
               <li key={customer.customerId}>
                 <CustomerRow customer={customer} local={local} />
               </li>
             ))}
           </ul>
-          <Button tone="secondary" onClick={() => openView("#handover")}>
+          <Button
+            tone="secondary"
+            onClick={() => openView("#handover")}
+            className="w-full"
+          >
             <Money aria-hidden size={20} weight="regular" />
             Hand over today's cash
           </Button>
@@ -113,10 +125,19 @@ export function RouteScreen({
   );
 }
 
+function SummaryChip({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-surface-sunken px-3 text-sm text-ink-muted">
+      {label}
+      <span className="text-base font-semibold text-ink">{value}</span>
+    </span>
+  );
+}
+
 function DayMessage({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="rounded-[var(--radius-surface)] border border-border bg-surface-raised p-4 text-base font-medium text-ink"
+      className="rounded-surface border border-border bg-surface-raised p-4 text-base font-medium text-ink shadow-raised"
       data-testid="empty-route"
     >
       {children}
@@ -150,88 +171,140 @@ function CustomerRow({
         openView(`#collect/${customer.customerId}`);
       }}
       className={cn(
-        "flex flex-col rounded-[var(--radius-surface)] border bg-surface-raised text-left transition-colors active:translate-y-px",
+        "flex flex-col overflow-hidden rounded-surface border text-left shadow-raised transition-colors active:translate-y-px",
         grouped ? "border-border-strong" : "border-border",
-        done && "bg-surface-sunken",
+        done ? "bg-surface-sunken" : "bg-surface-raised",
       )}
       data-testid={`customer-${customer.customerCode}`}
     >
-      <span className="flex items-center justify-between gap-3 px-4 py-[var(--row-padding-y)]">
-        <span className="flex min-w-0 flex-col">
-          <span
-            className={cn(
-              "truncate text-base font-semibold",
-              done ? "text-ink-muted" : "text-ink",
-            )}
-          >
-            {customer.name}
-          </span>
-          <span className="truncate text-sm text-ink-muted">
-            {customer.address}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          {grouped ? (
-            <Badge tone="neutral">{customer.accounts.length} accounts</Badge>
-          ) : null}
-          <CaretRight
-            aria-hidden
-            size={20}
-            weight="regular"
-            className="text-ink-subtle"
-          />
-        </span>
-      </span>
-      {customer.accounts.map((account) => (
-        <span
-          key={account.accountLoanId}
-          className={cn(
-            "flex items-center justify-between gap-3 px-4",
-            grouped
-              ? "border-t border-border py-2"
-              : "pb-[var(--row-padding-y)]",
-          )}
-          data-testid={`account-${account.accountCode}`}
-          data-state={local.rowState[account.accountLoanId]}
-        >
-          <span className="flex min-w-0 flex-col" data-numeric>
-            {grouped ? (
-              <span className="text-xs text-ink-muted">
-                {account.accountCode}
-              </span>
-            ) : null}
-            <span className="text-sm text-ink-muted">
-              Outstanding{" "}
-              <span data-testid="outstanding">
-                {formatCurrency(account.outstandingAmount)}
+      {grouped ? (
+        <>
+          <span className="flex items-start justify-between gap-3 border-b border-border bg-surface-sunken px-4 py-3">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <CustomerName name={customer.name} done={done} />
+              <span className="truncate text-sm text-ink-muted">
+                {customer.address}
               </span>
             </span>
+            <Badge tone="neutral" className="mt-0.5 shrink-0">
+              {customer.accounts.length} accounts
+            </Badge>
           </span>
-          <span className="flex shrink-0 flex-col items-end gap-1" data-numeric>
-            {account.collectedToday ? (
+          <span className="flex flex-col divide-y divide-border">
+            {customer.accounts.map((account) => (
               <span
-                className="text-base text-ink-muted"
-                data-testid="collected-today"
+                key={account.accountLoanId}
+                className="flex min-h-touch items-center gap-3 px-4 py-3"
+                data-testid={`account-${account.accountCode}`}
+                data-state={local.rowState[account.accountLoanId]}
               >
-                Collected{" "}
-                <span className="font-semibold">
-                  {formatCurrency(account.collectedToday.amount)}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-pill bg-accent"
+                    />
+                    <span
+                      className="truncate font-mono text-sm font-medium text-ink"
+                      data-numeric
+                    >
+                      {account.accountCode}
+                    </span>
+                  </span>
+                  <Outstanding account={account} />
+                  <RowStateMark
+                    state={local.rowState[account.accountLoanId] ?? "PENDING"}
+                  />
                 </span>
+                <Amount account={account} />
+                <Chevron />
               </span>
-            ) : (
-              <span
-                className="text-lg font-semibold text-ink"
-                data-testid="expected"
-              >
-                {formatCurrency(account.expectedAmount)}
-              </span>
-            )}
-            <RowStateMark
-              state={local.rowState[account.accountLoanId] ?? "PENDING"}
-            />
+            ))}
           </span>
-        </span>
-      ))}
+        </>
+      ) : (
+        customer.accounts.map((account) => (
+          <span
+            key={account.accountLoanId}
+            className="flex min-h-touch items-center gap-3 px-4 py-[var(--row-padding-y)]"
+            data-testid={`account-${account.accountCode}`}
+            data-state={local.rowState[account.accountLoanId]}
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <CustomerName name={customer.name} done={done} />
+              <span className="truncate text-sm text-ink-muted">
+                {customer.address}
+              </span>
+              <Outstanding account={account} />
+              <span className="mt-1.5 empty:hidden">
+                <RowStateMark
+                  state={local.rowState[account.accountLoanId] ?? "PENDING"}
+                />
+              </span>
+            </span>
+            <Amount account={account} />
+            <Chevron />
+          </span>
+        ))
+      )}
     </a>
+  );
+}
+
+function CustomerName({ name, done }: { name: string; done: boolean }) {
+  return (
+    <span
+      className={cn(
+        "truncate text-base font-semibold",
+        done ? "text-ink-muted" : "text-ink",
+      )}
+    >
+      {name}
+    </span>
+  );
+}
+
+function Outstanding({ account }: { account: Account }) {
+  return (
+    <span className="text-xs text-ink-muted" data-numeric>
+      Outstanding{" "}
+      <span data-testid="outstanding">
+        {formatCurrency(account.outstandingAmount)}
+      </span>
+    </span>
+  );
+}
+
+function Amount({ account }: { account: Account }) {
+  return account.collectedToday ? (
+    <span
+      className="flex shrink-0 flex-col items-end text-ink-muted"
+      data-testid="collected-today"
+      data-numeric
+    >
+      <span className="text-xs">Collected</span>{" "}
+      <span className="text-xl font-semibold text-ink-muted">
+        {formatCurrency(account.collectedToday.amount)}
+      </span>
+    </span>
+  ) : (
+    <span
+      className="shrink-0 text-xl font-semibold text-ink"
+      data-testid="expected"
+      data-numeric
+    >
+      {formatCurrency(account.expectedAmount)}
+    </span>
+  );
+}
+
+function Chevron() {
+  return (
+    <CaretRight
+      aria-hidden
+      size={20}
+      weight="regular"
+      className="shrink-0 text-ink-subtle"
+    />
   );
 }

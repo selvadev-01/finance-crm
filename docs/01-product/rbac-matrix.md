@@ -124,6 +124,10 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 
 > **Juniors never see profit or invested amounts** — matching Appendix A. A Junior sees what to collect and what remains, which is all their job requires. The margin on a customer's account is not their business, and exposing it in the field creates friction with customers.
 >
+> **As built (US-080, US-082):** the business overview (`GET /api/dashboards/overview`) and the Admin operational dashboard (`GET /api/dashboards/operations`) are both guarded by "Business totals". S-07 gives Admins the same overview as Super Admins, so no new permission was added. **As built (US-081):** the sector comparison (`GET /api/dashboards/sectors`) is guarded by "Sector totals" (`money.sectorTotals`). **As built (US-083):** the line dashboard (`GET /api/dashboards/line`) is guarded by "Line totals"; a Senior reads only their current line, and another line's id is `404`. It shows no invested or profit figures.
+>
+> **As built (US-084):** the reports (M12) are guarded by "Reports" (`report.view`) — Super Admin, Admin and Senior. The line-wise report (`GET /api/reports/line-wise`) reads the lines through scope, so a Senior gets their own line and another line's or sector's id is `404`; their own line's invested and profit are shown, as the rows above grant them. A Junior is `403`. **As built (US-085):** the investment overview (`GET /api/reports/investment`) is the same permission and the same scope, and shows a Senior their own line's invested, profit and profit earned — the "own line" cells of the invested and profit rows.
+>
 > Appendix A's "Limited" for Senior investment/profit is interpreted as **their own line only**. The raw ledger is Admin-and-above: it is the audit substrate, and a Senior reading it could infer business-wide figures from cash and capital accounts.
 
 ### Notifications (M10)
@@ -137,18 +141,20 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 
 ### Administration (M01, M13, M15)
 
-| Action                   | Super Admin | Admin |  Senior  | Junior |
-| ------------------------ | :---------: | :---: | :------: | :----: |
-| List staff               |      ✓      |   ✓   | own line |   —    |
-| Create staff             |      ✓      |   ✓   |    —     |   —    |
-| **Change staff role**    |      ✓      |   —   |    —     |   —    |
-| Suspend staff            |      ✓      |   ✓   |    —     |   —    |
-| Reset another's password |      ✓      |   ✓   |    —     |   —    |
-| **View audit log**       |      ✓      |   ✓   |    —     |   —    |
-| View an account's history |     ✓      |   ✓   |    —     |   —    |
-| **Change settings**      |      ✓      |   —   |    —     |   —    |
-| Declare holiday          |      ✓      |   ✓   |    —     |   —    |
-| View own profile         |      ✓      |   ✓   |    ✓     |   ✓    |
+| Action                    | Super Admin | Admin |  Senior  |  Junior  |
+| ------------------------- | :---------: | :---: | :------: | :------: |
+| List staff                |      ✓      |   ✓   | own line |    —     |
+| Create staff              |      ✓      |   ✓   |    —     |    —     |
+| **Change staff role**     |      ✓      |   —   |    —     |    —     |
+| Suspend staff             |      ✓      |   ✓   |    —     |    —     |
+| Reset another's password  |      ✓      |   ✓   |    —     |    —     |
+| **View audit log**        |      ✓      |   ✓   |    —     |    —     |
+| View an account's history |      ✓      |   ✓   |    —     |    —     |
+| **Change settings**       |      ✓      |   —   |    —     |    —     |
+| View holidays             |      ✓      |   ✓   | own line | own line |
+| Declare holiday           |      ✓      |   ✓   |    —     |    —     |
+| Remove a future holiday   |      ✓      |   ✓   |    —     |    —     |
+| View own profile          |      ✓      |   ✓   |    ✓     |    ✓     |
 
 > Role change is Super Admin only — otherwise an Admin could promote themselves. Settings likewise: they alter business rules, and changing one is not an operational act.
 
@@ -169,7 +175,10 @@ PDF §25 lists nine areas. What each role actually sees:
 | Notifications |      ✓      |   ✓   |     ✓     |         ✓         |
 | Reports       |      ✓      |   ✓   |  Limited  |         —         |
 | Settings      |      ✓      |   —   |     —     |         —         |
+| Holidays      |      ✓      |   ✓   | View only |   — (via route)   |
 
+> **Holidays** (US-093, `/settings/holidays`) is listed under System in the console for every console role: anyone can see which days carry no collections, and only Admin and above can declare or remove one. A Junior never sees the console shell, and learns of a holiday through the route's empty state and a notification.
+>
 > The Junior's "Dashboard" is not a dashboard — it is today's route list. Giving a Junior an aggregate screen would be noise, and the route is the only screen they need open all day. This is a deliberate departure from §25's uniform navigation.
 
 ---

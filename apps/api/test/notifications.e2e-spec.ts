@@ -214,9 +214,27 @@ describe('notifications (M10, e2e)', () => {
           pushed: false,
           emailed: false,
         },
-        { category: 'SUCCESS', enabled: true, locked: false, pushed: false, emailed: false },
-        { category: 'WARNING', enabled: true, locked: false, pushed: true, emailed: false },
-        { category: 'ALERT', enabled: true, locked: true, pushed: true, emailed: false },
+        {
+          category: 'SUCCESS',
+          enabled: true,
+          locked: false,
+          pushed: false,
+          emailed: false,
+        },
+        {
+          category: 'WARNING',
+          enabled: true,
+          locked: false,
+          pushed: true,
+          emailed: false,
+        },
+        {
+          category: 'ALERT',
+          enabled: true,
+          locked: true,
+          pushed: true,
+          emailed: false,
+        },
       ]),
     );
 

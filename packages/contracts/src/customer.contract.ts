@@ -51,7 +51,11 @@ export const referenceInputSchema = z.object({
   address: optionalText(300),
 });
 
-export const customerStatusSchema = z.enum(["ACTIVE", "INACTIVE", "BLACKLISTED"]);
+export const customerStatusSchema = z.enum([
+  "ACTIVE",
+  "INACTIVE",
+  "BLACKLISTED",
+]);
 
 export const customerReferenceSchema = z.object({
   id: idSchema,

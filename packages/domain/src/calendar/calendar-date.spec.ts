@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   addCalendarDays,
   dayOfWeek,
+  daysBetween,
   fromUtcMidnight,
   isCalendarDate,
   parseCalendarDate,
+  startOfMonth,
   toUtcMidnight,
 } from "./calendar-date.js";
 
@@ -76,6 +78,29 @@ describe("addCalendarDays", () => {
     ["2026-01-05", 365, "2027-01-05"],
   ])("%s + %i days is %s", (date, days, expected) => {
     expect(addCalendarDays(d(date), days)).toBe(expected);
+  });
+});
+
+describe("daysBetween", () => {
+  it.each([
+    ["2026-01-05", "2026-01-05", 0],
+    ["2026-01-05", "2026-01-06", 1],
+    ["2026-01-06", "2026-01-05", -1],
+    ["2028-02-01", "2028-03-01", 29],
+    ["2026-12-31", "2027-01-01", 1],
+  ])("from %s to %s is %i", (from, to, expected) => {
+    expect(daysBetween(d(from), d(to))).toBe(expected);
+  });
+});
+
+describe("startOfMonth", () => {
+  it.each([
+    ["2026-01-05", "2026-01-01"],
+    ["2026-01-01", "2026-01-01"],
+    ["2028-02-29", "2028-02-01"],
+    ["2026-12-31", "2026-12-01"],
+  ])("%s is in the month starting %s", (date, expected) => {
+    expect(startOfMonth(d(date))).toBe(expected);
   });
 });
 

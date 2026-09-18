@@ -35,6 +35,33 @@ export function canResetPasswordOf(
   return target.role !== "SUPER_ADMIN" || me.role === "SUPER_ADMIN";
 }
 
+/** `customer.create` and `account.create`: Admin and Super Admin. */
+export function canOnboard(role: Role): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+/**
+ * `money.businessTotals`: the business-wide dashboards — the overview (US-080)
+ * and the operational dashboard (US-082). Which one lands is the role's
+ * choice in `dashboard-screen.tsx`.
+ */
+export function seesBusinessTotals(role: Role): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+/** `money.sectorTotals`: the sector comparison (US-081). */
+export function seesSectorTotals(role: Role): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+/**
+ * `report.view`: the reports (M12) — Super Admin and Admin across the
+ * business, a Senior for their own line.
+ */
+export function seesReports(role: Role): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN" || role === "SENIOR";
+}
+
 /** Only Seniors and Juniors work lines (M03). */
 export function worksLines(role: Role): role is "SENIOR" | "JUNIOR" {
   return role === "SENIOR" || role === "JUNIOR";

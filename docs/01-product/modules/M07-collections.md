@@ -154,18 +154,19 @@ The most important screen in the application (see [personas](../../00-overview/p
 
 In `apps/api/src/collections/`, through `packages/contracts/src/collection.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
 
-| Endpoint                | Permission          | Answers                                                                                                   |
-| ----------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `POST /api/collections` | `collection.record` | `201` recorded; **`200` replay** with the stored body; `409 IDEMPOTENCY_KEY_REUSED`; `422 AMOUNT_EXCEEDS_OUTSTANDING`, `422 ACCOUNT_NOT_ACTIVE`; `404` off the Junior's line |
-| `GET /api/route`        | `collection.record` | Today's route for the Junior: day kind (WORKING / SUNDAY / HOLIDAY + name) and accounts due today by customer |
-| `GET /api/collections`  | `collection.view`   | S-16: history by business date (at most 93 days, else `400 INVALID_DATE_RANGE`), in `collectionScope` |
-| `GET /api/collections/:collectionId` | `collection.view` | S-17: the collection, its adjustments with approvals, the net, and what the caller may start |
-| `POST /api/collections/:collectionId/corrections` | `collection.requestCorrection` | `201` a pending adjustment to `correctedAmount`; `409 CORRECTION_PENDING`; `422 NO_CHANGE`, `AMOUNT_EXCEEDS_OUTSTANDING`, `ACCOUNT_NOT_CORRECTABLE`, `NOT_AN_ORIGINAL_COLLECTION` |
-| `POST /api/collections/:collectionId/reversal` | `collection.reverse` | As above, to ₹0 |
-| `GET /api/collection-approvals` | `collection.approveCorrection` | S-18: corrections by decision, pending by default, each with `canDecide` |
-| `POST /api/collection-approvals/:approvalId/decision` | `collection.approveCorrection` | `200` APPROVED or REJECTED; `403 SELF_APPROVAL`; `409 APPROVAL_ALREADY_DECIDED`; `422` when the outstanding no longer allows it |
+| Endpoint                                              | Permission                     | Answers                                                                                                                                                                           |
+| ----------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/collections`                               | `collection.record`            | `201` recorded; **`200` replay** with the stored body; `409 IDEMPOTENCY_KEY_REUSED`; `422 AMOUNT_EXCEEDS_OUTSTANDING`, `422 ACCOUNT_NOT_ACTIVE`; `404` off the Junior's line      |
+| `GET /api/route`                                      | `collection.record`            | Today's route for the Junior: day kind (WORKING / SUNDAY / HOLIDAY + name) and accounts due today by customer                                                                     |
+| `GET /api/collections`                                | `collection.view`              | S-16: history by business date (at most 93 days, else `400 INVALID_DATE_RANGE`), in `collectionScope`                                                                             |
+| `GET /api/collections/:collectionId`                  | `collection.view`              | S-17: the collection, its adjustments with approvals, the net, and what the caller may start                                                                                      |
+| `POST /api/collections/:collectionId/corrections`     | `collection.requestCorrection` | `201` a pending adjustment to `correctedAmount`; `409 CORRECTION_PENDING`; `422 NO_CHANGE`, `AMOUNT_EXCEEDS_OUTSTANDING`, `ACCOUNT_NOT_CORRECTABLE`, `NOT_AN_ORIGINAL_COLLECTION` |
+| `POST /api/collections/:collectionId/reversal`        | `collection.reverse`           | As above, to ₹0                                                                                                                                                                   |
+| `GET /api/collection-approvals`                       | `collection.approveCorrection` | S-18: corrections by decision, pending by default, each with `canDecide`                                                                                                          |
+| `POST /api/collection-approvals/:approvalId/decision` | `collection.approveCorrection` | `200` APPROVED or REJECTED; `403 SELF_APPROVAL`; `409 APPROVAL_ALREADY_DECIDED`; `422` when the outstanding no longer allows it                                                   |
 
 **One transaction per collection** (BR-18), after a `SELECT … FOR UPDATE` on the account row so collections on one account are serialised:
+
 - The collection is written with `lineId` from the customer's line, `collectedByUserId` from the session, `expectedAmount = min(D, outstanding)` and `businessDate = toBusinessDate(capturedAt)`, all frozen at write.
 - The slot it answers becomes `COLLECTED` when the amount meets the expected, else `PARTIAL`, which includes `NO_PAYMENT`.
 - The account completes at zero outstanding: `COMPLETED`, `actualCompletionDate`, remaining slots `CANCELLED`. Otherwise every `PENDING` slot is replaced by a regenerated tail from the business date (BR-06).
@@ -173,6 +174,7 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 - The audit entry is written, and the `idempotency_key` row holding the response.
 
 **Decided 2026-09-13:**
+
 - **Which slot is answered.** The earliest pending slot due on or before the business date, else the next pending slot. Cash is never refused for want of a slot.
 - **Device clocks.** A `capturedAt` more than 15 minutes ahead of the server is replaced by server time for the business date and logged. The original `capturedAt` is stored. Old dates (late syncs) are accepted.
 - **The route's permission.** `GET /api/route` reuses `collection.record`, because the route is the data a Junior records against. The RBAC matrix has no separate row for it.
@@ -182,6 +184,7 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 **Tests:** successful writes are proven in Tier 1 only, because collection and ledger rows reject DELETE. The HTTP tier covers roles, validation and refusals that write nothing. The account row lock has no test: exercising it needs two committed collections.
 
 **Corrections** (`correction.service.ts`, decided 2026-09-14):
+
 - **Request.** In one transaction under the account row lock: the original must be in scope, an `ORIGINAL`, on an `ACTIVE` or `COMPLETED` account, with no pending correction. The `ADJUSTMENT` is written `PENDING_APPROVAL` for `correctedAmount − net`, with its `collection_approval`, and audited. Nothing else moves.
 - **Approve.** Refused to the requester whatever their role. Under the lock, the decision and the outstanding are read again. `AccountSettlement` moves the balances and either completes the account, regenerates the tail from the approval date, or **reopens** a completed account that a negative correction leaves owing. The ledger posts an `ADJUSTMENT` transaction dated the adjustment's business date: the original collector's `CASH_IN_HAND` against the receivable, and profit via `profitForCollection` on the running total. The status becomes `CONFIRMED`; the approval is recorded and audited.
 - **Reject.** The status becomes `REJECTED`; the approval is recorded and audited; nothing else moves.

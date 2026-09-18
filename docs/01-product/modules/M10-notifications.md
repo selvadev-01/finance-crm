@@ -124,21 +124,23 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
 - **Raising.** `NotificationService.raise` refuses to run outside a transaction and is called inside the transaction of its event, so a rolled-back collection has no notification and no delivery rows. It skips the person who caused the event, drops a muted non-ALERT category per recipient, and writes one `notification` per recipient. For `ALERT` and `WARNING` it also writes one `notification_outbox` row per active device whose provider `PUSH_PROVIDER` allows.
 - **Events and recipients** live in one place, `EventNotices`. "Senior of the line" is the Senior assigned on today's business date.
 
-  | Event | Category | Recipients | Raised by |
-  | --- | --- | --- | --- |
-  | `LOW_COLLECTION`, `NO_PAYMENT_COLLECTION` | `ALERT` | Senior of the line | recording a collection |
-  | `EXTRA_COLLECTION` | `WARNING` | Senior of the line | recording a collection |
-  | `ACCOUNT_COMPLETED` | `SUCCESS` | Senior of the line | the collection that completes it |
-  | `APPROVAL_REQUESTED` | `WARNING` | the line's Senior for a Junior's correction; the Senior and Admins for a Senior's request or any reversal | US-044 |
-  | `NEW_ASSIGNMENT` | `INFORMATION` | the person assigned, the Seniors of the new and previous lines | M03 |
-  | `MISSED_COLLECTION` | `ALERT` | Senior of the line — one summary per close with the count | M08 close |
-  | `DAY_REOPENED` | `WARNING` | Senior of the line | BR-16a late collection or approval |
-  | `HANDOVER_SUBMITTED` | `INFORMATION` | the receiver | S-06 |
-  | `HANDOVER_DISPUTED` | `ALERT` | sender, receiver, Admins | US-063 |
-  | `DAY_CLOSE_DISCREPANCY` | `ALERT` | Senior of the line, Admins — when acknowledged cash differs from the record | US-062 |
-  | `RECONCILIATION_MISMATCH` | `ALERT` | Admins and Super Admins, one per run; links to the audit log | US-095 |
+  | Event                                     | Category      | Recipients                                                                                                | Raised by                          |
+  | ----------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+  | `LOW_COLLECTION`, `NO_PAYMENT_COLLECTION` | `ALERT`       | Senior of the line                                                                                        | recording a collection             |
+  | `EXTRA_COLLECTION`                        | `WARNING`     | Senior of the line                                                                                        | recording a collection             |
+  | `ACCOUNT_COMPLETED`                       | `SUCCESS`     | Senior of the line                                                                                        | the collection that completes it   |
+  | `APPROVAL_REQUESTED`                      | `WARNING`     | the line's Senior for a Junior's correction; the Senior and Admins for a Senior's request or any reversal | US-044                             |
+  | `NEW_ASSIGNMENT`                          | `INFORMATION` | the person assigned, the Seniors of the new and previous lines                                            | M03                                |
+  | `MISSED_COLLECTION`                       | `ALERT`       | Senior of the line — one summary per close with the count                                                 | M08 close                          |
+  | `DAY_REOPENED`                            | `WARNING`     | Senior of the line                                                                                        | BR-16a late collection or approval |
+  | `HANDOVER_SUBMITTED`                      | `INFORMATION` | the receiver                                                                                              | S-06                               |
+  | `HANDOVER_DISPUTED`                       | `ALERT`       | sender, receiver, Admins                                                                                  | US-063                             |
+  | `DAY_CLOSE_DISCREPANCY`                   | `ALERT`       | Senior of the line, Admins — when acknowledged cash differs from the record                               | US-062                             |
+  | `RECONCILIATION_MISMATCH`                 | `ALERT`       | Admins and Super Admins, one per run; links to the audit log                                              | US-095                             |
+  | `HOLIDAY_DECLARED`, `HOLIDAY_REMOVED`     | `WARNING`     | Seniors and Juniors assigned today to the active lines the holiday covers (a sector's, or every line)     | US-093 (M06)                       |
 
-  `NO_PAYMENT_COLLECTION`, `HANDOVER_SUBMITTED`, `HANDOVER_DISPUTED`, `DAY_REOPENED` and `RECONCILIATION_MISMATCH` were added to the enum (migration `notification_events`). Not raised: new customer (M04), day closed with no discrepancy, handover acknowledged to the sender.
+  `NO_PAYMENT_COLLECTION`, `HANDOVER_SUBMITTED`, `HANDOVER_DISPUTED`, `DAY_REOPENED` and `RECONCILIATION_MISMATCH` were added to the enum (migration `notification_events`); `HOLIDAY_DECLARED` and `HOLIDAY_REMOVED` on 2026-09-17 (migration `holiday_events`). A holiday notice links Seniors to `/settings/holidays` and Juniors to `/route`. Not raised: new customer (M04), day closed with no discrepancy, handover acknowledged to the sender.
+
 - **Delivery is an outbox drained every minute**, not a job per notification: the outbox rows are the transactional record, and the `dispatch-notifications` job (M14) calls `PushDispatchService.dispatch` per organization. It claims due `PENDING` rows with `FOR UPDATE SKIP LOCKED`, counts the attempt and leases the row for five minutes, sends through the subscription's provider, then records `SENT`; `PENDING` with the next delay (1 min, 5 min, 30 min, 2 h); or `FAILED` with the error. A `gone` answer, or a fifth failure, deactivates the subscription and expires its other pending rows. Push adds up to a minute of latency to the in-app row, which is immediate.
 - **Providers.** `packages/notifications`: `WebPushProvider` (web-push 3.6.7; 404/410 gone, 429/5xx/network retry, other 4xx failed) and `FcmProvider` (firebase-admin 14.4.0; unregistered/invalid token gone, unavailable/quota/internal retry), each with an injectable transport; `outcome()` holds the retry table once. A provider that is selected but not configured answers `retry`. Configuration refuses to start without the keys of the selected provider.
 - **Preferences.** `notification_preference` holds one row per user and category that differs from the default (on). `ALERT` cannot be switched off — `422 ALERT_ALWAYS_ON` at the API, a CHECK in the database.
@@ -164,17 +166,20 @@ Design and rationale in [notifications.md#email](../../02-architecture/notificat
   - `PENDING`, with the push backoff (1, 5, 30 and 120 minutes)
   - `FAILED`, with the server's reply as `lastError`
   - `EXPIRED`, when the recipient is no longer an active staff member
-  
+
   With no provider configured, queued rows are left alone. A failure is logged with the row id and attempt count only.
+
 - **Provider.** `SmtpEmailProvider` in `packages/notifications` uses Nodemailer 10.0.10: a pooled transport with 30-second timeouts, and an injectable transport for tests. It classifies failures as follows:
   - An SMTP 4xx reply is retried; a 5xx reply fails.
   - Without a reply code, connection, DNS, TLS and login errors are retried, and envelope and message errors fail.
-  
+
   A login failure is retried so an operator can fix the password before the attempts run out. That holds even when the rejection arrives as a 5xx reply, which is how Gmail sends `535 5.7.8`: Nodemailer's `EAUTH` code is checked before the reply code.
+
 - **Checking the settings.** `pnpm --filter api email:test <address>`, after `pnpm build`, sends one email straight through the configured server, with no database, queue or worker, and prints the server's reply if it is refused. It was proven against Gmail SMTP on 2026-09-15.
 - **Content.** `email-templates.ts` holds pure functions. Every email has a plain-text part and a minimal HTML part with inline styles, no images and no tracking. Every value is HTML-escaped, and subjects are kept to one line.
 
 **Tests.**
+
 - `packages/notifications/src/smtp-email-provider.spec.ts`: message shape and failure classification.
 - Tier 1 `test/email/email.spec.ts`:
   - queueing refused outside a transaction

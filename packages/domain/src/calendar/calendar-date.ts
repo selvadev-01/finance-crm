@@ -82,6 +82,16 @@ export function addCalendarDays(
   return fromEpochDay(toEpochDay(date) + days);
 }
 
+/** Whole days from `from` to `to`: `0` for the same date, negative when `to` is earlier. */
+export function daysBetween(from: CalendarDate, to: CalendarDate): number {
+  return toEpochDay(to) - toEpochDay(from);
+}
+
+/** The first day of `date`'s month — a report's default start (M12). */
+export function startOfMonth(date: CalendarDate): CalendarDate {
+  return `${date.slice(0, 8)}01` as CalendarDate;
+}
+
 /** `0` = Sunday … `6` = Saturday. */
 export function dayOfWeek(date: CalendarDate): number {
   // 1970-01-01 was a Thursday (4). The double modulo keeps pre-1970 dates positive.

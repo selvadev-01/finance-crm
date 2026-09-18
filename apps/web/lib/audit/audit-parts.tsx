@@ -1,27 +1,20 @@
 "use client";
 
 import type { AuditAction, AuditEntry, AuditedTable } from "@repo/contracts";
-import { Badge, type BadgeProps } from "@repo/ui";
 import Link from "next/link";
 
-export const ACTION_LABEL: Record<AuditAction, string> = {
-  CREATE: "Created",
-  UPDATE: "Changed",
-  DELETE: "Deleted",
-  APPROVE: "Approved",
-  REJECT: "Rejected",
-  LOGIN: "Sign-in",
-  REOPEN_DAY: "Day reopened",
-};
+import { StatusBadge, statusLabel } from "../../components/status-badge";
+import { formatTimestamp } from "../format";
 
-const ACTION_TONE: Record<AuditAction, NonNullable<BadgeProps["tone"]>> = {
-  CREATE: "positive",
-  UPDATE: "info",
-  DELETE: "critical",
-  APPROVE: "positive",
-  REJECT: "critical",
-  LOGIN: "neutral",
-  REOPEN_DAY: "warning",
+/** The action's words, from the status registry (`auditAction`). */
+export const ACTION_LABEL: Record<AuditAction, string> = {
+  CREATE: statusLabel("auditAction", "CREATE"),
+  UPDATE: statusLabel("auditAction", "UPDATE"),
+  DELETE: statusLabel("auditAction", "DELETE"),
+  APPROVE: statusLabel("auditAction", "APPROVE"),
+  REJECT: statusLabel("auditAction", "REJECT"),
+  LOGIN: statusLabel("auditAction", "LOGIN"),
+  REOPEN_DAY: statusLabel("auditAction", "REOPEN_DAY"),
 };
 
 export const TABLE_LABEL: Record<AuditedTable, string> = {
@@ -36,6 +29,7 @@ export const TABLE_LABEL: Record<AuditedTable, string> = {
   day_close: "Day close",
   cash_handover: "Cash handover",
   ledger_account: "Ledger account",
+  holiday: "Holiday",
 };
 
 export function tableLabel(table: string): string {
@@ -52,36 +46,37 @@ const ENTITY_HREF: Partial<Record<AuditedTable, (id: string) => string>> = {
   staff_profile: (id) => `/team/${id}`,
 };
 
-/** Audit times are instants, shown in the business time zone. */
-export const WHEN = new Intl.DateTimeFormat("en-IN", {
-  timeZone: "Asia/Kolkata",
-  dateStyle: "medium",
-  timeStyle: "medium",
-});
+/**
+ * Audit times are instants, shown in the business time zone.
+ *
+ * @deprecated Call `formatTimestamp(instant)` from `lib/format.ts`. Kept, as a
+ * thin wrapper over it, for callers not yet moved.
+ */
+export const WHEN = {
+  format: (instant: Date | string): string => formatTimestamp(instant, "full"),
+};
 
+/** An audit action, in the tone the status registry gives it. */
 export function ActionBadge({ action }: { action: AuditAction }) {
-  // Warning and info words fail AA on their subtle fills (design-system.md).
-  return (
-    <Badge tone={ACTION_TONE[action]} className="text-ink">
-      {ACTION_LABEL[action]}
-    </Badge>
-  );
+  return <StatusBadge kind="auditAction" value={action} />;
 }
 
 export function EntityRef({ table, id }: { table: string; id: string }) {
   const href = ENTITY_HREF[table as AuditedTable]?.(id);
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
-      <span className="text-sm text-ink">{tableLabel(table)}</span>
+      <span className="text-body text-ink">{tableLabel(table)}</span>
       {href ? (
         <Link
           href={href}
-          className="font-mono text-2xs break-all text-accent hover:underline"
+          className="font-mono text-2xs break-all text-accent underline-offset-4 hover:underline"
         >
           {id}
         </Link>
       ) : (
-        <span className="font-mono text-2xs break-all text-ink-muted">{id}</span>
+        <span className="font-mono text-2xs break-all text-ink-muted">
+          {id}
+        </span>
       )}
     </span>
   );
@@ -107,22 +102,22 @@ export function SnapshotDiff({
   ];
   if (fields.length === 0)
     return (
-      <p className="text-sm text-ink-muted">No field values were recorded.</p>
+      <p className="text-body text-ink-muted">No field values were recorded.</p>
     );
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-md text-left text-sm">
+      <table className="w-full min-w-md border-collapse text-left text-body">
         <thead>
-          <tr className="text-2xs tracking-wide text-ink-muted uppercase">
-            <th scope="col" className="py-1 pr-4 font-medium">
+          <tr className="border-b border-border text-2xs tracking-wider text-ink-subtle uppercase">
+            <th scope="col" className="py-1.5 pr-4 font-medium">
               Field
             </th>
             {before ? (
-              <th scope="col" className="py-1 pr-4 font-medium">
+              <th scope="col" className="py-1.5 pr-4 font-medium">
                 Before
               </th>
             ) : null}
-            <th scope="col" className="py-1 font-medium">
+            <th scope="col" className="py-1.5 font-medium">
               {before ? "After" : "Value"}
             </th>
           </tr>
@@ -133,7 +128,10 @@ export function SnapshotDiff({
             const now = after?.[field];
             const changed = before !== null && show(was) !== show(now);
             return (
-              <tr key={field} className="border-t border-border align-top">
+              <tr
+                key={field}
+                className="border-b border-border align-top last:border-b-0"
+              >
                 <th
                   scope="row"
                   className="py-1.5 pr-4 font-mono text-2xs font-normal text-ink-muted"
@@ -141,15 +139,15 @@ export function SnapshotDiff({
                   {field}
                 </th>
                 {before ? (
-                  <td className="py-1.5 pr-4 break-all text-ink-muted">
+                  <td className="py-1.5 pr-4 break-all text-ink-muted tabular-nums">
                     {show(was)}
                   </td>
                 ) : null}
                 <td
                   className={
                     changed
-                      ? "py-1.5 break-all font-medium text-ink"
-                      : "py-1.5 break-all text-ink"
+                      ? "py-1.5 break-all font-medium text-ink tabular-nums"
+                      : "py-1.5 break-all text-ink tabular-nums"
                   }
                 >
                   {show(now)}

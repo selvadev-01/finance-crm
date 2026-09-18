@@ -62,12 +62,12 @@ Role is single-valued — a person is a Senior or a Junior, not both. Multi-role
 
 ### `line`
 
-| Column     | Type      | Null | Notes                                          |
-| ---------- | --------- | ---- | ---------------------------------------------- |
-| `sectorId` | `String`  | No   | FK → `sector.id`                               |
+| Column     | Type      | Null | Notes                                                    |
+| ---------- | --------- | ---- | -------------------------------------------------------- |
+| `sectorId` | `String`  | No   | FK → `sector.id`                                         |
 | `code`     | `String`  | No   | Unique within the organization, not per sector (`LN-07`) |
-| `name`     | `String`  | No   |                                                |
-| `isActive` | `Boolean` | No   | Default `true`                                 |
+| `name`     | `String`  | No   |                                                          |
+| `isActive` | `Boolean` | No   | Default `true`                                           |
 
 A line cannot be deactivated while it has `ACTIVE` accounts — _service-enforced_, since it needs a count.
 
@@ -129,25 +129,25 @@ Multiple references per customer are allowed; at least one is required at onboar
 
 The loan. Called "Account" everywhere in the UI.
 
-| Column                 | Type                | Null | Notes                                                                |
-| ---------------------- | ------------------- | ---- | -------------------------------------------------------------------- |
+| Column                 | Type                | Null | Notes                                                                                           |
+| ---------------------- | ------------------- | ---- | ----------------------------------------------------------------------------------------------- |
 | `accountCode`          | `String`            | No   | Unique (`ACC-2026-00892`). API-issued: creation year + `account_code_seq`, which never restarts |
-| `customerId`           | `String`            | No   | FK → `customer.id`                                                   |
-| `lineId`               | `String`            | No   | FK → `line.id`. Line at creation                                     |
-| `accountAmount`        | `Decimal`           | No   | `A`. Immutable after disbursement                                    |
-| `investedAmount`       | `Decimal`           | No   | `I`. Immutable after disbursement                                    |
-| `profitAmount`         | `Decimal`           | No   | `P`. Derived (BR-01); check constraint enforces `= A - I`            |
-| `dailyAmount`          | `Decimal`           | No   | `D`                                                                  |
-| `termDays`             | `Int`               | No   | `N`. Default `100`                                                   |
-| `disbursementDate`     | `DateTime @db.Date` | No   | Day 0, not a collection day (BR-03)                                  |
-| `firstCollectionDate`  | `DateTime @db.Date` | No   | Next working day after disbursement                                  |
-| `targetCompletionDate` | `DateTime @db.Date` | No   | Recomputed after every collection (BR-06)                            |
-| `actualCompletionDate` | `DateTime @db.Date` | Yes  | Set when status → `COMPLETED`                                        |
-| `collectedAmount`      | `Decimal`           | No   | Denormalised cache, default `0`. Reconciled nightly                  |
-| `outstandingAmount`    | `Decimal`           | No   | Cache of `A − collected`                                             |
-| `status`               | `AccountStatus`     | No   | `PENDING` \| `ACTIVE` \| `COMPLETED` \| `DEFAULTED` \| `WRITTEN_OFF` |
-| `isOverdue`            | `Boolean`           | No   | Flag on `ACTIVE`, not a status (BR-05). Set by scheduled job         |
-| `closureNote`          | `String`            | Yes  | Required for `DEFAULTED` / `WRITTEN_OFF`                             |
+| `customerId`           | `String`            | No   | FK → `customer.id`                                                                              |
+| `lineId`               | `String`            | No   | FK → `line.id`. Line at creation                                                                |
+| `accountAmount`        | `Decimal`           | No   | `A`. Immutable after disbursement                                                               |
+| `investedAmount`       | `Decimal`           | No   | `I`. Immutable after disbursement                                                               |
+| `profitAmount`         | `Decimal`           | No   | `P`. Derived (BR-01); check constraint enforces `= A - I`                                       |
+| `dailyAmount`          | `Decimal`           | No   | `D`                                                                                             |
+| `termDays`             | `Int`               | No   | `N`. Default `100`                                                                              |
+| `disbursementDate`     | `DateTime @db.Date` | No   | Day 0, not a collection day (BR-03)                                                             |
+| `firstCollectionDate`  | `DateTime @db.Date` | No   | Next working day after disbursement                                                             |
+| `targetCompletionDate` | `DateTime @db.Date` | No   | Recomputed after every collection (BR-06)                                                       |
+| `actualCompletionDate` | `DateTime @db.Date` | Yes  | Set when status → `COMPLETED`                                                                   |
+| `collectedAmount`      | `Decimal`           | No   | Denormalised cache, default `0`. Reconciled nightly                                             |
+| `outstandingAmount`    | `Decimal`           | No   | Cache of `A − collected`                                                                        |
+| `status`               | `AccountStatus`     | No   | `PENDING` \| `ACTIVE` \| `COMPLETED` \| `DEFAULTED` \| `WRITTEN_OFF`                            |
+| `isOverdue`            | `Boolean`           | No   | Flag on `ACTIVE`, not a status (BR-05). Set by scheduled job                                    |
+| `closureNote`          | `String`            | Yes  | Required for `DEFAULTED` / `WRITTEN_OFF`                                                        |
 
 Constraints:
 
@@ -187,24 +187,24 @@ Constraints: `sequence >= 1`; `expectedAmount > 0`.
 
 **Append-only.** No update path exists in the API (BR-14).
 
-| Column                | Type                | Null | Notes                                                                                                        |
-| --------------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
-| `idempotencyKey`      | `String`            | No   | **Unique.** Client-generated UUID v4 at record time (BR-13)                                                  |
-| `accountLoanId`       | `String`            | No   | FK → `account_loan.id`. **Mandatory, never inferred** — a customer may hold several active accounts (BR-01a) |
-| `accountScheduleId`   | `String`            | Yes  | FK → `account_schedule.id`. Null for adjustments                                                             |
-| `lineId`              | `String`            | No   | **Frozen at write** (BR-15)                                                                                  |
-| `collectedByUserId`   | `String`            | No   | **Frozen at write.** Who physically collected                                                                |
-| `businessDate`        | `DateTime @db.Date` | No   | `Asia/Kolkata` (BR-12)                                                                                       |
-| `capturedAt`          | `DateTime`          | No   | Device clock at recording — may precede `syncedAt` by hours                                                  |
-| `syncedAt`            | `DateTime`          | No   | Server receipt. Equals `capturedAt` when online                                                              |
-| `expectedAmount`      | `Decimal`           | No   | Snapshot; not recomputable later                                                                             |
-| `amount`              | `Decimal`           | No   | Actually collected. `0` is valid (`NO_PAYMENT`); negative only on `ADJUSTMENT`                               |
-| `variance`            | `Decimal`           | No   | `amount − expectedAmount`                                                                                    |
-| `classification`      | `Classification`    | No   | `CORRECT` \| `LOW` \| `EXTRA` \| `NO_PAYMENT` (BR-08)                                                        |
-| `entryType`           | `EntryType`         | No   | `ORIGINAL` \| `ADJUSTMENT`                                                                                   |
-| `adjustsCollectionId` | `String`            | Yes  | Self-FK. Required when `entryType = ADJUSTMENT`                                                              |
-| `status`              | `CollectionStatus`  | No   | `PENDING_APPROVAL` \| `CONFIRMED` \| `REVERSED` \| `REJECTED`. `REVERSED` is unused: a reversal is an adjustment                                                              |
-| `note`                | `String`            | Yes  |                                                                                                              |
+| Column                | Type                | Null | Notes                                                                                                            |
+| --------------------- | ------------------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
+| `idempotencyKey`      | `String`            | No   | **Unique.** Client-generated UUID v4 at record time (BR-13)                                                      |
+| `accountLoanId`       | `String`            | No   | FK → `account_loan.id`. **Mandatory, never inferred** — a customer may hold several active accounts (BR-01a)     |
+| `accountScheduleId`   | `String`            | Yes  | FK → `account_schedule.id`. Null for adjustments                                                                 |
+| `lineId`              | `String`            | No   | **Frozen at write** (BR-15)                                                                                      |
+| `collectedByUserId`   | `String`            | No   | **Frozen at write.** Who physically collected                                                                    |
+| `businessDate`        | `DateTime @db.Date` | No   | `Asia/Kolkata` (BR-12)                                                                                           |
+| `capturedAt`          | `DateTime`          | No   | Device clock at recording — may precede `syncedAt` by hours                                                      |
+| `syncedAt`            | `DateTime`          | No   | Server receipt. Equals `capturedAt` when online                                                                  |
+| `expectedAmount`      | `Decimal`           | No   | Snapshot; not recomputable later                                                                                 |
+| `amount`              | `Decimal`           | No   | Actually collected. `0` is valid (`NO_PAYMENT`); negative only on `ADJUSTMENT`                                   |
+| `variance`            | `Decimal`           | No   | `amount − expectedAmount`                                                                                        |
+| `classification`      | `Classification`    | No   | `CORRECT` \| `LOW` \| `EXTRA` \| `NO_PAYMENT` (BR-08)                                                            |
+| `entryType`           | `EntryType`         | No   | `ORIGINAL` \| `ADJUSTMENT`                                                                                       |
+| `adjustsCollectionId` | `String`            | Yes  | Self-FK. Required when `entryType = ADJUSTMENT`                                                                  |
+| `status`              | `CollectionStatus`  | No   | `PENDING_APPROVAL` \| `CONFIRMED` \| `REVERSED` \| `REJECTED`. `REVERSED` is unused: a reversal is an adjustment |
+| `note`                | `String`            | Yes  |                                                                                                                  |
 
 No `updatedAt` — nothing updates. `status` transitions are the sole exception and are themselves audited.
 
@@ -258,19 +258,19 @@ Constraints: `discrepancy = cashReceivedTotal - collectedTotal`; `expectedTotal 
 
 ### `cash_handover`
 
-| Column           | Type             | Null | Notes                                        |
-| ---------------- | ---------------- | ---- | -------------------------------------------- |
-| `dayCloseId`     | `String`         | No   | FK → `day_close.id`                          |
-| `fromUserId`     | `String`         | No   | Junior, or Senior on the second hop          |
-| `toUserId`       | `String`         | No   | Senior, or Admin                             |
-| `declaredAmount` | `Decimal`        | No   | Physically counted                           |
-| `systemAmount`   | `Decimal`        | No   | What Rasi recorded for that person and date  |
-| `discrepancy`    | `Decimal`        | No   | `declaredAmount − systemAmount`              |
-| `status`         | `HandoverStatus` | No   | `PENDING` \| `ACKNOWLEDGED` \| `DISPUTED`    |
-| `acknowledgedAt` | `DateTime`       | Yes  | Cash has not moved until this is set (BR-17) |
+| Column           | Type             | Null | Notes                                                                                            |
+| ---------------- | ---------------- | ---- | ------------------------------------------------------------------------------------------------ |
+| `dayCloseId`     | `String`         | No   | FK → `day_close.id`                                                                              |
+| `fromUserId`     | `String`         | No   | Junior, or Senior on the second hop                                                              |
+| `toUserId`       | `String`         | No   | Senior, or Admin                                                                                 |
+| `declaredAmount` | `Decimal`        | No   | Physically counted                                                                               |
+| `systemAmount`   | `Decimal`        | No   | What Rasi recorded for that person and date                                                      |
+| `discrepancy`    | `Decimal`        | No   | `declaredAmount − systemAmount`                                                                  |
+| `status`         | `HandoverStatus` | No   | `PENDING` \| `ACKNOWLEDGED` \| `DISPUTED`                                                        |
+| `acknowledgedAt` | `DateTime`       | Yes  | Cash has not moved until this is set (BR-17)                                                     |
 | `hop`            | `HandoverHop`    | No   | `JUNIOR_TO_SENIOR` \| `SENIOR_TO_OFFICE`. Only the first counts towards the line's cash received |
-| `note`           | `String`         | Yes  | The sender's explanation; required when `discrepancy ≠ 0` (S-06) |
-| `disputeNote`    | `String`         | Yes  | Required exactly when `status = DISPUTED`    |
+| `note`           | `String`         | Yes  | The sender's explanation; required when `discrepancy ≠ 0` (S-06)                                 |
+| `disputeNote`    | `String`         | Yes  | Required exactly when `status = DISPUTED`                                                        |
 
 Constraints: `discrepancy = declaredAmount - systemAmount`; `declaredAmount >= 0`; `fromUserId <> toUserId`; BR-17 `status = ACKNOWLEDGED` if and only if `acknowledgedAt` is set.
 
@@ -280,12 +280,12 @@ Further constraints (US-061…US-063): `cash_handover_discrepancy_note_check` �
 
 What a Junior's phone last reported about its outbox, so a Senior closing the day knows whose phone may still hold that day's collections (US-060). One row per staff member, replaced on every report.
 
-| Column           | Type       | Null | Notes                                             |
-| ---------------- | ---------- | ---- | ------------------------------------------------- |
-| `staffProfileId` | `String`   | No   | Unique. FK → `staff_profile.id`, cascade delete   |
-| `unsentCount`    | `Int`      | No   | Collections on the phone not yet acknowledged     |
-| `oldestUnsentAt` | `DateTime` | Yes  | `capturedAt` of the oldest of them                |
-| `reportedAt`     | `DateTime` | No   | Server time of the report                         |
+| Column           | Type       | Null | Notes                                           |
+| ---------------- | ---------- | ---- | ----------------------------------------------- |
+| `staffProfileId` | `String`   | No   | Unique. FK → `staff_profile.id`, cascade delete |
+| `unsentCount`    | `Int`      | No   | Collections on the phone not yet acknowledged   |
+| `oldestUnsentAt` | `DateTime` | Yes  | `capturedAt` of the oldest of them              |
+| `reportedAt`     | `DateTime` | No   | Server time of the report                       |
 
 Constraints: `unsentCount >= 0`; `oldestUnsentAt` is null exactly when `unsentCount = 0`.
 
@@ -310,14 +310,14 @@ Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the
 
 ### `ledger_account`
 
-| Column          | Type                | Null | Notes                                                                                                        |
-| --------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
-| `organizationId` | `String`           | No   | FK → `organization.id` (added 2026-09-13)                                                                    |
-| `accountType`   | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` |
-| `ownerUserId`   | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                  |
-| `accountLoanId` | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                               |
-| `normalBalance` | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                          |
-| `balance`       | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                          |
+| Column           | Type                | Null | Notes                                                                                                        |
+| ---------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
+| `organizationId` | `String`            | No   | FK → `organization.id` (added 2026-09-13)                                                                    |
+| `accountType`    | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` |
+| `ownerUserId`    | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                  |
+| `accountLoanId`  | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                               |
+| `normalBalance`  | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                          |
+| `balance`        | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                          |
 
 One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` and `EARNED_PROFIT` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
 
@@ -352,15 +352,15 @@ A **deferred** constraint trigger enforces Σ debits = Σ credits per transactio
 
 ### `notification`
 
-| Column      | Type                   | Null | Notes                                                                                                                                                       |
-| ----------- | ---------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`    | `String`               | No   | Recipient                                                                                                                                                   |
-| `category`  | `NotificationCategory` | No   | `INFORMATION` \| `SUCCESS` \| `WARNING` \| `ALERT` (PDF §24)                                                                                                |
-| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` \| `NO_PAYMENT_COLLECTION` \| `HANDOVER_SUBMITTED` \| `HANDOVER_DISPUTED` \| `DAY_REOPENED` \| `RECONCILIATION_MISMATCH` (the last five added by M10, 2026-09-15) |
-| `title`     | `String`               | No   |                                                                                                                                                             |
-| `body`      | `String`               | No   |                                                                                                                                                             |
-| `payload`   | `Json`                 | Yes  | Deep-link context — `entityType`, `entityId` and `url`                                                                                                      |
-| `readAt`    | `DateTime`             | Yes  |                                                                                                                                                             |
+| Column      | Type                   | Null | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`    | `String`               | No   | Recipient                                                                                                                                                                                                                                                                                                                                                                                           |
+| `category`  | `NotificationCategory` | No   | `INFORMATION` \| `SUCCESS` \| `WARNING` \| `ALERT` (PDF §24)                                                                                                                                                                                                                                                                                                                                        |
+| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` \| `NO_PAYMENT_COLLECTION` \| `HANDOVER_SUBMITTED` \| `HANDOVER_DISPUTED` \| `DAY_REOPENED` \| `RECONCILIATION_MISMATCH` \| `HOLIDAY_DECLARED` \| `HOLIDAY_REMOVED` (five added by M10, 2026-09-15; the last two by US-093, 2026-09-17) |
+| `title`     | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `body`      | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `payload`   | `Json`                 | Yes  | Deep-link context — `entityType`, `entityId` and `url`                                                                                                                                                                                                                                                                                                                                              |
+| `readAt`    | `DateTime`             | Yes  |                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Constraint: `title` and `body` are not blank. Written in the transaction of the event that raises it ([M10 as built](../01-product/modules/M10-notifications.md#as-built)); rows cascade with their user.
 
@@ -408,20 +408,20 @@ Constraints: `attempts >= 0`; `status = SENT` requires `sentAt`; `status = FAILE
 
 Email waiting to be sent, or already sent, over SMTP ([notifications.md#email](../02-architecture/notifications.md#email)). Written in the transaction of the event it describes; drained by `dispatch-emails`.
 
-| Column           | Type           | Null | Notes                                                                 |
-| ---------------- | -------------- | ---- | --------------------------------------------------------------------- |
-| `organizationId` | `String`       | No   | FK → `organization.id`, cascade. The dispatch job runs per organization |
+| Column           | Type           | Null | Notes                                                                                           |
+| ---------------- | -------------- | ---- | ----------------------------------------------------------------------------------------------- |
+| `organizationId` | `String`       | No   | FK → `organization.id`, cascade. The dispatch job runs per organization                         |
 | `userId`         | `String`       | No   | FK → `user.id`, cascade. The recipient; **the address is read at send time**, never copied here |
-| `kind`           | `EmailKind`    | No   | `NOTIFICATION` \| `WELCOME`                                           |
-| `notificationId` | `String`       | Yes  | FK → `notification.id`, cascade. Set exactly when `kind = NOTIFICATION` |
-| `subject`        | `String`       | No   | One line                                                              |
-| `textBody`       | `String`       | No   | The plain-text part                                                   |
-| `htmlBody`       | `String`       | Yes  | The HTML part, values escaped                                         |
-| `status`         | `OutboxStatus` | No   | `PENDING` \| `SENT` \| `FAILED` \| `EXPIRED`                          |
-| `attempts`       | `Int`          | No   | Default `0`                                                           |
-| `lastError`      | `String`       | Yes  | The SMTP server's reply or the connection error                       |
-| `nextAttemptAt`  | `DateTime`     | Yes  | Backoff 1 / 5 / 30 / 120 min; the five-minute lease while claimed     |
-| `sentAt`         | `DateTime`     | Yes  |                                                                       |
+| `kind`           | `EmailKind`    | No   | `NOTIFICATION` \| `WELCOME`                                                                     |
+| `notificationId` | `String`       | Yes  | FK → `notification.id`, cascade. Set exactly when `kind = NOTIFICATION`                         |
+| `subject`        | `String`       | No   | One line                                                                                        |
+| `textBody`       | `String`       | No   | The plain-text part                                                                             |
+| `htmlBody`       | `String`       | Yes  | The HTML part, values escaped                                                                   |
+| `status`         | `OutboxStatus` | No   | `PENDING` \| `SENT` \| `FAILED` \| `EXPIRED`                                                    |
+| `attempts`       | `Int`          | No   | Default `0`                                                                                     |
+| `lastError`      | `String`       | Yes  | The SMTP server's reply or the connection error                                                 |
+| `nextAttemptAt`  | `DateTime`     | Yes  | Backoff 1 / 5 / 30 / 120 min; the five-minute lease while claimed                               |
+| `sentAt`         | `DateTime`     | Yes  |                                                                                                 |
 
 Constraints (migration `constraints_email_outbox`): `email_outbox_attempts_non_negative_check`; `email_outbox_sent_has_timestamp_check`; `email_outbox_failed_has_error_check`; `email_outbox_notification_kind_check` (`kind = NOTIFICATION` if and only if `notificationId` is set); `email_outbox_content_check` (subject and text not blank). Index on `(organizationId, status, nextAttemptAt)` for the claim. A row for someone no longer an active staff member is `EXPIRED` rather than sent.
 
@@ -435,21 +435,23 @@ Constraints (migration `constraints_email_outbox`): `email_outbox_attempts_non_n
 
 Unique on `(organizationId, date, sectorId)` **`NULLS NOT DISTINCT`**, so there is at most one business-wide holiday per date in each organization. Sundays are **not** stored here — they are excluded by rule, not by data.
 
+Constraints (migration `constraints_holiday`, 2026-09-17): `holiday_not_sunday_check` (the date is never a Sunday); `holiday_name_not_blank_check`. "Future dates only" is enforced by the service, because it depends on today's business date (M06 as built). A row is deleted when a future holiday is removed; past rows are never changed.
+
 ### `audit_log`
 
 Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 
-| Column        | Type          | Null | Notes                                                                                |
-| ------------- | ------------- | ---- | ------------------------------------------------------------------------------------ |
-| `organizationId` | `String`   | Yes  | FK → `organization.id` (restrict). The organization the entry belongs to, so the log is read in scope (US-090). Null only for a sign-in with an unknown email, and for rows written before 2026-09-15 (not backfilled: the table rejects UPDATE) |
-| `actorUserId` | `String`      | Yes  | Null for system actions                                                              |
-| `entityTable` | `String`      | No   |                                                                                      |
-| `entityId`    | `String`      | No   |                                                                                      |
-| `action`      | `AuditAction` | No   | `CREATE` \| `UPDATE` \| `DELETE` \| `APPROVE` \| `REJECT` \| `LOGIN` \| `REOPEN_DAY` |
-| `before`      | `Json`        | Yes  |                                                                                      |
-| `after`       | `Json`        | Yes  |                                                                                      |
-| `ipAddress`   | `String`      | Yes  |                                                                                      |
-| `userAgent`   | `String`      | Yes  |                                                                                      |
+| Column           | Type          | Null | Notes                                                                                                                                                                                                                                            |
+| ---------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `organizationId` | `String`      | Yes  | FK → `organization.id` (restrict). The organization the entry belongs to, so the log is read in scope (US-090). Null only for a sign-in with an unknown email, and for rows written before 2026-09-15 (not backfilled: the table rejects UPDATE) |
+| `actorUserId`    | `String`      | Yes  | Null for system actions                                                                                                                                                                                                                          |
+| `entityTable`    | `String`      | No   |                                                                                                                                                                                                                                                  |
+| `entityId`       | `String`      | No   |                                                                                                                                                                                                                                                  |
+| `action`         | `AuditAction` | No   | `CREATE` \| `UPDATE` \| `DELETE` \| `APPROVE` \| `REJECT` \| `LOGIN` \| `REOPEN_DAY`                                                                                                                                                             |
+| `before`         | `Json`        | Yes  |                                                                                                                                                                                                                                                  |
+| `after`          | `Json`        | Yes  |                                                                                                                                                                                                                                                  |
+| `ipAddress`      | `String`      | Yes  |                                                                                                                                                                                                                                                  |
+| `userAgent`      | `String`      | Yes  |                                                                                                                                                                                                                                                  |
 
 Constraint (`constraints_audit_log_organization`, `NOT VALID` so it applies to new rows only): `organizationId` is set unless `action = LOGIN`. Indexed on `(organizationId, createdAt)` for the log's newest-first reads.
 
@@ -466,11 +468,11 @@ Constraint (`constraints_audit_log_organization`, `NOT VALID` so it applies to n
 
 ### `setting`
 
-| Column        | Type     | Null | Notes                                   |
-| ------------- | -------- | ---- | --------------------------------------- |
+| Column        | Type     | Null | Notes                                                           |
+| ------------- | -------- | ---- | --------------------------------------------------------------- |
 | `key`         | `String` | No   | Unique within the organization (`collection.varianceTolerance`) |
-| `value`       | `Json`   | No   |                                         |
-| `description` | `String` | No   |                                         |
+| `value`       | `Json`   | No   |                                                                 |
+| `description` | `String` | No   |                                                                 |
 
 Runtime business settings only. Infrastructure configuration stays in environment variables.
 
@@ -478,9 +480,9 @@ Runtime business settings only. Infrastructure configuration stays in environmen
 
 One row per business, created by organization sign-up with its owner as Super Admin ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md)). Every top-level entity carries `organizationId`, and every query is scoped by it (M02).
 
-| Column     | Type     | Null | Notes          |
-| ---------- | -------- | ---- | -------------- |
-| `name`     | `String` | No   |                |
+| Column     | Type     | Null | Notes                                                                                                                                                                                                          |
+| ---------- | -------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | `String` | No   |                                                                                                                                                                                                                |
 | `slug`     | `String` | No   | Unique. The sign-in link `/<slug>/sign-in`, generated from the name at sign-up; default `org-` + 12 random hex characters. CHECK `organization_slug_format_check`: `^[a-z0-9]+(-[a-z0-9]+)*$`, 3–63 characters |
-| `timezone` | `String` | No   | `Asia/Kolkata` |
-| `currency` | `String` | No   | `INR`          |
+| `timezone` | `String` | No   | `Asia/Kolkata`                                                                                                                                                                                                 |
+| `currency` | `String` | No   | `INR`                                                                                                                                                                                                          |

@@ -34,7 +34,10 @@ export function ResetPasswordDialog({
       params: { staffProfileId },
     });
     setPending(false);
-    if (!result.ok) return setProblem(result.form);
+    if (!result.ok)
+      return setProblem(
+        result.form ?? "The password was not reset. Try again.",
+      );
     setPassword(result.body.temporaryPassword);
   }
 
@@ -61,7 +64,7 @@ export function ResetPasswordDialog({
         description="Give it to them in person or by phone. It is shown only now. They choose a new password when they next sign in."
       >
         <p
-          className="rounded-[var(--radius-control)] border border-border bg-surface-sunken px-3 py-3 text-center font-mono text-lg tracking-wider text-ink select-all"
+          className="rounded-control border border-border bg-surface-sunken px-3 py-3 text-center font-mono text-lg tracking-wider text-ink select-all"
           aria-label="Temporary password"
         >
           {password}

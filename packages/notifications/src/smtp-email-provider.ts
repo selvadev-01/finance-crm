@@ -89,7 +89,16 @@ export class SmtpEmailProvider implements EmailProvider {
 }
 
 /** Connection-level trouble that another attempt, later, may not meet. */
-const RETRY_CODES = new Set(["ECONNECTION", "ETIMEDOUT", "ESOCKET", "EDNS", "ETLS", "EPROTOCOL", "EAUTH", "ENOAUTH"]);
+const RETRY_CODES = new Set([
+  "ECONNECTION",
+  "ETIMEDOUT",
+  "ESOCKET",
+  "EDNS",
+  "ETLS",
+  "EPROTOCOL",
+  "EAUTH",
+  "ENOAUTH",
+]);
 
 /**
  * SMTP's own convention decides first: a 4xx reply is a temporary refusal
@@ -100,19 +109,29 @@ const RETRY_CODES = new Set(["ECONNECTION", "ETIMEDOUT", "ESOCKET", "EDNS", "ETL
  * attempts run out — or the message itself, which will never improve.
  */
 export function classifySmtpError(error: unknown): EmailResult {
-  const { responseCode, code } = error as { responseCode?: unknown; code?: unknown };
+  const { responseCode, code } = error as {
+    responseCode?: unknown;
+    code?: unknown;
+  };
   const detail = error instanceof Error ? error.message : String(error);
   // A rejected login arrives as a 5xx reply (Gmail: 535 5.7.8), but it is the
   // server's password that is wrong, not the message: keep the email queued.
   if (code === "EAUTH" || code === "ENOAUTH") {
-    return { status: "retry", reason: `${typeof responseCode === "number" ? `${responseCode} ` : ""}${detail}` };
+    return {
+      status: "retry",
+      reason: `${typeof responseCode === "number" ? `${responseCode} ` : ""}${detail}`,
+    };
   }
   if (typeof responseCode === "number") {
     const reason = `${responseCode} ${detail}`;
-    return responseCode >= 400 && responseCode < 500 ? { status: "retry", reason } : { status: "failed", reason };
+    return responseCode >= 400 && responseCode < 500
+      ? { status: "retry", reason }
+      : { status: "failed", reason };
   }
   if (typeof code === "string") {
-    return RETRY_CODES.has(code) ? { status: "retry", reason: `${code} ${detail}` } : { status: "failed", reason: `${code} ${detail}` };
+    return RETRY_CODES.has(code)
+      ? { status: "retry", reason: `${code} ${detail}` }
+      : { status: "failed", reason: `${code} ${detail}` };
   }
   return { status: "retry", reason: detail };
 }

@@ -171,12 +171,12 @@ export function FieldRoute() {
           className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4"
           aria-hidden
         >
-          <div className="h-7 w-40 animate-pulse rounded-[var(--radius-control)] bg-surface-sunken" />
-          <div className="h-4 w-56 animate-pulse rounded-[var(--radius-control)] bg-surface-sunken" />
+          <div className="h-7 w-40 animate-pulse rounded-control bg-surface-sunken" />
+          <div className="h-4 w-56 animate-pulse rounded-control bg-surface-sunken" />
           {[0, 1, 2].map((card) => (
             <div
               key={card}
-              className="h-24 animate-pulse rounded-[var(--radius-surface)] border border-border bg-surface-raised"
+              className="h-24 animate-pulse rounded-surface border border-border bg-surface-raised"
             />
           ))}
         </div>
@@ -273,7 +273,7 @@ export function FieldRoute() {
         unsynced={summary?.unsynced ?? 0}
         unread={connected ? unread : null}
       />
-      <main className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4">
+      <main className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] px-4 pt-5 pb-10">
         {summary?.pausedForSignIn && view.name !== "sync" ? (
           <FormMessage tone="critical">
             Your sign-in has expired.{" "}

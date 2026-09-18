@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { cn } from "./cn";
+import { controlFrame } from "./control";
 
 /**
  * Multi-line text on the same frame as `Input` — addresses and notes. Padding
@@ -14,12 +15,8 @@ export function Textarea({ className, rows = 3, ...props }: TextareaProps) {
     <textarea
       rows={rows}
       className={cn(
-        "block w-full min-w-0 resize-y rounded-[var(--radius-control)] border border-border-strong bg-surface-raised",
-        "min-h-[calc(var(--control-height)*2)] px-[var(--control-padding-x)] py-2 text-[length:var(--control-font-size)] text-ink",
-        "placeholder:text-ink-subtle",
-        "transition-colors hover:border-ink-subtle",
-        "aria-invalid:border-critical",
-        "disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-muted",
+        controlFrame,
+        "min-h-[calc(var(--control-height)*2)] resize-y px-[var(--control-padding-x)] py-2",
         className,
       )}
       {...props}

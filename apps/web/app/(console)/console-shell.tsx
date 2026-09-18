@@ -3,25 +3,32 @@
 import {
   AddressBook,
   Bell,
+  CalendarBlank,
+  CaretUpDown,
+  ChartBar,
   ClipboardText,
   List,
-  Money,
   MapTrifold,
+  Money,
   Path,
   Receipt,
   SignOut,
   SquaresFour,
   UsersThree,
-  X,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, cn, useBackdropPress } from "@repo/ui";
+import { AppShell, Button, Menu } from "@repo/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { authClient } from "../../lib/auth-client";
 import { useUnreadCount } from "../../lib/notifications/use-unread-count";
-import { canManageOrganisation, ROLE_LABEL, type Role } from "../../lib/roles";
+import {
+  canManageOrganisation,
+  ROLE_LABEL,
+  type Role,
+  seesReports,
+} from "../../lib/roles";
 import { LANDING, SignedInContext, useMe } from "../../lib/use-me";
 
 interface NavItem {
@@ -31,80 +38,107 @@ interface NavItem {
   shownTo: (role: Role) => boolean;
 }
 
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const everyone = () => true;
+
 /**
- * navigation-ia.md#navigation-by-role — only the areas that exist so far.
- * Reports and Settings join as
- * their screens are built; a link to an unbuilt page is not added early.
- * Hidden, not disabled: a role without the area does not see the link.
+ * navigation-ia.md#navigation-by-role — only the areas that exist so far,
+ * grouped by what a person is doing: running today's money, looking after the
+ * records, or the system itself. Settings joins when its screen is built; a
+ * link to an unbuilt page is not added early. Hidden, not
+ * disabled: a role without the area does not see the link.
  */
-const NAV: NavItem[] = [
+const NAV: NavGroup[] = [
   {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: SquaresFour,
-    shownTo: () => true,
+    title: "Operate",
+    items: [
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        icon: SquaresFour,
+        shownTo: everyone,
+      },
+      {
+        href: "/collections",
+        label: "Collections",
+        icon: Receipt,
+        shownTo: everyone,
+      },
+      { href: "/cash", label: "Cash", icon: Money, shownTo: everyone },
+      // M12: Admins, and a Senior for their own line (US-084 onwards).
+      {
+        href: "/reports",
+        label: "Reports",
+        icon: ChartBar,
+        shownTo: seesReports,
+      },
+    ],
   },
   {
-    href: "/customers",
-    label: "Customers",
-    icon: AddressBook,
-    shownTo: () => true,
+    title: "Records",
+    items: [
+      {
+        href: "/customers",
+        label: "Customers",
+        icon: AddressBook,
+        shownTo: everyone,
+      },
+      { href: "/lines", label: "Lines", icon: Path, shownTo: everyone },
+      {
+        href: "/sectors",
+        label: "Sectors",
+        icon: MapTrifold,
+        shownTo: canManageOrganisation,
+      },
+      { href: "/team", label: "Team", icon: UsersThree, shownTo: everyone },
+    ],
   },
   {
-    href: "/sectors",
-    label: "Sectors",
-    icon: MapTrifold,
-    shownTo: canManageOrganisation,
-  },
-  { href: "/lines", label: "Lines", icon: Path, shownTo: () => true },
-  {
-    href: "/collections",
-    label: "Collections",
-    icon: Receipt,
-    shownTo: () => true,
-  },
-  { href: "/cash", label: "Cash", icon: Money, shownTo: () => true },
-  { href: "/team", label: "Team", icon: UsersThree, shownTo: () => true },
-  {
-    href: "/notifications",
-    label: "Notifications",
-    icon: Bell,
-    shownTo: () => true,
-  },
-  {
-    href: "/settings/audit",
-    label: "Audit log",
-    icon: ClipboardText,
-    shownTo: canManageOrganisation,
+    title: "System",
+    items: [
+      {
+        href: "/notifications",
+        label: "Notifications",
+        icon: Bell,
+        shownTo: everyone,
+      },
+      // M06: every role reads the holidays; only Admins change them (US-093).
+      {
+        href: "/settings/holidays",
+        label: "Holidays",
+        icon: CalendarBlank,
+        shownTo: everyone,
+      },
+      {
+        href: "/settings/audit",
+        label: "Audit log",
+        icon: ClipboardText,
+        shownTo: canManageOrganisation,
+      },
+    ],
   },
 ];
 
 /**
- * The admin console frame for Super Admin, Admin and Senior: a sidebar from
- * 1280px, icons only from 768px, a drawer below (navigation-ia.md#responsive-behaviour).
- * A Junior who opens a console URL is sent to their route — the console shell
- * is never shown to them.
+ * The admin console frame for Super Admin, Admin and Senior
+ * (navigation-ia.md#responsive-behaviour). A Junior who opens a console URL is
+ * sent to their route — the console shell is never shown to them.
  */
 export function ConsoleShell({ children }: { children: ReactNode }) {
   const me = useMe();
   const router = useRouter();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawer = useRef<HTMLDialogElement>(null);
-  const drawerBackdrop = useBackdropPress(() => setDrawerOpen(false));
   // The bell (navigation-ia.md#notifications): polled, never for a Junior.
   const unread = useUnreadCount(Boolean(me) && me?.role !== "JUNIOR");
 
   useEffect(() => {
     if (me?.role === "JUNIOR") router.replace(LANDING.JUNIOR);
   }, [me, router]);
-
-  useEffect(() => {
-    const dialog = drawer.current;
-    if (!dialog) return;
-    if (drawerOpen && !dialog.open) dialog.showModal();
-    if (!drawerOpen && dialog.open) dialog.close();
-  }, [drawerOpen]);
 
   if (!me || me.role === "JUNIOR") {
     return (
@@ -114,195 +148,171 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const items = NAV.filter((item) => item.shownTo(me.role));
   const isCurrent = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+  const groups = NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.shownTo(me.role)),
+  })).filter((group) => group.items.length > 0);
+  const section = groups
+    .flatMap((group) => group.items)
+    .find((item) => isCurrent(item.href));
 
   async function signOut() {
     await authClient.signOut();
     router.replace("/sign-in");
   }
 
-  const navLinks = (layout: "rail" | "drawer") => (
-    <ul className="flex flex-col gap-0.5">
-      {items.map((item) => {
-        const current = isCurrent(item.href);
+  const navigation = groups.map((group) => (
+    <AppShell.NavSection key={group.title} title={group.title}>
+      {group.items.map((item) => {
         const Icon = item.icon;
-        const count = item.href === "/notifications" ? unread : null;
         return (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              aria-current={current ? "page" : undefined}
-              title={layout === "rail" ? item.label : undefined}
-              onClick={() => setDrawerOpen(false)}
-              className={cn(
-                "flex h-[var(--control-height)] items-center gap-3 rounded-[var(--radius-control)] px-2.5 text-sm font-medium transition-colors",
-                layout === "rail" && "justify-center xl:justify-start",
-                current
-                  ? "bg-accent-subtle text-accent"
-                  : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
-              )}
-            >
-              <span className="relative shrink-0">
-                <Icon aria-hidden size={20} weight="regular" />
-                {count ? (
-                  <UnreadDot
-                    count={count}
-                    className={cn(layout === "rail" && "xl:hidden")}
-                  />
-                ) : null}
-              </span>
-              <span
-                className={cn(layout === "rail" && "sr-only xl:not-sr-only")}
-              >
-                {item.label}
-              </span>
-              {count ? (
-                <span
-                  data-numeric
-                  className={cn(
-                    "ml-auto rounded-full bg-critical px-1.5 text-2xs font-semibold text-ink-inverse",
-                    layout === "rail" && "hidden xl:inline",
-                  )}
-                >
-                  {count}
-                  <span className="sr-only"> unread</span>
-                </span>
-              ) : null}
-            </Link>
-          </li>
+          <AppShell.NavItem
+            key={item.href}
+            icon={<Icon aria-hidden size={18} />}
+            label={item.label}
+            state={isCurrent(item.href) ? "current" : "idle"}
+            count={
+              item.href === "/notifications" ? (unread ?? undefined) : undefined
+            }
+          >
+            <Link href={item.href} />
+          </AppShell.NavItem>
         );
       })}
-    </ul>
+    </AppShell.NavSection>
+  ));
+
+  const brand = (
+    <Link
+      href="/dashboard"
+      aria-label="Rasi — dashboard"
+      className="flex items-center gap-2.5"
+    >
+      <span
+        aria-hidden
+        className="grid size-7 place-items-center rounded-control bg-accent text-label font-semibold text-accent-ink"
+      >
+        R
+      </span>
+      <span aria-hidden className="text-heading text-ink md:max-xl:hidden">
+        Rasi
+      </span>
+    </Link>
   );
 
-  const identity = (layout: "rail" | "drawer") => (
-    <div className="flex flex-col gap-2 border-t border-border pt-3">
-      <div className={cn(layout === "rail" && "hidden xl:block")}>
-        <p className="truncate text-sm font-medium text-ink">{me.name}</p>
-        <p className="text-2xs text-ink-muted">{ROLE_LABEL[me.role]}</p>
-      </div>
-      <Button
-        tone="ghost"
-        onClick={signOut}
-        title={layout === "rail" ? "Sign out" : undefined}
-        className={cn(
-          "justify-start px-2.5",
-          layout === "rail" && "justify-center xl:justify-start",
-        )}
-      >
-        <SignOut aria-hidden size={20} weight="regular" className="shrink-0" />
-        <span className={cn(layout === "rail" && "sr-only xl:not-sr-only")}>
-          Sign out
-        </span>
-      </Button>
-    </div>
-  );
+  const initials = me.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <SignedInContext value={me}>
-      <div className="min-h-dvh md:flex">
-        <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 flex-col gap-4 border-r border-border bg-surface-raised px-2 py-4 md:flex xl:w-60 xl:px-3">
-          <Link
-            href="/dashboard"
-            className="px-2.5 text-lg font-semibold text-ink"
-            aria-label="Rasi — dashboard"
-          >
-            <span aria-hidden className="xl:hidden">
-              R
-            </span>
-            <span aria-hidden className="hidden xl:inline">
-              Rasi
-            </span>
-          </Link>
-          <nav aria-label="Console" className="flex-1">
-            {navLinks("rail")}
-          </nav>
-          {identity("rail")}
-        </aside>
-
-        <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface-raised px-2 py-2 md:hidden">
-          <Button
-            tone="ghost"
-            aria-label="Open navigation"
-            aria-haspopup="dialog"
-            aria-expanded={drawerOpen}
-            onClick={() => setDrawerOpen(true)}
-            className="px-2.5"
-          >
-            <List aria-hidden size={22} weight="regular" />
-          </Button>
-          <span className="flex-1 text-base font-semibold text-ink">Rasi</span>
-          <Link
-            href="/notifications"
-            aria-label={
-              unread ? `Notifications, ${unread} unread` : "Notifications"
-            }
-            className="relative flex h-[var(--control-height)] items-center rounded-[var(--radius-control)] px-2.5 text-ink hover:bg-surface-sunken"
-          >
-            <Bell aria-hidden size={22} weight="regular" />
-            {unread ? <UnreadDot count={unread} /> : null}
-          </Link>
-        </header>
-
-        <dialog
-          ref={drawer}
-          aria-label="Navigation"
-          onCancel={(event) => {
-            event.preventDefault();
-            setDrawerOpen(false);
-          }}
-          {...drawerBackdrop}
-          className="m-0 h-dvh max-h-dvh w-72 max-w-[calc(100vw-3rem)] border-r border-border bg-surface-raised p-0 backdrop:bg-ink/40"
+      <AppShell.Root>
+        <AppShell.Sidebar brand={brand}>{navigation}</AppShell.Sidebar>
+        <AppShell.Drawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          brand={brand}
         >
-          <div className="flex h-full flex-col gap-4 px-3 py-3">
-            <div className="flex items-center justify-between">
-              <span className="px-2.5 text-lg font-semibold text-ink">
-                Rasi
-              </span>
-              <Button
-                tone="ghost"
-                aria-label="Close navigation"
-                onClick={() => setDrawerOpen(false)}
-                className="px-2.5"
+          {navigation}
+        </AppShell.Drawer>
+
+        <AppShell.Body>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-30 focus:rounded-control focus:bg-surface-raised focus:px-3 focus:py-2 focus:shadow-popover"
+          >
+            Skip to content
+          </a>
+          <AppShell.Topbar>
+            <Button
+              tone="ghost"
+              size="sm"
+              className="md:hidden"
+              aria-label="Open navigation"
+              aria-haspopup="dialog"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen(true)}
+            >
+              <List aria-hidden size={20} />
+            </Button>
+            <span className="truncate text-label text-ink-muted">
+              {section?.label ?? "Rasi"}
+            </span>
+
+            <div className="ml-auto flex items-center gap-1">
+              <Link
+                href="/notifications"
+                aria-label={
+                  unread ? `Notifications, ${unread} unread` : "Notifications"
+                }
+                className="relative grid size-8 place-items-center rounded-control text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
               >
-                <X aria-hidden size={20} weight="regular" />
-              </Button>
+                <Bell aria-hidden size={18} />
+                {unread ? (
+                  <span
+                    aria-hidden
+                    data-numeric
+                    className="absolute -top-0.5 -right-0.5 min-w-4 rounded-pill bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse"
+                  >
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                ) : null}
+              </Link>
+
+              <Menu.Root>
+                <Menu.Trigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`${me.name}, ${ROLE_LABEL[me.role]} — account menu`}
+                    className="flex h-8 items-center gap-2 rounded-control pr-1.5 pl-1 text-left transition-colors hover:bg-surface-sunken"
+                  >
+                    <span
+                      aria-hidden
+                      className="grid size-6 place-items-center rounded-pill bg-accent-subtle text-2xs font-semibold text-accent"
+                    >
+                      {initials}
+                    </span>
+                    <span
+                      aria-hidden
+                      className="hidden flex-col leading-tight sm:flex"
+                    >
+                      <span className="max-w-40 truncate text-label text-ink">
+                        {me.name}
+                      </span>
+                      <span className="text-2xs text-ink-muted">
+                        {ROLE_LABEL[me.role]}
+                      </span>
+                    </span>
+                    <CaretUpDown
+                      aria-hidden
+                      size={12}
+                      className="text-ink-subtle"
+                    />
+                  </button>
+                </Menu.Trigger>
+                <Menu.Content>
+                  <Menu.Label>
+                    <span className="text-label text-ink">{me.name}</span>
+                    <span>{ROLE_LABEL[me.role]}</span>
+                  </Menu.Label>
+                  <Menu.Separator />
+                  <Menu.Item onSelect={() => void signOut()}>
+                    <SignOut aria-hidden size={16} />
+                    Sign out
+                  </Menu.Item>
+                </Menu.Content>
+              </Menu.Root>
             </div>
-            <nav aria-label="Console" className="flex-1">
-              {navLinks("drawer")}
-            </nav>
-            {identity("drawer")}
-          </div>
-        </dialog>
-
-        <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
-          {children}
-        </main>
-      </div>
+          </AppShell.Topbar>
+          <AppShell.Main>{children}</AppShell.Main>
+        </AppShell.Body>
+      </AppShell.Root>
     </SignedInContext>
-  );
-}
-
-/** The count on the bell icon; the full count is also spoken where it is shown. */
-function UnreadDot({
-  count,
-  className,
-}: {
-  count: number;
-  className?: string;
-}) {
-  return (
-    <span
-      aria-hidden
-      data-numeric
-      className={cn(
-        "absolute -top-1.5 -right-2 min-w-4 rounded-full bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse",
-        className,
-      )}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
   );
 }

@@ -93,6 +93,11 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
     },
   });
   await prisma.user.deleteMany({ where: { email: taggedEmail } });
+  // Holidays declared over HTTP (US-093) belong to a tagged organization, and
+  // must go before the sectors and organization they reference.
+  await prisma.holiday.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
   await prisma.line.deleteMany({ where: { code: taggedCode } });
   await prisma.sector.deleteMany({ where: { code: taggedCode } });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });

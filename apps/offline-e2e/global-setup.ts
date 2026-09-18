@@ -5,7 +5,9 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const FIXTURE_PATH = fileURLToPath(new URL("./.fixture.json", import.meta.url));
+export const FIXTURE_PATH = fileURLToPath(
+  new URL("./.fixture.json", import.meta.url),
+);
 export const PASSWORD = "offline-e2e-password";
 const API = "http://localhost:3001";
 const WEB_ORIGIN = "http://localhost:3000";
@@ -17,9 +19,17 @@ export interface Fixture {
   /** Why the scenarios cannot run today, if they cannot. */
   skip: string | null;
   junior: { email: string; userId: string };
-  accounts: { id: string; code: string; customerName: string; outstanding: string }[];
+  accounts: {
+    id: string;
+    code: string;
+    customerName: string;
+    outstanding: string;
+  }[];
   /** US-042: one customer holding two accounts, expecting 100 and 150. */
-  split: { customerName: string; accounts: { id: string; code: string; daily: string }[] };
+  split: {
+    customerName: string;
+    accounts: { id: string; code: string; daily: string }[];
+  };
 }
 
 /**
@@ -36,17 +46,33 @@ export interface Fixture {
 export default async function globalSetup(): Promise<void> {
   process.loadEnvFile(fileURLToPath(new URL("../../.env", import.meta.url)));
   const prisma = getPrismaClient();
-  const runId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const runId = new Date()
+    .toISOString()
+    .replace(/[-:.TZ]/g, "")
+    .slice(0, 14);
   const businessDate = toBusinessDate(new Date());
 
   const organization = await prisma.organization.create({
-    data: { name: `Offline E2E ${runId}`, timezone: "Asia/Kolkata", currency: "INR" },
+    data: {
+      name: `Offline E2E ${runId}`,
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+    },
   });
   const sector = await prisma.sector.create({
-    data: { organizationId: organization.id, code: `OE2E-S-${runId}`, name: "Offline E2E sector" },
+    data: {
+      organizationId: organization.id,
+      code: `OE2E-S-${runId}`,
+      name: "Offline E2E sector",
+    },
   });
   const line = await prisma.line.create({
-    data: { organizationId: organization.id, sectorId: sector.id, code: `OE2E-L-${runId}`, name: "Offline E2E line" },
+    data: {
+      organizationId: organization.id,
+      sectorId: sector.id,
+      code: `OE2E-L-${runId}`,
+      name: "Offline E2E line",
+    },
   });
 
   const hash = await hashPassword(PASSWORD);
@@ -54,10 +80,21 @@ export default async function globalSetup(): Promise<void> {
     const userId = randomUUID();
     const email = `offline-e2e-${role.toLowerCase()}-${runId}@offline-e2e.rasi.test`;
     await prisma.user.create({
-      data: { id: userId, name: `Offline E2E ${role.toLowerCase()}`, email, emailVerified: true },
+      data: {
+        id: userId,
+        name: `Offline E2E ${role.toLowerCase()}`,
+        email,
+        emailVerified: true,
+      },
     });
     await prisma.account.create({
-      data: { id: randomUUID(), accountId: userId, providerId: "credential", userId, password: hash },
+      data: {
+        id: randomUUID(),
+        accountId: userId,
+        providerId: "credential",
+        userId,
+        password: hash,
+      },
     });
     const profile = await prisma.staffProfile.create({
       data: {
@@ -75,7 +112,12 @@ export default async function globalSetup(): Promise<void> {
   const admin = { email: `offline-e2e-admin-${runId}@offline-e2e.rasi.test` };
   const junior = await staff("JUNIOR");
   await prisma.lineAssignment.create({
-    data: { lineId: line.id, staffProfileId: junior.staffProfileId, assignmentRole: "JUNIOR", effectiveFrom: new Date("2026-01-01") },
+    data: {
+      lineId: line.id,
+      staffProfileId: junior.staffProfileId,
+      assignmentRole: "JUNIOR",
+      effectiveFrom: new Date("2026-01-01"),
+    },
   });
 
   await waitFor(`${API}/health/live`);
@@ -83,18 +125,33 @@ export default async function globalSetup(): Promise<void> {
   const call = async (path: string, body: object) => {
     const response = await fetch(`${API}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie, Origin: WEB_ORIGIN },
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: cookie,
+        Origin: WEB_ORIGIN,
+      },
       body: JSON.stringify(body),
     });
     if (response.status >= 300) {
-      throw new Error(`${path} answered ${response.status}: ${await response.text()}`);
+      throw new Error(
+        `${path} answered ${response.status}: ${await response.text()}`,
+      );
     }
-    return response.json() as Promise<{ id: string; accountCode: string; outstandingAmount: string }>;
+    return response.json() as Promise<{
+      id: string;
+      accountCode: string;
+      outstandingAmount: string;
+    }>;
   };
 
   const accounts: Fixture["accounts"] = [];
   // One account per scenario, so each starts from an untouched balance.
-  const names = ["Lakshmi Narayanan", "Meena Devi", "Arun Kumar", "Suresh Babu"];
+  const names = [
+    "Lakshmi Narayanan",
+    "Meena Devi",
+    "Arun Kumar",
+    "Suresh Babu",
+  ];
   for (const [index, name] of names.entries()) {
     const customer = await call("/api/customers", {
       name,
@@ -117,7 +174,12 @@ export default async function globalSetup(): Promise<void> {
       where: { accountLoanId: account.id, sequence: 1 },
       data: { dueDate: toUtcMidnight(businessDate) },
     });
-    accounts.push({ id: account.id, code: account.accountCode, customerName: name, outstanding: account.outstandingAmount });
+    accounts.push({
+      id: account.id,
+      code: account.accountCode,
+      customerName: name,
+      outstanding: account.outstandingAmount,
+    });
   }
 
   // US-042: a second customer shape — two accounts, one customer.
@@ -131,7 +193,10 @@ export default async function globalSetup(): Promise<void> {
     confirmDuplicateMobile: true,
   });
   const split: Fixture["split"] = { customerName: splitName, accounts: [] };
-  for (const [accountAmount, investedAmount, dailyAmount] of [["1000", "850", "100"], ["1500", "1275", "150"]] as const) {
+  for (const [accountAmount, investedAmount, dailyAmount] of [
+    ["1000", "850", "100"],
+    ["1500", "1275", "150"],
+  ] as const) {
     const account = await call("/api/accounts", {
       customerId: splitCustomer.id,
       accountAmount,
@@ -145,11 +210,18 @@ export default async function globalSetup(): Promise<void> {
       where: { accountLoanId: account.id, sequence: 1 },
       data: { dueDate: toUtcMidnight(businessDate) },
     });
-    split.accounts.push({ id: account.id, code: account.accountCode, daily: `${dailyAmount}.00` });
+    split.accounts.push({
+      id: account.id,
+      code: account.accountCode,
+      daily: `${dailyAmount}.00`,
+    });
   }
 
   const holiday = await prisma.holiday.findFirst({
-    where: { organizationId: organization.id, date: toUtcMidnight(businessDate) },
+    where: {
+      organizationId: organization.id,
+      date: toUtcMidnight(businessDate),
+    },
   });
   const skip =
     dayOfWeek(businessDate) === 0
@@ -190,5 +262,8 @@ async function signIn(email: string): Promise<string> {
     body: JSON.stringify({ email, password: PASSWORD }),
   });
   if (!response.ok) throw new Error(`sign-in answered ${response.status}`);
-  return response.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+  return response.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
 }

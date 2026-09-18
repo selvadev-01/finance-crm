@@ -45,7 +45,10 @@ describe("US-030a worked example — started 1 July, paid 4,700 of 10,000", () =
   it("schedules the 5,300 as slots 48–100 from the next working day after entry", () => {
     const tail = withStatus(plan.slots, "PENDING");
     expect(tail).toHaveLength(53);
-    expect(tail[0]).toMatchObject({ sequence: 48, dueDate: nextWorkingDay(entered, NONE) });
+    expect(tail[0]).toMatchObject({
+      sequence: 48,
+      dueDate: nextWorkingDay(entered, NONE),
+    });
     expect(total(tail).toString()).toBe("5300");
     expect(plan.targetCompletionDate).toBe(addWorkingDays(entered, 53, NONE));
   });
@@ -116,12 +119,9 @@ describe("a hand-checked week — disbursed Saturday 3 January, entered Saturday
   it("450 paid against six days due (5–10 Jan): behind 150, four collected, one partial, tail from Monday 12", () => {
     const plan = planMidTermSchedule({ ...base, collectedToDate: "450" });
     expect(plan.amountBehind.toString()).toBe("150");
-    expect(withStatus(plan.slots, "COLLECTED").map((slot) => slot.dueDate)).toEqual([
-      "2026-01-05",
-      "2026-01-06",
-      "2026-01-07",
-      "2026-01-08",
-    ]);
+    expect(
+      withStatus(plan.slots, "COLLECTED").map((slot) => slot.dueDate),
+    ).toEqual(["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"]);
     expect(withStatus(plan.slots, "PARTIAL")).toEqual([
       expect.objectContaining({ sequence: 5, dueDate: "2026-01-09" }),
     ]);
@@ -143,13 +143,26 @@ describe("a hand-checked week — disbursed Saturday 3 January, entered Saturday
     const plan = planMidTermSchedule({ ...base, collectedToDate: "1000" });
     expect(plan.amountBehind.toString()).toBe("0");
     expect(withStatus(plan.slots, "COLLECTED")).toHaveLength(10);
-    expect(withStatus(plan.slots, "PENDING")[0]).toMatchObject({ sequence: 11, dueDate: "2026-01-12" });
+    expect(withStatus(plan.slots, "PENDING")[0]).toMatchObject({
+      sequence: 11,
+      dueDate: "2026-01-12",
+    });
   });
 
   it("refuses a disbursement on or after the entry day, and a collected amount outside 0…A", () => {
-    expect(() => planMidTermSchedule({ ...base, enteredOn: d("2026-01-03"), collectedToDate: "0" })).toThrow(RangeError);
-    expect(() => planMidTermSchedule({ ...base, collectedToDate: "10000" })).toThrow(RangeError);
-    expect(() => planMidTermSchedule({ ...base, collectedToDate: "-1" })).toThrow(RangeError);
+    expect(() =>
+      planMidTermSchedule({
+        ...base,
+        enteredOn: d("2026-01-03"),
+        collectedToDate: "0",
+      }),
+    ).toThrow(RangeError);
+    expect(() =>
+      planMidTermSchedule({ ...base, collectedToDate: "10000" }),
+    ).toThrow(RangeError);
+    expect(() =>
+      planMidTermSchedule({ ...base, collectedToDate: "-1" }),
+    ).toThrow(RangeError);
   });
 });
 
@@ -162,7 +175,10 @@ describe("release gate 6 — the tail is exactly a day-one account's regenerated
         fc.double({ min: 0, max: 0.999, noNaN: true }),
         (rupees, dailyShare, share) => {
           const accountAmount = new Decimal(rupees);
-          const dailyAmount = Decimal.max(1, accountAmount.times(dailyShare).dividedBy(100).floor());
+          const dailyAmount = Decimal.max(
+            1,
+            accountAmount.times(dailyShare).dividedBy(100).floor(),
+          );
           const collected = accountAmount.times(share).floor();
           const entered = d("2026-03-16");
           const plan = planMidTermSchedule({
@@ -182,15 +198,22 @@ describe("release gate 6 — the tail is exactly a day-one account's regenerated
             holidays: NONE,
             firstSequence: paid.length + 1,
           });
-          expect(tail.map(({ status: _status, ...slot }) => slot)).toEqual(dayOne);
+          expect(tail.map(({ status: _status, ...slot }) => slot)).toEqual(
+            dayOne,
+          );
           // What the paid slots stand for is exactly the collected amount.
           const fullyPaid = paid
             .filter((slot) => slot.status === "COLLECTED")
-            .reduce((sum, slot) => sum.plus(slot.expectedAmount), new Decimal(0));
+            .reduce(
+              (sum, slot) => sum.plus(slot.expectedAmount),
+              new Decimal(0),
+            );
           const partial = paid.find((slot) => slot.status === "PARTIAL");
           expect(fullyPaid.lessThanOrEqualTo(collected)).toBe(true);
           if (partial) {
-            expect(collected.minus(fullyPaid).lessThan(partial.expectedAmount)).toBe(true);
+            expect(
+              collected.minus(fullyPaid).lessThan(partial.expectedAmount),
+            ).toBe(true);
           } else {
             expect(fullyPaid.equals(collected)).toBe(true);
           }

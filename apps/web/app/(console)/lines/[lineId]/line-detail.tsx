@@ -1,44 +1,47 @@
 "use client";
 
-import { organisationContract as org, staffContract } from "@repo/contracts";
+import {
+  type AssignmentHistoryEntry,
+  organisationContract as org,
+  staffContract,
+} from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
   Badge,
   Button,
   buttonClass,
-  DataTable,
-  DataTableSkeleton,
+  DataView,
   formatBusinessDate,
+  ListFooter,
   NothingYet,
   PageHeader,
+  Section,
+  Skeleton,
+  Stat,
+  StatGrid,
 } from "@repo/ui";
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
-import { canManageOrganisation } from "../../../../lib/roles";
+import { identityColumn, valueColumn } from "../../../../components/columns";
+import { ListFallback } from "../../../../components/list-state";
+import { PageTrail } from "../../../../components/page-trail";
+import { LoadFailed, RecordFallback } from "../../../../components/query-state";
+import { ActivityBadge } from "../../../../components/status-badge";
+import { LIST_LIMIT } from "../../../../lib/list-limit";
+import { canManageOrganisation, ROLE_LABEL } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
-import {
-  LIST_LIMIT,
-  LoadFailed,
-  RecordNotFound,
-  Surface,
-  TruncatedNote,
-} from "../../_organisation/list-controls";
+import { usePagedQuery } from "../../../../lib/use-paged-query";
 import { AssignDialog } from "../../_organisation/assign-dialog";
 import {
   DeactivateDialog,
   RenameDialog,
 } from "../../_organisation/organisation-dialogs";
-import { StatusBadge } from "../../_organisation/status-badge";
 
-type Open =
-  | "rename"
-  | "deactivate"
-  | "assign-senior"
-  | "assign-junior"
-  | null;
+type Open = "rename" | "deactivate" | "assign-senior" | "assign-junior" | null;
 
+/** A line: today's staff and its assignment history (US-011, US-014, US-015). */
 export function LineDetail({ lineId }: { lineId: string }) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
@@ -47,12 +50,14 @@ export function LineDetail({ lineId }: { lineId: string }) {
   const line = useApiQuery(org.getLine, { params: { lineId } });
   const sector = useApiQuery(
     org.getSector,
-    line.status === "ready" ? { params: { sectorId: line.data.sectorId } } : null,
+    line.status === "ready"
+      ? { params: { sectorId: line.data.sectorId } }
+      : null,
   );
   const staffing = useApiQuery(org.listLineStaffing, {
     query: { limit: LIST_LIMIT },
   });
-  const history = useApiQuery(org.listAssignmentHistory, {
+  const history = usePagedQuery(org.listAssignmentHistory, {
     params: { lineId },
     query: { limit: LIST_LIMIT },
   });
@@ -77,15 +82,8 @@ export function LineDetail({ lineId }: { lineId: string }) {
     manages ? { query: { limit: LIST_LIMIT, includeInactive: "true" } } : null,
   );
 
-  if (line.status === "loading") {
-    return <DataTableSkeleton columns={4} rows={3} />;
-  }
-  if (line.status === "not-found" || line.status === "not-permitted") {
-    return <RecordNotFound noun="Line" />;
-  }
-  if (line.status === "error") {
-    return <LoadFailed message={line.message} onRetry={line.reload} />;
-  }
+  if (line.status !== "ready")
+    return <RecordFallback query={line} noun="Line" />;
 
   const record = line.data;
   const today =
@@ -122,24 +120,25 @@ export function LineDetail({ lineId }: { lineId: string }) {
   return (
     <>
       <PageHeader
-        eyebrow={
-          manages ? (
-            <Link
-              href={`/sectors/${record.sectorId}`}
-              className="hover:text-ink hover:underline"
-            >
-              {sectorName}
-            </Link>
-          ) : (
-            sectorName
-          )
+        trail={
+          <PageTrail
+            steps={
+              manages
+                ? [
+                    { label: "Sectors", href: "/sectors" },
+                    { label: sectorName, href: `/sectors/${record.sectorId}` },
+                    { label: record.name },
+                  ]
+                : [{ label: sectorName }, { label: record.name }]
+            }
+          />
         }
         title={record.name}
-        description={
-          <span className="flex items-center gap-2">
+        meta={
+          <>
             <span className="font-mono">{record.code}</span>
-            <StatusBadge isActive={record.isActive} />
-          </span>
+            <ActivityBadge isActive={record.isActive} />
+          </>
         }
         actions={
           <>
@@ -150,126 +149,130 @@ export function LineDetail({ lineId }: { lineId: string }) {
               Day close
             </Link>
             {manages ? (
-            <>
-              <Button onClick={() => setOpen("rename")}>Rename</Button>
-              {record.isActive ? (
-                <Button onClick={() => setOpen("deactivate")}>Deactivate</Button>
-              ) : null}
-            </>
+              <>
+                <Button onClick={() => setOpen("rename")}>Rename</Button>
+                {record.isActive ? (
+                  <Button tone="danger" onClick={() => setOpen("deactivate")}>
+                    Deactivate
+                  </Button>
+                ) : null}
+              </>
             ) : null}
           </>
         }
       />
 
-      <section aria-labelledby="line-staff" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="line-staff" className="text-base font-semibold text-ink">
-            Staff today
-          </h2>
-          {canAssign ? (
-            <div className="flex flex-wrap gap-2">
+      <Section
+        title="Staff today"
+        actions={
+          canAssign ? (
+            <>
               <Button onClick={() => setOpen("assign-senior")}>
                 {today?.senior ? "Change Senior" : "Assign Senior"}
               </Button>
-              <Button onClick={() => setOpen("assign-junior")}>Add Junior</Button>
-            </div>
-          ) : null}
-        </div>
+              <Button onClick={() => setOpen("assign-junior")}>
+                Add Junior
+              </Button>
+            </>
+          ) : null
+        }
+      >
         {staffing.status === "loading" ? (
-          <DataTableSkeleton columns={3} rows={1} />
+          <Skeleton className="h-20 w-full" />
         ) : staffing.status === "error" ? (
           <LoadFailed message={staffing.message} onRetry={staffing.reload} />
         ) : !record.isActive ? (
-          <p className="text-sm text-ink-muted">
+          <p className="text-body text-ink-muted">
             This line is inactive, so no current staffing is shown. Its history
             is below.
           </p>
         ) : (
-          <dl className="grid gap-3 sm:grid-cols-3">
-            <Figure label="Senior">
+          <StatGrid columns={3}>
+            <Stat label="Senior">
               {today?.senior ? (
                 today.senior.name
               ) : (
                 <Badge tone="warning">No Senior assigned</Badge>
               )}
-            </Figure>
-            <Figure label="Juniors">{today ? today.juniorCount : "—"}</Figure>
-            <Figure label="Customers">
-              {today ? today.customerCount : "—"}
-            </Figure>
-          </dl>
+            </Stat>
+            <Stat label="Juniors">{today ? today.juniorCount : "—"}</Stat>
+            <Stat label="Customers">{today ? today.customerCount : "—"}</Stat>
+          </StatGrid>
         )}
-      </section>
+      </Section>
 
-      <section aria-labelledby="line-figures" className="flex flex-col gap-3">
-        <h2 id="line-figures" className="text-base font-semibold text-ink">
-          Collections and money
-        </h2>
-        <p className="text-sm text-ink-muted">
+      <Section title="Collections and money">
+        <p className="text-body text-ink-muted">
           Account value, invested amount, profit, and expected and actual daily
           collection appear here once accounts and collections are recorded.
           Until then nothing is shown, rather than zeros.
         </p>
-      </section>
+      </Section>
 
-      <section aria-labelledby="line-history" className="flex flex-col gap-3">
-        <h2 id="line-history" className="text-base font-semibold text-ink">
-          Assignment history
-        </h2>
-        {history.status === "loading" ? <DataTableSkeleton columns={4} rows={3} /> : null}
-        {history.status === "error" ? (
-          <LoadFailed message={history.message} onRetry={history.reload} />
-        ) : null}
-        {history.status === "ready" && history.data.data.length === 0 ? (
-          <Surface>
-            <NothingYet
-              title="No one has been assigned"
-              description="When a Senior or Junior is assigned to this line, each assignment is kept here with its dates."
-            />
-          </Surface>
-        ) : null}
-        {history.status === "ready" && history.data.data.length > 0 ? (
+      <Section title="Assignment history">
+        {history.status === "ready" && history.rows.length > 0 ? (
           <>
-            <DataTable
+            <DataView
               caption="Assignment history"
-              rows={history.data.data}
-              rowKey={(entry) => entry.id}
+              rows={history.rows}
+              getRowId={(entry) => entry.id}
+              complete={!history.hasMore}
               columns={[
-                {
+                identityColumn<AssignmentHistoryEntry>({
                   header: "Staff",
-                  cell: (entry) => (
-                    <Link
-                      href={`/team/${entry.staffProfileId}`}
-                      className="font-medium text-ink hover:text-accent hover:underline"
-                    >
-                      {entry.staffName}
-                    </Link>
-                  ),
-                },
-                {
+                  name: (entry) => entry.staffName,
+                  href: (entry) => `/team/${entry.staffProfileId}`,
+                }),
+                valueColumn<AssignmentHistoryEntry>({
+                  id: "role",
                   header: "Role",
-                  cell: (entry) =>
-                    entry.assignmentRole === "SENIOR" ? "Senior" : "Junior",
-                },
-                {
+                  value: (entry) => ROLE_LABEL[entry.assignmentRole],
+                }),
+                valueColumn<AssignmentHistoryEntry>({
+                  id: "from",
                   header: "From",
+                  value: (entry) => entry.effectiveFrom,
                   cell: (entry) => formatBusinessDate(entry.effectiveFrom),
-                },
-                {
+                }),
+                valueColumn<AssignmentHistoryEntry>({
+                  id: "to",
                   header: "To",
+                  // An open assignment sorts after every closed one.
+                  value: (entry) => entry.effectiveTo ?? "9999-12-31",
                   cell: (entry) =>
                     entry.effectiveTo ? (
                       formatBusinessDate(entry.effectiveTo)
                     ) : (
                       <Badge tone="info">Open</Badge>
                     ),
-                },
+                }),
               ]}
+              footer={
+                <ListFooter
+                  shown={history.rows.length}
+                  noun={
+                    history.rows.length === 1 ? "assignment" : "assignments"
+                  }
+                  onMore={history.loadMore}
+                  loadingMore={history.loadingMore}
+                  note={history.moreError ?? undefined}
+                />
+              }
             />
-            {history.data.hasMore ? <TruncatedNote noun="assignments" /> : null}
           </>
-        ) : null}
-      </section>
+        ) : (
+          <ListFallback
+            query={history}
+            columns={4}
+            empty={
+              <NothingYet
+                title="No one has been assigned"
+                description="When a Senior or Junior is assigned to this line, each assignment is kept here with its dates."
+              />
+            }
+          />
+        )}
+      </Section>
 
       {open === "rename" ? (
         <RenameDialog
@@ -306,18 +309,5 @@ export function LineDetail({ lineId }: { lineId: string }) {
         />
       ) : null}
     </>
-  );
-}
-
-function Figure({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
-      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">
-        {label}
-      </dt>
-      <dd className="text-lg font-semibold text-ink" data-numeric>
-        {children}
-      </dd>
-    </div>
   );
 }

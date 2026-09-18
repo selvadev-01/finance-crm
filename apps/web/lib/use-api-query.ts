@@ -46,7 +46,9 @@ export function useApiQuery<Route extends RouteDefinition>(
   useEffect(() => {
     if (key === null) return;
     let cancelled = false;
-    const body = JSON.parse(key.slice(0, key.lastIndexOf("#"))) as RouteRequest<Route>;
+    const body = JSON.parse(
+      key.slice(0, key.lastIndexOf("#")),
+    ) as RouteRequest<Route>;
 
     const settle = (state: QueryState<Route>) => {
       if (!cancelled) setSettled({ key, state });
@@ -80,8 +82,18 @@ export function useApiQuery<Route extends RouteDefinition>(
 
   const reload = useCallback(() => setVersion((value) => value + 1), []);
 
-  // A stale answer for an earlier request is never shown as the current one.
+  // A stale answer for an earlier *request* is never shown as the current one.
+  // A reload of the same request keeps showing what it has until the fresh
+  // answer arrives, so a list does not blink to a skeleton after every save.
+  const sameRequest =
+    settled !== null &&
+    key !== null &&
+    settled.key.slice(0, settled.key.lastIndexOf("#")) ===
+      key.slice(0, key.lastIndexOf("#"));
   const state: QueryState<Route> =
-    settled && settled.key === key ? settled.state : { status: "loading" };
+    settled &&
+    (settled.key === key || (sameRequest && settled.state.status === "ready"))
+      ? settled.state
+      : { status: "loading" };
   return { ...state, reload };
 }

@@ -5,7 +5,10 @@ import { accountTermsSchema } from "./account.contract.js";
 import { buildPath, createApiClient } from "./client.js";
 import { collectionContract } from "./collection.contract.js";
 import { customerContract, mobileSchema } from "./customer.contract.js";
+import { dashboardContract } from "./dashboard.contract.js";
+import { holidayContract } from "./holiday.contract.js";
 import { organisationContract } from "./organisation.contract.js";
+import { MAX_REPORT_DAYS, reportContract } from "./report.contract.js";
 import { route, successStatus } from "./route.js";
 import {
   calendarDateSchema,
@@ -185,13 +188,19 @@ describe("account terms (US-030, BR-01)", () => {
 
   it("US-030a: collected to date is optional, and refused at or above the account amount", () => {
     expect(issues(terms({ collectedToDate: "4,700" }))).toEqual([]);
-    expect(accountTermsSchema.parse(terms({ collectedToDate: "4,700" })).collectedToDate).toBe("4700");
+    expect(
+      accountTermsSchema.parse(terms({ collectedToDate: "4,700" }))
+        .collectedToDate,
+    ).toBe("4700");
     expect(issues(terms({ collectedToDate: "10000" }))).toEqual([
-      { path: "collectedToDate", message: expect.stringContaining("paid in full") },
+      {
+        path: "collectedToDate",
+        message: expect.stringContaining("paid in full"),
+      },
     ]);
-    expect(issues(terms({ collectedToDate: "-1" })).map((issue) => issue.path)).toEqual([
-      "collectedToDate",
-    ]);
+    expect(
+      issues(terms({ collectedToDate: "-1" })).map((issue) => issue.path),
+    ).toEqual(["collectedToDate"]);
   });
 
   it("formats paise for messages with Indian grouping", () => {
@@ -291,7 +300,8 @@ describe("createApiClient", () => {
     };
     const replay = createApiClient({
       baseUrl: "",
-      fetch: async () => new Response(JSON.stringify(collection), { status: 200 }),
+      fetch: async () =>
+        new Response(JSON.stringify(collection), { status: 200 }),
     });
     const result = await replay(collectionContract.recordCollection, {
       body: {
@@ -341,5 +351,540 @@ describe("createApiClient", () => {
         body: { name: "x" },
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("holiday contract (US-093)", () => {
+  const body = holidayContract.declareHoliday.body;
+
+  it("treats a blank sector as business-wide", () => {
+    expect(
+      body.parse({ date: "2026-10-20", name: " Deepavali ", sectorId: "" }),
+    ).toEqual({ date: "2026-10-20", name: "Deepavali", sectorId: undefined });
+    expect(body.parse({ date: "2026-10-20", name: "Deepavali" }).sectorId).toBe(
+      undefined,
+    );
+  });
+
+  it("keeps a chosen sector", () => {
+    expect(
+      body.parse({ date: "2026-10-20", name: "Local", sectorId: "s1" })
+        .sectorId,
+    ).toBe("s1");
+  });
+
+  it.each([
+    [{ date: "2026-02-30", name: "x" }, "date"],
+    [{ date: "2026-10-20", name: "   " }, "name"],
+  ])("refuses %j at %s", (input, field) => {
+    const result = body.safeParse(input);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path[0])).toContain(field);
+  });
+
+  it("lists upcoming holidays unless asked for past ones", () => {
+    const query = holidayContract.listHolidays.query;
+    expect(query.parse({}).period).toBe("upcoming");
+    expect(query.parse({ period: "past", year: "2026" })).toMatchObject({
+      period: "past",
+      year: 2026,
+    });
+    expect(query.safeParse({ period: "soon" }).success).toBe(false);
+  });
+});
+
+describe("business overview contract (US-080)", () => {
+  const response = dashboardContract.getOverview.responses[200];
+  const unavailable = {
+    businessDate: "2026-01-05",
+    day: { kind: "WORKING" },
+    generatedAt: "2026-01-05T14:30:00.000Z",
+    setupNeeded: null,
+    today: null,
+    structure: null,
+    accounts: null,
+    totals: null,
+    sectors: null,
+    tally: null,
+  };
+  const sector = {
+    sectorId: "sec_1",
+    code: "S-01",
+    name: "North",
+    lineCount: 2,
+    expected: "1100.00",
+    collected: "1050.00",
+    shortfall: "100.00",
+    surplus: "50.00",
+    lowCount: 1,
+    extraCount: 1,
+    linesToClose: 2,
+    linesClosed: 1,
+    linesTallied: 0,
+    tally: "OPEN",
+  };
+
+  it("carries each of the thirteen figures' groups as null when unknown, never as zero (S-07)", () => {
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(
+      response.safeParse({ ...unavailable, totals: undefined }).success,
+    ).toBe(false);
+  });
+
+  it("sends money as decimal strings and a sector's tally as one of four states", () => {
+    const parsed = response.parse({ ...unavailable, sectors: [sector] });
+    expect(parsed.sectors).toEqual([sector]);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        totals: { accountAmount: 28000, invested: "1.00", profit: "1.00" },
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        sectors: [{ ...sector, tally: "REOPENED" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        sectors: [{ ...sector, shortfall: "-1.00" }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes an optional business date, which must be a real day", () => {
+    const query = dashboardContract.getOverview.query;
+    expect(query.parse({})).toEqual({});
+    expect(query.safeParse({ date: "2026-02-30" }).success).toBe(false);
+  });
+});
+
+describe("sector comparison contract (US-081)", () => {
+  const response = dashboardContract.getSectors.responses[200];
+  const unavailable = {
+    businessDate: "2026-01-05",
+    day: { kind: "WORKING" },
+    generatedAt: "2026-01-05T14:30:00.000Z",
+    setupNeeded: null,
+    sectors: null,
+    business: { structure: null, totals: null, today: null },
+    tally: null,
+  };
+  const row = {
+    sectorId: "sec_1",
+    code: "S-01",
+    name: "North",
+    isActive: true,
+    structure: null,
+    totals: null,
+    today: {
+      expected: "1100.00",
+      collected: "1050.00",
+      shortfall: "100.00",
+      surplus: "50.00",
+      lowCount: 1,
+      extraCount: 1,
+      linesToClose: 2,
+      linesClosed: 1,
+      linesTallied: 0,
+      tally: "OPEN",
+    },
+  };
+
+  it("carries a group it could not read as null, per sector and business-wide, never as zero (S-07)", () => {
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(response.parse({ ...unavailable, sectors: [row] }).sectors).toEqual([
+      row,
+    ]);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        business: { structure: null, totals: null },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("sends a sector's amounts as decimal strings and refuses a number", () => {
+    const totals = {
+      accountAmount: "20000.00",
+      invested: "17000.00",
+      profit: "3000.00",
+    };
+    expect(
+      response.parse({ ...unavailable, sectors: [{ ...row, totals }] })
+        .sectors?.[0]?.totals,
+    ).toEqual(totals);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        sectors: [{ ...row, totals: { ...totals, profit: 3000 } }],
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        sectors: [{ ...row, structure: { lines: -1, customers: 0 } }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes an optional business date, which must be a real day", () => {
+    const query = dashboardContract.getSectors.query;
+    expect(query.parse({})).toEqual({});
+    expect(query.safeParse({ date: "2026-02-30" }).success).toBe(false);
+  });
+});
+
+describe("operations dashboard contract (US-082)", () => {
+  const response = dashboardContract.getOperations.responses[200];
+  const unavailable = {
+    businessDate: "2026-01-05",
+    day: { kind: "WORKING" },
+    generatedAt: "2026-01-05T14:30:00.000Z",
+    today: null,
+    pendingApprovals: null,
+    customers: null,
+    accounts: null,
+    investment: null,
+    sectors: null,
+    lines: null,
+    attention: null,
+  };
+
+  it("carries an uncomputed figure as null, not as zero (S-07)", () => {
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(
+      response.safeParse({ ...unavailable, investment: undefined }).success,
+    ).toBe(false);
+  });
+
+  it("sends money as decimal strings and refuses a number or a negative shortfall", () => {
+    const today = {
+      expected: "1500.00",
+      collected: "-20.00",
+      pending: "1520.00",
+      extra: "0.00",
+      lowCount: 0,
+      extraCount: 0,
+      linesToClose: 1,
+      linesNotClosed: 1,
+    };
+    expect(response.parse({ ...unavailable, today }).today).toEqual(today);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        today: { ...today, expected: 1500 },
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        today: { ...today, pending: "-1.00" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes an optional business date, which must be a real day", () => {
+    const query = dashboardContract.getOperations.query;
+    expect(query.parse({})).toEqual({});
+    expect(query.parse({ date: "2026-01-05" }).date).toBe("2026-01-05");
+    expect(query.safeParse({ date: "2026-02-30" }).success).toBe(false);
+  });
+});
+
+describe("line-wise report contract (US-084)", () => {
+  const response = reportContract.getLineWise.responses[200];
+  const row = {
+    lineId: "line_1",
+    code: "L-01",
+    name: "Market Road",
+    isActive: true,
+    sectorId: "sec_1",
+    sectorCode: "S-01",
+    sectorName: "North",
+    staff: { seniorName: null, juniorNames: ["Ravi"] },
+    book: null,
+    amounts: null,
+    collections: {
+      expected: "3300.00",
+      collected: "-20.00",
+      pending: "3320.00",
+      extra: "0.00",
+    },
+  };
+  const report = {
+    from: "2026-01-01",
+    to: "2026-01-07",
+    generatedAt: "2026-01-07T14:30:00.000Z",
+    lines: [row],
+    totals: {
+      lines: 1,
+      book: null,
+      amounts: null,
+      collections: row.collections,
+    },
+  };
+
+  it("carries a group it could not read as null on the rows and the totals, never as zero (S-07)", () => {
+    expect(response.parse(report)).toEqual(report);
+    const unavailable = { ...report, lines: null, totals: null };
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(
+      response.safeParse({ ...report, lines: [{ ...row, book: undefined }] })
+        .success,
+    ).toBe(false);
+    // The staff arrive with the line itself, so they are never unknown.
+    expect(
+      response.safeParse({ ...report, lines: [{ ...row, staff: null }] })
+        .success,
+    ).toBe(false);
+  });
+
+  it("sends money as decimal strings and refuses a number or a negative pending", () => {
+    const amounts = {
+      accountAmount: "20000.00",
+      invested: "17000.00",
+      profit: "3000.00",
+    };
+    expect(
+      response.parse({ ...report, lines: [{ ...row, amounts }] }).lines?.[0]
+        ?.amounts,
+    ).toEqual(amounts);
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, amounts: { ...amounts, profit: 3000 } }],
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [
+          { ...row, collections: { ...row.collections, pending: "-1.00" } },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes an optional range and filters, with real days only", () => {
+    const query = reportContract.getLineWise.query;
+    expect(query.parse({})).toEqual({});
+    expect(
+      query.parse({ from: "2026-01-01", to: "2026-01-31", lineId: "line_1" }),
+    ).toEqual({ from: "2026-01-01", to: "2026-01-31", lineId: "line_1" });
+    expect(query.safeParse({ from: "2026-02-30" }).success).toBe(false);
+    expect(MAX_REPORT_DAYS).toBe(93);
+  });
+});
+
+describe("investment overview contract (US-085)", () => {
+  const response = reportContract.getInvestment.responses[200];
+  const position = {
+    accounts: 2,
+    accountAmount: "20000.00",
+    invested: "17000.00",
+    profit: "3000.00",
+    outstanding: "19100.00",
+    returned: "900.00",
+    profitEarned: "135.00",
+    profitToEarn: "2865.00",
+  };
+  const range = {
+    disbursements: 1,
+    accountAmount: "10000.00",
+    invested: "8500.00",
+    profit: "1500.00",
+    returned: "900.00",
+    profitEarned: "135.00",
+  };
+  const row = {
+    lineId: "line_1",
+    code: "L-01",
+    name: "Market Road",
+    isActive: true,
+    sectorId: "sec_1",
+    sectorCode: "S-01",
+    sectorName: "North",
+    position,
+    range,
+  };
+  const report = {
+    from: "2026-01-01",
+    to: "2026-01-07",
+    generatedAt: "2026-01-07T14:30:00.000Z",
+    lines: [row],
+    totals: { lines: 1, position, range },
+  };
+
+  it("carries §22's contracted figures beside the ledger's actual position", () => {
+    expect(response.parse(report)).toEqual(report);
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, position: { ...position, profitEarned: 135 } }],
+      }).success,
+    ).toBe(false);
+    // Money still out can never be negative; a period's movement can be.
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, position: { ...position, outstanding: "-1.00" } }],
+      }).success,
+    ).toBe(false);
+    const reversed = { ...range, returned: "-20.00", profitEarned: "-3.00" };
+    expect(
+      response.parse({ ...report, lines: [{ ...row, range: reversed }] })
+        .lines?.[0]?.range,
+    ).toEqual(reversed);
+  });
+
+  it("carries a group it could not read as null, never as zero (S-07)", () => {
+    const partial = {
+      ...report,
+      lines: [{ ...row, position: null }],
+      totals: { lines: 1, position: null, range },
+    };
+    expect(response.parse(partial)).toEqual(partial);
+    const unavailable = { ...report, lines: null, totals: null };
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(
+      response.safeParse({ ...report, lines: [{ ...row, range: undefined }] })
+        .success,
+    ).toBe(false);
+  });
+
+  it("takes the same range and filters as every report", () => {
+    const query = reportContract.getInvestment.query;
+    expect(query.parse({})).toEqual({});
+    expect(
+      query.parse({ from: "2026-01-01", to: "2026-01-31", sectorId: "sec_1" }),
+    ).toEqual({ from: "2026-01-01", to: "2026-01-31", sectorId: "sec_1" });
+    expect(query.safeParse({ to: "2026-02-30" }).success).toBe(false);
+    expect(reportContract.getInvestment.path).toBe("/api/reports/investment");
+  });
+});
+
+describe("collection report contract (US-086)", () => {
+  const response = reportContract.getCollection.responses[200];
+  const collections = {
+    expected: "2500.00",
+    collected: "1500.00",
+    variance: "-1000.00",
+    pending: "1000.00",
+    extra: "0.00",
+    missed: 1,
+  };
+  const classification = {
+    recorded: 4,
+    amount: "1500.00",
+    correct: { count: 1, amount: "500.00" },
+    low: { count: 1, amount: "400.00" },
+    extra: { count: 1, amount: "600.00" },
+    noPayment: { count: 1, amount: "0.00" },
+    adjusted: { count: 0, amount: "0.00" },
+  };
+  const row = {
+    lineId: "line_1",
+    code: "L-01",
+    name: "Market Road",
+    isActive: true,
+    sectorId: "sec_1",
+    sectorCode: "S-01",
+    sectorName: "North",
+    collections,
+    classification,
+  };
+  const report = {
+    from: "2026-01-05",
+    to: "2026-01-05",
+    generatedAt: "2026-01-05T14:30:00.000Z",
+    lines: [row],
+    totals: { lines: 1, collections, classification },
+  };
+
+  it("carries BR-08's four classes, corrections apart, beside expected against collected", () => {
+    expect(response.parse(report)).toEqual(report);
+    // A correction takes money back out, so its tally may be negative.
+    const corrected = {
+      ...classification,
+      adjusted: { count: 1, amount: "-20.00" },
+    };
+    expect(
+      response.parse({
+        ...report,
+        lines: [{ ...row, classification: corrected }],
+      }).lines?.[0]?.classification?.adjusted,
+    ).toEqual({ count: 1, amount: "-20.00" });
+    // Pending and extra are BR-16's per-day sums: never negative.
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, collections: { ...collections, extra: "-1.00" } }],
+      }).success,
+    ).toBe(false);
+    // A count is a whole number of entries, and money is never a JS number.
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [
+          {
+            ...row,
+            classification: {
+              ...classification,
+              low: { count: 1, amount: 400 },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, collections: { ...collections, missed: 1.5 } }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("carries a group it could not read as null, never as zero (S-07)", () => {
+    const partial = {
+      ...report,
+      lines: [{ ...row, classification: null }],
+      totals: { lines: 1, collections, classification: null },
+    };
+    expect(response.parse(partial)).toEqual(partial);
+    const unavailable = { ...report, lines: null, totals: null };
+    expect(response.parse(unavailable)).toEqual(unavailable);
+    expect(
+      response.safeParse({
+        ...report,
+        lines: [{ ...row, collections: undefined }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("takes every report's range and filters, plus the collector and one BR-08 class", () => {
+    const query = reportContract.getCollection.query;
+    expect(query.parse({})).toEqual({});
+    expect(
+      query.parse({
+        from: "2026-01-01",
+        to: "2026-01-31",
+        lineId: "line_1",
+        collectedByUserId: "user_1",
+        classification: "LOW",
+      }),
+    ).toEqual({
+      from: "2026-01-01",
+      to: "2026-01-31",
+      lineId: "line_1",
+      collectedByUserId: "user_1",
+      classification: "LOW",
+    });
+    // MISSED is a slot nobody visited, not a classification a row can carry.
+    expect(query.safeParse({ classification: "MISSED" }).success).toBe(false);
+    expect(query.safeParse({ from: "2026-02-30" }).success).toBe(false);
+    expect(reportContract.getCollection.path).toBe("/api/reports/collection");
   });
 });

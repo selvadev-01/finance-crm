@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { api } from "../../../../lib/api-client";
+import { AuthCard } from "../../auth-card";
 import { SignInForm } from "../../sign-in/sign-in-form";
 
 type Lookup =
@@ -37,19 +38,16 @@ export function OrganizationSignIn({ slug }: { slug: string }) {
   }, [slug]);
 
   return (
-    <section className="flex flex-col gap-6 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-6 shadow-[var(--shadow-raised)]">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-ink">
-          {lookup.status === "found" ? lookup.name : "Sign in"}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          {lookup.status === "found"
-            ? "Sign in with the email and password your administrator gave you."
-            : lookup.status === "loading"
-              ? "Finding your business…"
-              : "Use the email and password your administrator gave you."}
-        </p>
-      </header>
+    <AuthCard
+      title={lookup.status === "found" ? lookup.name : "Sign in"}
+      description={
+        lookup.status === "found"
+          ? "Sign in with the email and password your administrator gave you."
+          : lookup.status === "loading"
+            ? "Finding your business…"
+            : "Use the email and password your administrator gave you."
+      }
+    >
       {lookup.status === "not-found" ? (
         <FormMessage tone="critical">
           No business uses this sign-in link. Check the link, or{" "}
@@ -64,6 +62,6 @@ export function OrganizationSignIn({ slug }: { slug: string }) {
       ) : lookup.status === "error" ? (
         <SignInForm />
       ) : null}
-    </section>
+    </AuthCard>
   );
 }

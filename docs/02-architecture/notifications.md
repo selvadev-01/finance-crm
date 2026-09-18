@@ -176,12 +176,12 @@ Email is a third channel, beside the centre and push. It is **SMTP through Nodem
 
 **Addressed to a user, not an address.** The address is read when the email is sent: a corrected address is used, a deleted user's queue goes with them, and the table holds no copy of anyone's email.
 
-| Category      | Emailed |
-| ------------- | ------- |
-| `ALERT`       | Yes     |
+| Category      | Emailed                                                            |
+| ------------- | ------------------------------------------------------------------ |
+| `ALERT`       | Yes                                                                |
 | `WARNING`     | **No** — it fires on every extra collection and correction request |
-| `SUCCESS`     | **No**  |
-| `INFORMATION` | **No**  |
+| `SUCCESS`     | **No**                                                             |
+| `INFORMATION` | **No**                                                             |
 
 > An inbox fills faster than a notification tray and is read less often. Only the events the business must act on go there.
 
@@ -191,14 +191,14 @@ Email is a third channel, beside the centre and push. It is **SMTP through Nodem
 
 ## Risks
 
-| Risk                            | Mitigation                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Alert fatigue                   | Only `ALERT` and `WARNING` push; exact-match classification; missed detection deferred until after day close |
-| Stale tokens accumulate         | `gone` deactivation, 90-day staleness job                                                                    |
-| Provider outage                 | In-app unaffected; outbox retries                                                                            |
-| VAPID keys lost                 | Documented in the ops runbook; losing them invalidates every subscription and forces re-registration         |
-| Sensitive data on a lock screen | Payload scoped to the recipient's permissions                                                                |
-| FCM private key leaked          | Env only, never committed; rotation documented                                                               |
-| Mail server down or slow        | Email is queued in the transaction and sent by a job; retried with backoff; the notification is in the app regardless |
+| Risk                            | Mitigation                                                                                                                                |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Alert fatigue                   | Only `ALERT` and `WARNING` push; exact-match classification; missed detection deferred until after day close                              |
+| Stale tokens accumulate         | `gone` deactivation, 90-day staleness job                                                                                                 |
+| Provider outage                 | In-app unaffected; outbox retries                                                                                                         |
+| VAPID keys lost                 | Documented in the ops runbook; losing them invalidates every subscription and forces re-registration                                      |
+| Sensitive data on a lock screen | Payload scoped to the recipient's permissions                                                                                             |
+| FCM private key leaked          | Env only, never committed; rotation documented                                                                                            |
+| Mail server down or slow        | Email is queued in the transaction and sent by a job; retried with backoff; the notification is in the app regardless                     |
 | SMTP password leaked            | Env only (`SMTP_PASS`), never logged — failures log row ids only; use an app password or service credential, not a mailbox's own password |
-| Alert emails land in spam       | Send from a domain with SPF, DKIM and DMARC set up at the mail service; a plain-text part in every email      |
+| Alert emails land in spam       | Send from a domain with SPF, DKIM and DMARC set up at the mail service; a plain-text part in every email                                  |

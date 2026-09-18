@@ -79,9 +79,9 @@ describe("toBusinessDate (BR-12)", () => {
 
 describe("businessDayStart", () => {
   it("is IST midnight: 5 Jan 2026 begins at 18:30 UTC on 4 Jan", () => {
-    expect(businessDayStart(parseCalendarDate("2026-01-05")).toISOString()).toBe(
-      "2026-01-04T18:30:00.000Z",
-    );
+    expect(
+      businessDayStart(parseCalendarDate("2026-01-05")).toISOString(),
+    ).toBe("2026-01-04T18:30:00.000Z");
   });
 
   it("round-trips through toBusinessDate, and a millisecond earlier is the day before, for every day of 2024–2026", () => {
@@ -89,7 +89,9 @@ describe("businessDayStart", () => {
       const date = addCalendarDays(parseCalendarDate("2024-01-01"), day);
       const start = businessDayStart(date);
       expect(toBusinessDate(start)).toBe(date);
-      expect(toBusinessDate(new Date(start.getTime() - 1))).toBe(addCalendarDays(date, -1));
+      expect(toBusinessDate(new Date(start.getTime() - 1))).toBe(
+        addCalendarDays(date, -1),
+      );
     }
   });
 });

@@ -138,6 +138,7 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 **Decided 2026-09-13: ledger accounts carry `organizationId`** (migration `ledger_account_organization`). Before this, the business-wide accounts had no owner at all.
 
 Posting so far:
+
 - **Disbursement** (M05, US-032).
 - **The mid-term catch-up** (US-030a): one COLLECTION transaction sourced to the `account_loan`, debiting `CASH_AT_OFFICE`, with no collection row behind it. Collection, adjustment, handover and write-off postings arrive with their modules.
 

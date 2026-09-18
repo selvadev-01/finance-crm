@@ -27,6 +27,7 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'home',
   'lines',
   'notifications',
+  'reports',
   'route',
   'sectors',
   'serwist',

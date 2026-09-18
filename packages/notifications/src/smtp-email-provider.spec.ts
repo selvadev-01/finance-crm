@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import { MAX_ATTEMPTS, outcome } from "./delivery.js";
-import { classifySmtpError, SmtpEmailProvider, type SmtpSend } from "./smtp-email-provider.js";
+import {
+  classifySmtpError,
+  SmtpEmailProvider,
+  type SmtpSend,
+} from "./smtp-email-provider.js";
 
-const settings = { host: "smtp.example.com", port: 587, secure: false, from: "Rasi <no-reply@example.com>" };
+const settings = {
+  host: "smtp.example.com",
+  port: 587,
+  secure: false,
+  from: "Rasi <no-reply@example.com>",
+};
 const message = {
   to: "senior@example.com",
   subject: "Low collection on Line 3",
@@ -57,7 +66,11 @@ describe("SMTP email provider (notifications.md#email)", () => {
   });
 
   it("puts the reply code in the reason, for the outbox row", () => {
-    expect(classifySmtpError(Object.assign(new Error("mailbox unavailable"), { responseCode: 550 }))).toEqual({
+    expect(
+      classifySmtpError(
+        Object.assign(new Error("mailbox unavailable"), { responseCode: 550 }),
+      ),
+    ).toEqual({
       status: "failed",
       reason: "550 mailbox unavailable",
     });
@@ -66,8 +79,16 @@ describe("SMTP email provider (notifications.md#email)", () => {
   it("shares the push retry schedule: 1, 5, 30, 120 minutes, then gives up", () => {
     const now = new Date("2026-09-15T10:00:00Z");
     const retry = { status: "retry", reason: "421" } as const;
-    expect(outcome(retry, 1, now)).toMatchObject({ status: "PENDING", nextAttemptAt: new Date("2026-09-15T10:01:00Z") });
-    expect(outcome(retry, MAX_ATTEMPTS, now)).toMatchObject({ status: "FAILED" });
-    expect(outcome({ status: "failed", reason: "550" }, 1, now)).toMatchObject({ status: "FAILED", lastError: "550" });
+    expect(outcome(retry, 1, now)).toMatchObject({
+      status: "PENDING",
+      nextAttemptAt: new Date("2026-09-15T10:01:00Z"),
+    });
+    expect(outcome(retry, MAX_ATTEMPTS, now)).toMatchObject({
+      status: "FAILED",
+    });
+    expect(outcome({ status: "failed", reason: "550" }, 1, now)).toMatchObject({
+      status: "FAILED",
+      lastError: "550",
+    });
   });
 });

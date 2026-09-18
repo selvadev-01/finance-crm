@@ -57,10 +57,10 @@
 
 Environment-driven, not database-driven — they gate code paths, and a database flag that turns on unfinished code is a deployment risk rather than a feature.
 
-| Flag                   | Purpose                                       |
-| ---------------------- | --------------------------------------------- |
-| `PUSH_PROVIDER`        | `WEB_PUSH` \| `FCM` \| `BOTH` \| `NONE` (M10) |
-| `WORKER_ENABLED`       | Run job consumers in this process (M14)       || `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox            |
+| Flag             | Purpose                                       |
+| ---------------- | --------------------------------------------- |
+| `PUSH_PROVIDER`  | `WEB_PUSH` \| `FCM` \| `BOTH` \| `NONE` (M10) |
+| `WORKER_ENABLED` | Run job consumers in this process (M14)       |     | `OFFLINE_SYNC_ENABLED` | Kill switch for the offline outbox |
 
 `PUSH_PROVIDER=NONE` is the development default so local work raises no push traffic. `BOTH` exists for the migration window if the business moves between providers.
 

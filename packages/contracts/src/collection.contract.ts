@@ -130,7 +130,11 @@ export const collectionStatusSchema = z.enum([
   "REJECTED",
 ]);
 export const entryTypeSchema = z.enum(["ORIGINAL", "ADJUSTMENT"]);
-export const approvalDecisionSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const approvalDecisionSchema = z.enum([
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+]);
 
 /** S-16: one row of collection history. An adjustment's amount is signed. */
 export const collectionListItemSchema = z.object({
@@ -272,7 +276,8 @@ export const collectionContract = {
   listCollections: route({
     method: "GET",
     path: "/api/collections",
-    summary: "Collection history in the caller's scope, date-bounded (S-16, US-045)",
+    summary:
+      "Collection history in the caller's scope, date-bounded (S-16, US-045)",
     query: pageQuerySchema.extend({
       /** Inclusive business dates, at most 93 days apart. */
       from: calendarDateSchema,
@@ -296,7 +301,8 @@ export const collectionContract = {
   requestCorrection: route({
     method: "POST",
     path: "/api/collections/:collectionId/corrections",
-    summary: "Ask for a collection to be corrected; applies only on approval (US-044, BR-14)",
+    summary:
+      "Ask for a collection to be corrected; applies only on approval (US-044, BR-14)",
     pathParams: collectionParams,
     body: requestCorrectionBodySchema,
     responses: {
@@ -311,7 +317,8 @@ export const collectionContract = {
   requestReversal: route({
     method: "POST",
     path: "/api/collections/:collectionId/reversal",
-    summary: "Ask for a collection to be reversed to ₹0; applies only on approval (BR-14)",
+    summary:
+      "Ask for a collection to be reversed to ₹0; applies only on approval (BR-14)",
     pathParams: collectionParams,
     body: z.object({ reason: reasonSchema }),
     responses: {

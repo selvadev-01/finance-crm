@@ -246,12 +246,19 @@ describe('AssignmentService (US-012, US-013)', () => {
           effectiveFrom: '2026-09-13',
         });
         expect(result).toMatchObject({ closed: [], linesWithoutSenior: [] });
-        const told = await tx.notification.findMany({ where: { userId: junior.userId } });
+        const told = await tx.notification.findMany({
+          where: { userId: junior.userId },
+        });
         expect(told).toEqual([
-          expect.objectContaining({ eventType: 'NEW_ASSIGNMENT', category: 'INFORMATION' }),
+          expect.objectContaining({
+            eventType: 'NEW_ASSIGNMENT',
+            category: 'INFORMATION',
+          }),
         ]);
         expect(told[0]!.body).toContain('is a Junior on');
-        expect(await tx.notification.count({ where: { userId: context.userId } })).toBe(0);
+        expect(
+          await tx.notification.count({ where: { userId: context.userId } }),
+        ).toBe(0);
       });
     });
   });

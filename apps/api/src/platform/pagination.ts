@@ -48,12 +48,28 @@ export function toPage<Row extends { id: string }, Item>(
   page: PageRequest,
   toItem: (row: Row) => Item,
 ): Page<Item> {
+  return toPageBy(rows, page, (row) => row.id, toItem);
+}
+
+/**
+ * {@link toPage} for a list ordered by something other than the id — the
+ * overdue report is by target completion date or by outstanding (US-087), so
+ * its cursor carries that value **and** the id, and the row's own key function
+ * is what encodes it. The id is always the last part, so the order is total
+ * and a page boundary can never repeat or drop a row.
+ */
+export function toPageBy<Row, Item>(
+  rows: Row[],
+  page: PageRequest,
+  key: (row: Row) => string,
+  toItem: (row: Row) => Item,
+): Page<Item> {
   const hasMore = rows.length > page.limit;
   const visible = hasMore ? rows.slice(0, page.limit) : rows;
   const last = visible.at(-1);
   return {
     data: visible.map(toItem),
-    nextCursor: hasMore && last ? encodeCursor(last.id) : null,
+    nextCursor: hasMore && last !== undefined ? encodeCursor(key(last)) : null,
     hasMore,
   };
 }

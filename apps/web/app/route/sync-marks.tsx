@@ -1,21 +1,35 @@
 import {
+  ArrowLeft,
   CheckCircle,
   CircleNotch,
   Clock,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { BUSINESS_TIME_ZONE } from "@repo/domain";
-import { Badge } from "@repo/ui";
+import { Badge, Button } from "@repo/ui";
 
 import type { OutboxEntry } from "../../lib/offline/db";
 import type { RowState } from "../../lib/offline/outbox";
+import { backToRoute } from "./hash-view";
 
 /**
- * Warning and info text on their own subtle backgrounds measure 2.89:1 and
- * 4.18:1 — under WCAG AA for 11px text, and these are the states a Junior
- * reads in sunlight. The word goes in ink; the dot or icon carries the colour.
+ * The way back to S-01 from every other view. Its accessible name is exactly
+ * "Route" — the offline E2E suite finds it by that name.
  */
-const LEGIBLE = "text-ink";
+export function BackToRoute() {
+  return (
+    <div>
+      <Button
+        tone="ghost"
+        onClick={backToRoute}
+        className="-ml-3 font-semibold text-accent hover:text-accent-hover"
+      >
+        <ArrowLeft aria-hidden size={20} weight="regular" />
+        Route
+      </Button>
+    </div>
+  );
+}
 
 /**
  * The three sync states a Junior must tell apart at a glance, in sunlight
@@ -29,14 +43,14 @@ export function RowStateMark({ state }: { state: RowState }) {
       return null;
     case "SAVED":
       return (
-        <Badge tone="warning" className={LEGIBLE}>
-          <span aria-hidden className="size-2 rounded-full bg-warning" />
+        <Badge tone="warning" mark="none">
+          <span aria-hidden className="size-2 rounded-full bg-warning-bright" />
           Saved on phone
         </Badge>
       );
     case "SYNCING":
       return (
-        <Badge tone="info" className={LEGIBLE}>
+        <Badge tone="info" mark="none">
           <CircleNotch
             aria-hidden
             size={12}
@@ -48,7 +62,7 @@ export function RowStateMark({ state }: { state: RowState }) {
       );
     case "SYNCED":
       return (
-        <Badge tone="positive">
+        <Badge tone="positive" mark="none">
           <CheckCircle aria-hidden size={12} weight="fill" />
           Sent to office
         </Badge>
@@ -67,14 +81,14 @@ export function EntryStateMark({ entry }: { entry: OutboxEntry }) {
       return <RowStateMark state="SYNCED" />;
     case "PAUSED_AUTH":
       return (
-        <Badge tone="warning" className={LEGIBLE}>
+        <Badge tone="warning" mark="none">
           <Clock aria-hidden size={12} weight="bold" className="text-warning" />
           Waiting for sign-in
         </Badge>
       );
     case "FAILED":
       return (
-        <Badge tone="critical">
+        <Badge tone="critical" mark="none">
           <WarningCircle aria-hidden size={12} weight="bold" />
           Not accepted
         </Badge>

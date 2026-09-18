@@ -3,20 +3,33 @@
 import { type ApprovalQueueItem, collectionContract } from "@repo/contracts";
 import {
   Button,
-  DataTableSkeleton,
+  Card,
+  Description,
+  DescriptionList,
+  EmptyFrame,
+  FormMessage,
   formatBusinessDate,
   formatCurrency,
+  ListFooter,
   NothingYet,
   NotPermitted,
   PageHeader,
+  RecordIdentity,
+  recordLinkClass,
 } from "@repo/ui";
 import Link from "next/link";
 import { useState } from "react";
 
-import { useApiQuery } from "../../../../lib/use-api-query";
+import { ListFallback } from "../../../../components/list-state";
+import { PageTrail } from "../../../../components/page-trail";
+import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { useSignedIn } from "../../../../lib/use-me";
-import { LIST_LIMIT, LoadFailed, Surface, TruncatedNote } from "../../_organisation/list-controls";
-import { canApproveCorrections, DecisionDialog, signedAmount } from "../collection-parts";
+import { usePagedQuery } from "../../../../lib/use-paged-query";
+import {
+  canApproveCorrections,
+  DecisionDialog,
+  signedAmount,
+} from "../collection-parts";
 
 /**
  * S-18 · Pending approvals — an action queue. Each correction shows what was
@@ -27,8 +40,11 @@ import { canApproveCorrections, DecisionDialog, signedAmount } from "../collecti
 export function ApprovalQueue() {
   const me = useSignedIn();
   const allowed = canApproveCorrections(me.role);
-  const [deciding, setDeciding] = useState<{ item: ApprovalQueueItem; decision: "APPROVED" | "REJECTED" } | null>(null);
-  const queue = useApiQuery(
+  const [deciding, setDeciding] = useState<{
+    item: ApprovalQueueItem;
+    decision: "APPROVED" | "REJECTED";
+  } | null>(null);
+  const queue = usePagedQuery(
     collectionContract.listApprovals,
     allowed ? { query: { limit: LIST_LIMIT, decision: "PENDING" } } : null,
   );
@@ -36,72 +52,62 @@ export function ApprovalQueue() {
   return (
     <>
       <PageHeader
-        eyebrow={<Link href="/collections" className="hover:text-ink hover:underline">Collections</Link>}
+        trail={
+          <PageTrail
+            steps={[
+              { label: "Collections", href: "/collections" },
+              { label: "Pending approvals" },
+            ]}
+          />
+        }
         title="Pending approvals"
         description="Corrections wait here until someone other than the requester approves or rejects them. Nothing moves until then."
       />
 
       {!allowed ? (
-        <Surface>
-          <NotPermitted title="Approvals are for Seniors and Admins" description="Corrections you request are decided by your Senior." />
-        </Surface>
-      ) : null}
-      {queue.status === "loading" ? <DataTableSkeleton columns={4} rows={3} /> : null}
-      {queue.status === "error" ? <LoadFailed message={queue.message} onRetry={queue.reload} /> : null}
-      {queue.status === "ready" && queue.data.data.length === 0 ? (
-        <Surface>
-          <NothingYet title="Nothing waiting" description="Corrections requested on your line or organisation appear here." />
-        </Surface>
-      ) : null}
-
-      {queue.status === "ready" && queue.data.data.length > 0 ? (
-        <ul className="flex flex-col gap-3" aria-label="Corrections awaiting a decision">
-          {queue.data.data.map((item) => (
-            <li
-              key={item.id}
-              className="flex flex-col gap-3 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-4"
-              data-testid="approval"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col">
-                  <Link
-                    href={`/collections/${item.original.id}`}
-                    className="font-medium text-ink hover:text-accent hover:underline"
-                  >
-                    {item.adjustment.customerName}
-                  </Link>
-                  <span className="text-sm text-ink-muted">
-                    <span className="font-mono">{item.adjustment.accountCode}</span> · {item.adjustment.lineName} · collected{" "}
-                    {formatBusinessDate(item.original.businessDate)} by {item.adjustment.collectedByName}
-                  </span>
-                </div>
-                <p className="flex items-baseline gap-2 text-base text-ink" data-numeric>
-                  <span className="text-ink-muted line-through">{formatCurrency(item.original.netAmount)}</span>
-                  <span className="font-semibold">{formatCurrency(item.correctedAmount)}</span>
-                  <span className="text-sm text-ink-muted">({signedAmount(item.adjustment)})</span>
-                </p>
-              </div>
-              <blockquote className="border-l-2 border-border-strong pl-3 text-sm text-ink">{item.reason}</blockquote>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm text-ink-muted">Requested by {item.requestedByName}</span>
-                {item.canDecide ? (
-                  <span className="flex gap-2">
-                    <Button tone="secondary" onClick={() => setDeciding({ item, decision: "REJECTED" })}>
-                      Reject
-                    </Button>
-                    <Button tone="primary" onClick={() => setDeciding({ item, decision: "APPROVED" })}>
-                      Approve
-                    </Button>
-                  </span>
-                ) : (
-                  <span className="text-sm text-ink-muted">You requested this — another approver decides it.</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {queue.status === "ready" && queue.data.hasMore ? <TruncatedNote noun="corrections" /> : null}
+        <EmptyFrame>
+          <NotPermitted
+            title="Approvals are for Seniors and Admins"
+            description="Corrections you request are decided by your Senior."
+          />
+        </EmptyFrame>
+      ) : queue.status === "ready" && queue.rows.length > 0 ? (
+        <>
+          <ul
+            className="flex flex-col gap-3"
+            aria-label="Corrections awaiting a decision"
+          >
+            {queue.rows.map((item) => (
+              <li key={item.id} data-testid="approval">
+                <ApprovalCard
+                  item={item}
+                  onDecide={(decision) => setDeciding({ item, decision })}
+                />
+              </li>
+            ))}
+          </ul>
+          <ListFooter
+            shown={queue.rows.length}
+            noun={queue.rows.length === 1 ? "correction" : "corrections"}
+            onMore={queue.loadMore}
+            loadingMore={queue.loadingMore}
+          />
+          {queue.moreError ? (
+            <FormMessage tone="critical">{queue.moreError}</FormMessage>
+          ) : null}
+        </>
+      ) : (
+        <ListFallback
+          query={queue}
+          columns={4}
+          empty={
+            <NothingYet
+              title="Nothing waiting"
+              description="Corrections requested on your line or organisation appear here."
+            />
+          }
+        />
+      )}
 
       {deciding ? (
         <DecisionDialog
@@ -115,5 +121,70 @@ export function ApprovalQueue() {
         />
       ) : null}
     </>
+  );
+}
+
+/** One correction awaiting a decision: whose, from what to what, and why. */
+function ApprovalCard({
+  item,
+  onDecide,
+}: {
+  item: ApprovalQueueItem;
+  onDecide: (decision: "APPROVED" | "REJECTED") => void;
+}) {
+  return (
+    <Card.Root>
+      <Card.Body>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <RecordIdentity code={item.adjustment.accountCode}>
+            <Link
+              href={`/collections/${item.original.id}`}
+              className={recordLinkClass}
+            >
+              {item.adjustment.customerName}
+            </Link>
+          </RecordIdentity>
+          <p
+            className="flex items-baseline gap-2 text-heading text-ink"
+            data-numeric
+          >
+            <span className="font-normal text-ink-muted line-through">
+              {formatCurrency(item.original.netAmount)}
+            </span>
+            <span>{formatCurrency(item.correctedAmount)}</span>
+            <span className="text-caption text-ink-muted">
+              ({signedAmount(item.adjustment)})
+            </span>
+          </p>
+        </div>
+        <DescriptionList layout="columns">
+          <Description term="Line">{item.adjustment.lineName}</Description>
+          <Description term="Collected">
+            {formatBusinessDate(item.original.businessDate)} by{" "}
+            {item.adjustment.collectedByName}
+          </Description>
+          <Description term="Requested by">{item.requestedByName}</Description>
+        </DescriptionList>
+        <blockquote className="border-l-2 border-border-strong pl-3 text-body text-ink">
+          {item.reason}
+        </blockquote>
+      </Card.Body>
+      <Card.Footer>
+        {item.canDecide ? (
+          <>
+            <Button tone="secondary" onClick={() => onDecide("REJECTED")}>
+              Reject
+            </Button>
+            <Button tone="primary" onClick={() => onDecide("APPROVED")}>
+              Approve
+            </Button>
+          </>
+        ) : (
+          <span className="text-body text-ink-muted">
+            You requested this — another approver decides it.
+          </span>
+        )}
+      </Card.Footer>
+    </Card.Root>
   );
 }

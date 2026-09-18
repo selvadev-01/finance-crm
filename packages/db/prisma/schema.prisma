@@ -254,6 +254,9 @@ enum NotificationEvent {
   HANDOVER_DISPUTED
   DAY_REOPENED
   RECONCILIATION_MISMATCH
+  /// Added 2026-09-17 for US-093 (migration holiday_events).
+  HOLIDAY_DECLARED
+  HOLIDAY_REMOVED
 }
 
 enum PushProvider {
@@ -997,7 +1000,9 @@ model Holiday {
 
   /// NULLS NOT DISTINCT (migration organization_scoped_uniques), so one
   /// business-wide (NULL sector) holiday per date per organization. Prisma
-  /// cannot express the clause and does not diff it.
+  /// cannot express the clause and does not diff it. CHECKs
+  /// holiday_not_sunday_check and holiday_name_not_blank_check (migration
+  /// constraints_holiday).
   @@unique([organizationId, date, sectorId])
   @@index([organizationId])
   @@index([sectorId])

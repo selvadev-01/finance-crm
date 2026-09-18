@@ -10,17 +10,19 @@ import {
 } from "@repo/contracts";
 import {
   Button,
-  DataTableSkeleton,
+  Card,
+  FilterBar,
+  FilterField,
+  FormMessage,
   Input,
+  ListFooter,
   NoMatches,
   NothingYet,
-  NotPermitted,
   PageHeader,
   Select,
 } from "@repo/ui";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
+import { ListFallback } from "../../../../components/list-state";
 import {
   ACTION_LABEL,
   ActionBadge,
@@ -28,19 +30,23 @@ import {
   EntityRef,
   SnapshotDiff,
   TABLE_LABEL,
-  WHEN,
 } from "../../../../lib/audit/audit-parts";
+import { formatTimestamp } from "../../../../lib/format";
 import { useApiQuery } from "../../../../lib/use-api-query";
-import { LoadFailed } from "../../_organisation/list-controls";
+import { useListState } from "../../../../lib/use-list-state";
+import { usePagedQuery } from "../../../../lib/use-paged-query";
 
-export interface AuditFilters {
-  action?: string;
-  entityTable?: string;
-  entityId?: string;
-  actorUserId?: string;
-  from?: string;
-  to?: string;
-}
+/** The audit log's filters; an empty string is "any". */
+export const AUDIT_FILTERS = {
+  action: "",
+  entityTable: "",
+  entityId: "",
+  actorUserId: "",
+  from: "",
+  to: "",
+};
+
+export type AuditFilters = Partial<typeof AUDIT_FILTERS>;
 
 const PAGE = 50;
 
@@ -49,180 +55,14 @@ const PAGE = 50;
  * entry opens to show IP address, device and the recorded before and after.
  */
 export function AuditLog({ initial }: { initial: AuditFilters }) {
-  const router = useRouter();
-  const [filters, setFilters] = useState<AuditFilters>(initial);
-  /** Cursors of the pages shown after the first; "Older entries" adds one. */
-  const [cursors, setCursors] = useState<string[]>([]);
+  const { filters, setFilter, reset, filtered } = useListState(
+    AUDIT_FILTERS,
+    initial,
+  );
   const staff = useApiQuery(staffContract.listStaff, { query: { limit: 200 } });
-  const filtered = Object.values(filters).some(Boolean);
-
-  function change(key: keyof AuditFilters, value: string) {
-    const next = { ...filters, [key]: value || undefined };
-    setFilters(next);
-    setCursors([]);
-    const params = new URLSearchParams(
-      Object.entries(next).filter((entry): entry is [string, string] =>
-        Boolean(entry[1]),
-      ),
-    );
-    router.replace(
-      params.size > 0 ? `/settings/audit?${params}` : "/settings/audit",
-      { scroll: false },
-    );
-  }
-
-  function clear() {
-    setFilters({});
-    setCursors([]);
-    router.replace("/settings/audit", { scroll: false });
-  }
-
-  return (
-    <>
-      <PageHeader
-        title="Audit log"
-        description="Who did what, and when. Entries cannot be changed or removed."
-        actions={
-          filtered ? (
-            <Button tone="secondary" onClick={clear}>
-              Clear filters
-            </Button>
-          ) : null
-        }
-      />
-
-      <form
-        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
-        aria-label="Filter the audit log"
-        onSubmit={(event) => event.preventDefault()}
-      >
-        <FilterField label="Action">
-          <Select
-            value={filters.action ?? ""}
-            onChange={(event) => change("action", event.target.value)}
-          >
-            <option value="">Any action</option>
-            {(Object.keys(ACTION_LABEL) as AuditAction[]).map((action) => (
-              <option key={action} value={action}>
-                {ACTION_LABEL[action]}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
-        <FilterField label="Record type">
-          <Select
-            value={filters.entityTable ?? ""}
-            onChange={(event) => change("entityTable", event.target.value)}
-          >
-            <option value="">Any record</option>
-            {AUDITED_TABLES.map((table: AuditedTable) => (
-              <option key={table} value={table}>
-                {TABLE_LABEL[table]}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
-        <FilterField label="Record id">
-          <Input
-            value={filters.entityId ?? ""}
-            placeholder="Any"
-            onChange={(event) => change("entityId", event.target.value.trim())}
-          />
-        </FilterField>
-        <FilterField label="Staff member">
-          <Select
-            value={filters.actorUserId ?? ""}
-            onChange={(event) => change("actorUserId", event.target.value)}
-          >
-            <option value="">Anyone</option>
-            {staff.status === "ready"
-              ? staff.data.data.map((person) => (
-                  <option key={person.userId} value={person.userId}>
-                    {person.name}
-                  </option>
-                ))
-              : null}
-          </Select>
-        </FilterField>
-        <FilterField label="From">
-          <Input
-            type="date"
-            value={filters.from ?? ""}
-            max={filters.to}
-            onChange={(event) => change("from", event.target.value)}
-          />
-        </FilterField>
-        <FilterField label="To">
-          <Input
-            type="date"
-            value={filters.to ?? ""}
-            min={filters.from}
-            onChange={(event) => change("to", event.target.value)}
-          />
-        </FilterField>
-      </form>
-
-      <div className="flex flex-col gap-2">
-        <AuditPage
-          filters={filters}
-          cursor={null}
-          isLast={cursors.length === 0}
-          filtered={filtered}
-          onClear={clear}
-          onOlder={(cursor) => setCursors([cursor])}
-        />
-        {cursors.map((cursor, index) => (
-          <AuditPage
-            key={cursor}
-            filters={filters}
-            cursor={cursor}
-            isLast={index === cursors.length - 1}
-            filtered={filtered}
-            onClear={clear}
-            onOlder={(next) =>
-              setCursors((shown) => [...shown.slice(0, index + 1), next])
-            }
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-ink">
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function AuditPage({
-  filters,
-  cursor,
-  isLast,
-  filtered,
-  onClear,
-  onOlder,
-}: {
-  filters: AuditFilters;
-  cursor: string | null;
-  isLast: boolean;
-  filtered: boolean;
-  onClear: () => void;
-  onOlder: (cursor: string) => void;
-}) {
-  const page = useApiQuery(auditContract.listAuditLog, {
+  const entries = usePagedQuery(auditContract.listAuditLog, {
     query: {
       limit: PAGE,
-      ...(cursor ? { cursor } : {}),
       ...(filters.action ? { action: filters.action as AuditAction } : {}),
       ...(filters.entityTable
         ? { entityTable: filters.entityTable as AuditedTable }
@@ -234,49 +74,131 @@ function AuditPage({
     },
   });
 
-  if (page.status === "loading")
-    return <DataTableSkeleton columns={4} rows={cursor ? 2 : 6} />;
-  if (page.status === "not-permitted") return <NotPermitted />;
-  if (page.status === "not-found") return null;
-  if (page.status === "error") {
-    return <LoadFailed message={page.message} onRetry={page.reload} />;
-  }
-  if (!cursor && page.data.data.length === 0) {
-    return filtered ? (
-      <NoMatches
-        title="No entries match"
-        description="Nothing recorded matches these filters."
-        action={
-          <Button tone="secondary" onClick={onClear}>
-            Clear filters
-          </Button>
-        }
-      />
-    ) : (
-      <NothingYet
-        title="Nothing recorded yet"
-        description="Changes to customers, accounts, lines, cash and staff appear here."
-      />
-    );
-  }
+  const clear = (
+    <Button tone="secondary" onClick={reset}>
+      Clear filters
+    </Button>
+  );
 
   return (
     <>
-      <ul className="flex flex-col gap-2" data-testid="audit-entries">
-        {page.data.data.map((entry) => (
-          <AuditEntryRow key={entry.id} entry={entry} />
-        ))}
-      </ul>
-      {isLast && page.data.hasMore && page.data.nextCursor ? (
-        <div>
-          <Button
-            tone="secondary"
-            onClick={() => onOlder(page.data.nextCursor!)}
-          >
-            Older entries
-          </Button>
+      <PageHeader
+        title="Audit log"
+        description="Who did what, and when. Entries cannot be changed or removed."
+        actions={filtered ? clear : null}
+      />
+
+      <form
+        aria-label="Filter the audit log"
+        onSubmit={(event) => event.preventDefault()}
+      >
+        <FilterBar>
+          <FilterField label="Action" width="sm">
+            <Select
+              value={filters.action}
+              onChange={(event) => setFilter("action", event.target.value)}
+            >
+              <option value="">Any action</option>
+              {(Object.keys(ACTION_LABEL) as AuditAction[]).map((action) => (
+                <option key={action} value={action}>
+                  {ACTION_LABEL[action]}
+                </option>
+              ))}
+            </Select>
+          </FilterField>
+          <FilterField label="Record type" width="sm">
+            <Select
+              value={filters.entityTable}
+              onChange={(event) => setFilter("entityTable", event.target.value)}
+            >
+              <option value="">Any record</option>
+              {AUDITED_TABLES.map((table: AuditedTable) => (
+                <option key={table} value={table}>
+                  {TABLE_LABEL[table]}
+                </option>
+              ))}
+            </Select>
+          </FilterField>
+          <FilterField label="Record id" width="md">
+            <Input
+              value={filters.entityId}
+              placeholder="Any"
+              onChange={(event) =>
+                setFilter("entityId", event.target.value.trim())
+              }
+            />
+          </FilterField>
+          <FilterField label="Staff member" width="sm">
+            <Select
+              value={filters.actorUserId}
+              onChange={(event) => setFilter("actorUserId", event.target.value)}
+            >
+              <option value="">Anyone</option>
+              {staff.status === "ready"
+                ? staff.data.data.map((person) => (
+                    <option key={person.userId} value={person.userId}>
+                      {person.name}
+                    </option>
+                  ))
+                : null}
+            </Select>
+          </FilterField>
+          <FilterField label="From" width="sm">
+            <Input
+              type="date"
+              value={filters.from}
+              max={filters.to || undefined}
+              onChange={(event) => setFilter("from", event.target.value)}
+            />
+          </FilterField>
+          <FilterField label="To" width="sm">
+            <Input
+              type="date"
+              value={filters.to}
+              min={filters.from || undefined}
+              onChange={(event) => setFilter("to", event.target.value)}
+            />
+          </FilterField>
+        </FilterBar>
+      </form>
+
+      {entries.status === "ready" && entries.rows.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-2" data-testid="audit-entries">
+            {entries.rows.map((entry) => (
+              <AuditEntryRow key={entry.id} entry={entry} />
+            ))}
+          </ul>
+          <ListFooter
+            shown={entries.rows.length}
+            noun={entries.rows.length === 1 ? "entry" : "entries"}
+            onMore={entries.loadMore}
+            loadingMore={entries.loadingMore}
+          />
+          {entries.moreError ? (
+            <FormMessage tone="critical">{entries.moreError}</FormMessage>
+          ) : null}
         </div>
-      ) : null}
+      ) : (
+        <ListFallback
+          query={entries}
+          columns={4}
+          empty={
+            filtered ? (
+              <NoMatches
+                title="No entries match"
+                description="Nothing recorded matches these filters."
+                action={clear}
+              />
+            ) : (
+              <NothingYet
+                title="Nothing recorded yet"
+                description="Changes to customers, accounts, lines, cash and staff appear here."
+              />
+            )
+          }
+        />
+      )}
     </>
   );
 }
@@ -288,38 +210,47 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
       : undefined;
   return (
     <li>
-      <details className="group rounded-[var(--radius-surface)] border border-border bg-surface-raised">
-        <summary className="flex cursor-pointer list-none flex-col gap-1 px-4 py-3 hover:bg-surface-sunken md:flex-row md:items-center md:gap-4">
-          <span className="shrink-0 text-sm text-ink-muted md:w-44" data-numeric>
-            {WHEN.format(new Date(entry.createdAt))}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <ActionBadge action={entry.action} />
-            <EntityRef table={entry.entityTable} id={entry.entityId} />
-            {outcome ? (
-              <span className="text-sm text-ink-muted">
-                · {outcome.toLowerCase()}
-              </span>
-            ) : null}
-          </span>
-          <span className="text-sm font-medium text-ink">
-            {actorText(entry)}
-          </span>
-        </summary>
-        <div className="flex flex-col gap-3 border-t border-border px-4 py-3">
-          <SnapshotDiff before={entry.before} after={entry.after} />
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
-            <dt className="text-ink-muted">IP address</dt>
-            <dd className={entry.ipAddress ? "font-mono text-2xs text-ink" : "text-ink-muted"}>
-              {entry.ipAddress ?? "Not recorded"}
-            </dd>
-            <dt className="text-ink-muted">Device</dt>
-            <dd className="break-all text-ink">
-              {entry.userAgent ?? "Not recorded"}
-            </dd>
-          </dl>
-        </div>
-      </details>
+      <Card.Root className="overflow-hidden">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none flex-col gap-1 px-4 py-3 transition-colors hover:bg-surface-sunken/70 md:flex-row md:items-center md:gap-4">
+            <span
+              className="shrink-0 text-caption text-ink-muted tabular-nums md:w-44"
+              data-numeric
+            >
+              {formatTimestamp(entry.createdAt)}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <ActionBadge action={entry.action} />
+              <EntityRef table={entry.entityTable} id={entry.entityId} />
+              {outcome ? (
+                <span className="text-body text-ink-muted">
+                  · {outcome.toLowerCase()}
+                </span>
+              ) : null}
+            </span>
+            <span className="text-label text-ink">{actorText(entry)}</span>
+          </summary>
+          <div className="flex flex-col gap-3 border-t border-border bg-surface-sunken/40 px-4 py-3">
+            <SnapshotDiff before={entry.before} after={entry.after} />
+            <dl className="grid gap-x-6 gap-y-1 text-body sm:grid-cols-[auto_1fr]">
+              <dt className="text-ink-muted">IP address</dt>
+              <dd
+                className={
+                  entry.ipAddress
+                    ? "font-mono text-2xs text-ink"
+                    : "text-ink-muted"
+                }
+              >
+                {entry.ipAddress ?? "Not recorded"}
+              </dd>
+              <dt className="text-ink-muted">Device</dt>
+              <dd className="break-all text-ink">
+                {entry.userAgent ?? "Not recorded"}
+              </dd>
+            </dl>
+          </div>
+        </details>
+      </Card.Root>
     </li>
   );
 }

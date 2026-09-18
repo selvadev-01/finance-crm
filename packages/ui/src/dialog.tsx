@@ -1,16 +1,20 @@
 "use client";
 
 import { X } from "@phosphor-icons/react/dist/ssr";
+import { cva, type VariantProps } from "class-variance-authority";
 import {
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useId,
   useRef,
+  useState,
 } from "react";
 
 import { cn } from "./cn";
+import { PortalContainerContext } from "./portal-container";
 
 /**
  * A modal dialog on the native `<dialog>` element.
@@ -26,7 +30,18 @@ import { cn } from "./cn";
  * For a destructive action, the title names the consequence ("Deactivate line
  * LN-07"), never "Are you sure?" (design-system.md).
  */
-export interface DialogProps {
+const dialogFrame = cva("", {
+  variants: {
+    size: {
+      sm: "w-[min(24rem,calc(100vw-2rem))]",
+      md: "w-[min(32rem,calc(100vw-2rem))]",
+      lg: "w-[min(44rem,calc(100vw-2rem))]",
+    },
+  },
+  defaultVariants: { size: "md" },
+});
+
+export interface DialogProps extends VariantProps<typeof dialogFrame> {
   open: boolean;
   onClose: () => void;
   title: string;
@@ -40,10 +55,18 @@ export function Dialog({
   onClose,
   title,
   description,
+  size,
   children,
   className,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Also held in state, so floating layers inside re-render into it once it
+  // exists (portal-container.tsx).
+  const [element, setElement] = useState<HTMLDialogElement | null>(null);
+  const attach = useCallback((node: HTMLDialogElement | null) => {
+    ref.current = node;
+    setElement(node);
+  }, []);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -60,7 +83,9 @@ export function Dialog({
     // removing an open <dialog> skips the focus return `close()` would do —
     // so remember the opener and hand focus back ourselves.
     const opener =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     if (!dialog.open) dialog.showModal();
     return () => {
       if (dialog.open) dialog.close();
@@ -70,7 +95,7 @@ export function Dialog({
 
   return (
     <dialog
-      ref={ref}
+      ref={attach}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       onCancel={(event) => {
@@ -80,19 +105,20 @@ export function Dialog({
       }}
       {...backdropPress}
       className={cn(
-        "m-auto w-[min(32rem,calc(100vw-2rem))] rounded-[var(--radius-surface)] border border-border bg-surface-raised p-0 text-ink shadow-[var(--shadow-overlay)]",
-        "backdrop:bg-ink/40",
+        dialogFrame({ size }),
+        "m-auto max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-overlay border border-border bg-surface-raised p-0 text-ink shadow-overlay",
+        "open:animate-in backdrop:bg-ink/35",
         className,
       )}
     >
       <div className="flex flex-col gap-[var(--stack-gap)] p-5">
         <header className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
-            <h2 id={titleId} className="text-base font-semibold text-ink">
+            <h2 id={titleId} className="text-heading text-ink">
               {title}
             </h2>
             {description ? (
-              <p id={descriptionId} className="text-sm text-ink-muted">
+              <p id={descriptionId} className="text-body text-ink-muted">
                 {description}
               </p>
             ) : null}
@@ -101,12 +127,14 @@ export function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-m-1.5 rounded-[var(--radius-control)] p-1.5 text-ink-muted hover:bg-surface-sunken hover:text-ink"
+            className="-m-1.5 rounded-control p-1.5 text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
             <X aria-hidden size={18} weight="regular" />
           </button>
         </header>
-        {children}
+        <PortalContainerContext value={element}>
+          {children}
+        </PortalContainerContext>
       </div>
     </dialog>
   );
@@ -134,10 +162,14 @@ export function useBackdropPress(onClose: () => void) {
   };
 }
 
-/** The row of actions at the foot of a dialog: cancel first, commit last. */
+/**
+ * The row of actions at the foot of a dialog: cancel first, commit last. It
+ * sits on a ruled footer band, bleeding to the dialog's edges, so the commit
+ * button is always found in the same place.
+ */
 export function DialogActions({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+    <div className="-mx-5 mt-1 -mb-5 flex flex-col-reverse gap-2 border-t border-border bg-surface-sunken px-5 py-3 sm:flex-row sm:justify-end">
       {children}
     </div>
   );

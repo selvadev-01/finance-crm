@@ -84,7 +84,13 @@ export async function cashWorld(tx: PrismaClient) {
   const settlement = new AccountSettlement(database);
   const views = new HandoverViews();
   const { notices, recipients } = testNotifications(database);
-  const dayCloses = new DayCloseService(database, audit, settlement, views, notices);
+  const dayCloses = new DayCloseService(
+    database,
+    audit,
+    settlement,
+    views,
+    notices,
+  );
   const handovers = new HandoverService(
     database,
     audit,

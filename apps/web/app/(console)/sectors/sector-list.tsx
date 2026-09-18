@@ -3,8 +3,11 @@
 import { organisationContract as org, type Sector } from "@repo/contracts";
 import {
   Button,
-  DataTable,
-  DataTableSkeleton,
+  buttonClass,
+  DataView,
+  EmptyFrame,
+  FilterBar,
+  ListFooter,
   NothingYet,
   NotPermitted,
   PageHeader,
@@ -13,28 +16,39 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import {
+  displayColumn,
+  identityColumn,
+  valueColumn,
+} from "../../../components/columns";
+import { ListFallback } from "../../../components/list-state";
+import { ActivityBadge } from "../../../components/status-badge";
+import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
 import { useApiQuery } from "../../../lib/use-api-query";
+import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
-import {
-  LIST_LIMIT,
-  LoadFailed,
-  ShowInactiveToggle,
-  Surface,
-  TruncatedNote,
-} from "../_organisation/list-controls";
+import { usePagedQuery } from "../../../lib/use-paged-query";
+import { ShowInactiveToggle } from "../_organisation/list-controls";
 import { CreateSectorDialog } from "../_organisation/organisation-dialogs";
-import { StatusBadge } from "../_organisation/status-badge";
 
-export function SectorList() {
+export const SECTOR_FILTERS = { inactive: "" };
+
+/** S-13 · Sectors (US-010): the areas of the business, each with its lines. */
+export function SectorList({
+  initial,
+}: {
+  initial: Partial<typeof SECTOR_FILTERS>;
+}) {
   const me = useSignedIn();
   const router = useRouter();
   const manages = canManageOrganisation(me.role);
-  const [showInactive, setShowInactive] = useState(false);
   const [creating, setCreating] = useState(false);
+  const { filters, setFilter } = useListState(SECTOR_FILTERS, initial);
+  const showInactive = filters.inactive === "show";
 
   // Not read at all for a role that is not shown this screen.
-  const sectors = useApiQuery(
+  const sectors = usePagedQuery(
     org.listSectors,
     manages
       ? {
@@ -50,19 +64,24 @@ export function SectorList() {
     org.listLines,
     manages ? { query: { limit: LIST_LIMIT } } : null,
   );
-
-  const lineCount = (sector: Sector) => {
-    if (lines.status !== "ready" || lines.data.hasMore) return "—";
-    return lines.data.data.filter((line) => line.sectorId === sector.id).length;
-  };
+  const lineCount = (sector: Sector): number | null =>
+    lines.status === "ready" && !lines.data.hasMore
+      ? lines.data.data.filter((line) => line.sectorId === sector.id).length
+      : null;
 
   if (!manages) {
     return (
-      <Surface>
+      <EmptyFrame>
         <NotPermitted />
-      </Surface>
+      </EmptyFrame>
     );
   }
+
+  const newSector = (
+    <Button tone="primary" onClick={() => setCreating(true)}>
+      New sector
+    </Button>
+  );
 
   return (
     <>
@@ -70,80 +89,80 @@ export function SectorList() {
         title="Sectors"
         description="Areas of the business. Each sector groups its lines."
         actions={
-          <Button tone="primary" onClick={() => setCreating(true)}>
-            New sector
-          </Button>
+          <>
+            <Link
+              href="/dashboard/sectors"
+              className={buttonClass("secondary")}
+            >
+              Compare sectors
+            </Link>
+            {newSector}
+          </>
         }
       />
 
-      <div className="flex items-center justify-end">
-        <ShowInactiveToggle checked={showInactive} onChange={setShowInactive} />
-      </div>
-
-      {sectors.status === "loading" ? <DataTableSkeleton columns={3} /> : null}
-      {sectors.status === "error" ? (
-        <LoadFailed message={sectors.message} onRetry={sectors.reload} />
-      ) : null}
-      {sectors.status === "not-found" || sectors.status === "not-permitted" ? (
-        <Surface>
-          <NotPermitted />
-        </Surface>
-      ) : null}
-
-      {sectors.status === "ready" && sectors.data.data.length === 0 ? (
-        <Surface>
-          <NothingYet
-            title={showInactive ? "No sectors yet" : "No active sectors"}
-            description={
-              showInactive
-                ? "Create the first sector, then add its lines."
-                : "Create a sector, or show inactive ones to see those that were closed."
-            }
-            action={
-              <Button tone="primary" onClick={() => setCreating(true)}>
-                New sector
-              </Button>
-            }
+      <FilterBar
+        actions={
+          <ShowInactiveToggle
+            checked={showInactive}
+            onChange={(checked) => setFilter("inactive", checked ? "show" : "")}
           />
-        </Surface>
-      ) : null}
+        }
+      />
 
-      {sectors.status === "ready" && sectors.data.data.length > 0 ? (
-        <>
-          <DataTable
-            caption="Sectors"
-            rows={sectors.data.data}
-            rowKey={(sector) => sector.id}
-            columns={[
-              {
-                header: "Sector",
-                cell: (sector) => (
-                  <Link
-                    href={`/sectors/${sector.id}`}
-                    className="flex flex-col font-medium text-ink hover:text-accent hover:underline"
-                  >
-                    {sector.name}
-                    <span className="font-mono text-2xs font-normal text-ink-muted">
-                      {sector.code}
-                    </span>
-                  </Link>
-                ),
-              },
-              {
-                header: "Active lines",
-                align: "end",
-                cell: (sector) => lineCount(sector),
-              },
-              {
-                header: "Status",
-                align: "end",
-                cell: (sector) => <StatusBadge isActive={sector.isActive} />,
-              },
-            ]}
-          />
-          {sectors.data.hasMore ? <TruncatedNote noun="sectors" /> : null}
-        </>
-      ) : null}
+      {sectors.status === "ready" && sectors.rows.length > 0 ? (
+        <DataView
+          caption="Sectors"
+          rows={sectors.rows}
+          getRowId={(sector) => sector.id}
+          complete={!sectors.hasMore}
+          columns={[
+            identityColumn<Sector>({
+              header: "Sector",
+              name: (sector) => sector.name,
+              code: (sector) => sector.code,
+              href: (sector) => `/sectors/${sector.id}`,
+            }),
+            valueColumn<Sector>({
+              id: "lines",
+              header: "Active lines",
+              align: "end",
+              value: (sector) => lineCount(sector) ?? -1,
+              cell: (sector) => lineCount(sector) ?? "—",
+            }),
+            displayColumn<Sector>({
+              id: "status",
+              header: "Status",
+              align: "end",
+              cell: (sector) => <ActivityBadge isActive={sector.isActive} />,
+            }),
+          ]}
+          footer={
+            <ListFooter
+              shown={sectors.rows.length}
+              noun={sectors.rows.length === 1 ? "sector" : "sectors"}
+              onMore={sectors.loadMore}
+              loadingMore={sectors.loadingMore}
+            />
+          }
+        />
+      ) : (
+        <ListFallback
+          query={sectors}
+          columns={3}
+          empty={
+            <NothingYet
+              title={showInactive ? "No sectors yet" : "No active sectors"}
+              description={
+                showInactive
+                  ? "Create the first sector, then add its lines."
+                  : "Create a sector, or show inactive ones to see those that were closed."
+              }
+              action={newSector}
+            />
+          }
+        />
+      )}
 
       {creating ? (
         <CreateSectorDialog

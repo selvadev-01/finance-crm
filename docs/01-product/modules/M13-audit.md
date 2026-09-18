@@ -26,7 +26,7 @@
 | -------------------- | ---------------------------------------------------- |
 | `CREATE`             | Customers, accounts, staff, sectors, lines, holidays |
 | `UPDATE`             | Any change to the above, with before/after           |
-| `DELETE`             | Soft deletes                                         |
+| `DELETE`             | Soft deletes; a removed future holiday (US-093)      |
 | `APPROVE` / `REJECT` | Collection corrections                               |
 | `LOGIN`              | Every sign-in, success and failure                   |
 | `REOPEN_DAY`         | Manual reopen, with reason                           |

@@ -139,6 +139,7 @@ Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit ent
 **Staffing views:** `GET /api/staffing` (US-014, `staff.list`) and `GET /api/lines/:lineId/assignments?on=` (US-015, `assignment.viewHistory`), both scoped by line.
 
 **Screens:**
+
 - `/sectors` and `/sectors/:id` (S-13) are for Admin and Super Admin only.
 - `/lines` and `/lines/:id` (S-12) are also open to a Senior, who sees their own line read-only. The line detail shows today's staffing and the assignment history.
 - The §14 figures are stated as unavailable until M05, M07 and M09 exist; the page never shows zeros in their place.

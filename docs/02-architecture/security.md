@@ -24,13 +24,13 @@ Rasi holds the financial records of 1,000+ people and controls a daily cash chai
 
 Better Auth ([`authentication.md`](authentication.md)).
 
-| Control                 | Setting                                                   |
-| ----------------------- | --------------------------------------------------------- |
-| Password hashing        | Better Auth default (scrypt)                              |
-| Minimum password length | 10 characters                                             |
-| Session                 | 30 days, rolling, `httpOnly` + `secure` + `sameSite: lax` |
-| Sign-in rate limit      | 5 per 15 min per IP                                       |
-| Revocation              | Immediate on suspend — does not wait for expiry           |
+| Control                 | Setting                                                                                                                                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Password hashing        | Better Auth default (scrypt)                                                                                                                                                                                     |
+| Minimum password length | 10 characters                                                                                                                                                                                                    |
+| Session                 | 30 days, rolling, `httpOnly` + `secure` + `sameSite: lax`                                                                                                                                                        |
+| Sign-in rate limit      | 5 per 15 min per IP                                                                                                                                                                                              |
+| Revocation              | Immediate on suspend — does not wait for expiry                                                                                                                                                                  |
 | Self-registration       | **Disabled** for staff, who are Admin-created. A business's owner signs up publicly, rate-limited to five attempts an hour per address; no email verification yet ([ADR-0012](adr/0012-organization-sign-up.md)) |
 
 **Long sessions are a field requirement, not laxity** — a Junior with an expired session and no connectivity cannot work. The compensating control is immediate revocation.

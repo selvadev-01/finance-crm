@@ -52,8 +52,7 @@ export const signUpContract = {
   signUpOrganization: route({
     method: "POST",
     path: "/api/organizations",
-    summary:
-      "Create an organization and its owner as Super Admin (US-006)",
+    summary: "Create an organization and its owner as Super Admin (US-006)",
     body: signUpRequestSchema,
     responses: {
       201: signUpResultSchema,

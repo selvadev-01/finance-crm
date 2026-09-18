@@ -1,62 +1,59 @@
 "use client";
 
+import { customerContract, type CustomerSummary } from "@repo/contracts";
 import {
-  customerContract,
-  type CustomerSummary,
-  organisationContract as org,
-} from "@repo/contracts";
-import {
-  Badge,
   Button,
   buttonClass,
-  DataTable,
-  DataTableSkeleton,
+  DataView,
+  FilterBar,
+  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
-  Select,
 } from "@repo/ui";
 import Link from "next/link";
-import { useState } from "react";
 
-import { canManageOrganisation } from "../../../lib/roles";
-import { useApiQuery } from "../../../lib/use-api-query";
-import { useSignedIn } from "../../../lib/use-me";
 import {
-  LIST_LIMIT,
-  LoadFailed,
-  Surface,
-  TruncatedNote,
-} from "../_organisation/list-controls";
+  displayColumn,
+  identityColumn,
+  valueColumn,
+} from "../../../components/columns";
+import { LineFilter } from "../../../components/line-filter";
+import { ListFallback } from "../../../components/list-state";
+import { StatusBadge } from "../../../components/status-badge";
+import { formatMobile } from "../../../lib/format";
+import { LIST_LIMIT } from "../../../lib/list-limit";
+import { canManageOrganisation } from "../../../lib/roles";
+import { useListState } from "../../../lib/use-list-state";
+import { useSignedIn } from "../../../lib/use-me";
+import { usePagedQuery } from "../../../lib/use-paged-query";
 
-/** Display form of an E.164 Indian mobile: +91 98765 43210. */
-export function formatMobile(mobile: string): string {
-  const match = /^\+91(\d{5})(\d{5})$/.exec(mobile);
-  return match ? `+91 ${match[1]} ${match[2]}` : mobile;
-}
+export const CUSTOMER_FILTERS = { line: "" };
 
-export function CustomerStatusBadge({
-  status,
+/** S-08 · Customers (US-020): paged, so a book of 1,000+ customers is all reachable. */
+export function CustomerList({
+  initial,
 }: {
-  status: CustomerSummary["status"];
+  initial: Partial<typeof CUSTOMER_FILTERS>;
 }) {
-  if (status === "ACTIVE") return <Badge tone="positive">Active</Badge>;
-  if (status === "BLACKLISTED") return <Badge tone="critical">Blacklisted</Badge>;
-  return <Badge tone="neutral">Inactive</Badge>;
-}
-
-export function CustomerList() {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
-  const [lineId, setLineId] = useState("");
+  const { filters, setFilter, reset, filtered } = useListState(
+    CUSTOMER_FILTERS,
+    initial,
+  );
+  // Only Admins filter by line; a Senior or Junior already sees just their own.
+  const lineId = manages ? filters.line : "";
 
-  const customers = useApiQuery(customerContract.listCustomers, {
+  const customers = usePagedQuery(customerContract.listCustomers, {
     query: { limit: LIST_LIMIT, ...(lineId ? { lineId } : {}) },
   });
-  const lines = useApiQuery(
-    org.listLines,
-    manages ? { query: { limit: LIST_LIMIT, includeInactive: "true" } } : null,
-  );
+
+  const newCustomer = manages ? (
+    <Link href="/customers/new" className={buttonClass("primary")}>
+      New customer
+    </Link>
+  ) : null;
 
   return (
     <>
@@ -67,104 +64,91 @@ export function CustomerList() {
             ? "Everyone who holds or has held an account."
             : "Customers on your line."
         }
-        actions={
-          manages ? (
-            <Link href="/customers/new" className={buttonClass("primary")}>
-              New customer
-            </Link>
-          ) : null
-        }
+        actions={newCustomer}
       />
 
       {manages ? (
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-64">
-          Line
-          <Select value={lineId} onChange={(event) => setLineId(event.target.value)}>
-            <option value="">All lines</option>
-            {lines.status === "ready"
-              ? lines.data.data.map((line) => (
-                  <option key={line.id} value={line.id}>
-                    {line.name}
-                    {line.isActive ? "" : " (inactive)"}
-                  </option>
-                ))
-              : null}
-          </Select>
-        </label>
+        <FilterBar>
+          <LineFilter
+            value={filters.line}
+            onChange={(value) => setFilter("line", value)}
+          />
+        </FilterBar>
       ) : null}
 
-      {customers.status === "loading" ? <DataTableSkeleton columns={4} /> : null}
-      {customers.status === "error" ? (
-        <LoadFailed message={customers.message} onRetry={customers.reload} />
-      ) : null}
-
-      {customers.status === "ready" && customers.data.data.length === 0 ? (
-        <Surface>
-          {lineId ? (
-            <NoMatches
-              title="No customers on this line"
-              description="Choose another line, or show every line."
-              action={<Button onClick={() => setLineId("")}>Show all lines</Button>}
-            />
-          ) : manages ? (
-            <NothingYet
-              title="No customers yet"
-              description="Onboard the first customer. Each one needs a line and at least one reference person."
-              action={
-                <Link href="/customers/new" className={buttonClass("primary")}>
-                  New customer
-                </Link>
-              }
-            />
-          ) : (
-            <NothingYet
-              title="No customers on your line"
-              description="Customers appear here once an Admin onboards them onto your line."
-            />
-          )}
-        </Surface>
-      ) : null}
-
-      {customers.status === "ready" && customers.data.data.length > 0 ? (
+      {customers.status === "ready" && customers.rows.length > 0 ? (
         <>
-          <DataTable
+          <DataView
             caption="Customers"
-            rows={customers.data.data}
-            rowKey={(customer) => customer.id}
+            rows={customers.rows}
+            getRowId={(customer) => customer.id}
+            complete={!customers.hasMore}
             columns={[
-              {
+              identityColumn<CustomerSummary>({
                 header: "Customer",
-                cell: (customer) => (
-                  <Link
-                    href={`/customers/${customer.id}`}
-                    className="flex flex-col font-medium text-ink hover:text-accent hover:underline"
-                  >
-                    {customer.name}
-                    <span className="font-mono text-2xs font-normal text-ink-muted">
-                      {customer.customerCode}
-                    </span>
-                  </Link>
-                ),
-              },
-              {
+                name: (customer) => customer.name,
+                code: (customer) => customer.customerCode,
+                href: (customer) => `/customers/${customer.id}`,
+              }),
+              valueColumn<CustomerSummary>({
+                id: "mobile",
                 header: "Mobile",
+                value: (customer) => customer.mobile,
                 cell: (customer) => (
                   <span data-numeric>{formatMobile(customer.mobile)}</span>
                 ),
-              },
-              { header: "Line", cell: (customer) => customer.lineName },
-              {
+              }),
+              valueColumn<CustomerSummary>({
+                id: "line",
+                header: "Line",
+                value: (customer) => customer.lineName,
+              }),
+              displayColumn<CustomerSummary>({
+                id: "status",
                 header: "Status",
                 align: "end",
-                cell: (customer) => <CustomerStatusBadge status={customer.status} />,
-              },
+                cell: (customer) => (
+                  <StatusBadge kind="customer" value={customer.status} />
+                ),
+              }),
             ]}
+            footer={
+              <ListFooter
+                shown={customers.rows.length}
+                noun={customers.rows.length === 1 ? "customer" : "customers"}
+                onMore={customers.loadMore}
+                loadingMore={customers.loadingMore}
+                note={customers.moreError ?? undefined}
+              />
+            }
           />
-          {customers.data.hasMore ? (
-            <TruncatedNote noun="customers" />
-          ) : null}
         </>
-      ) : null}
+      ) : (
+        <ListFallback
+          query={customers}
+          columns={4}
+          empty={
+            manages && filtered ? (
+              <NoMatches
+                title="No customers on this line"
+                description="Choose another line, or show every line."
+                action={<Button onClick={reset}>Show all lines</Button>}
+              />
+            ) : manages ? (
+              <NothingYet
+                title="No customers yet"
+                description="Onboard the first customer. Each one needs a line and at least one reference person."
+                action={newCustomer ?? undefined}
+              />
+            ) : (
+              <NothingYet
+                title="No customers on your line"
+                description="Customers appear here once an Admin onboards them onto your line."
+              />
+            )
+          }
+        />
+      )}
     </>
   );
 }

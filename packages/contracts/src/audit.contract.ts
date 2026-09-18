@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 import { route } from "./route.js";
-import { calendarDateSchema, errorSchema, idSchema, pageQuerySchema } from "./shared.js";
+import {
+  calendarDateSchema,
+  errorSchema,
+  idSchema,
+  pageQuerySchema,
+} from "./shared.js";
 
 /**
  * M13 Audit — the audit log (US-090) and an account's history (US-091). Both
@@ -22,6 +27,7 @@ export const AUDITED_TABLES = [
   "day_close",
   "cash_handover",
   "ledger_account",
+  "holiday",
 ] as const;
 
 export const auditActionSchema = z.enum([
@@ -53,7 +59,12 @@ export const auditEntrySchema = z.object({
   userAgent: z.string().nullable(),
 });
 
-const errors = { 400: errorSchema, 401: errorSchema, 403: errorSchema, 404: errorSchema };
+const errors = {
+  400: errorSchema,
+  401: errorSchema,
+  403: errorSchema,
+  404: errorSchema,
+};
 
 const accountParams = z.object({ accountId: idSchema });
 
@@ -108,7 +119,8 @@ export const auditContract = {
   listAuditLog: route({
     method: "GET",
     path: "/api/audit-log",
-    summary: "The organization's audit log, newest first, filtered by actor, entity, action and date (US-090)",
+    summary:
+      "The organization's audit log, newest first, filtered by actor, entity, action and date (US-090)",
     query: pageQuerySchema.extend({
       actorUserId: z.string().min(1).max(64).optional(),
       entityTable: z.enum(AUDITED_TABLES).optional(),
@@ -131,7 +143,8 @@ export const auditContract = {
   getAccountHistory: route({
     method: "GET",
     path: "/api/accounts/:accountId/history",
-    summary: "An account's full chronological trail: audit entries, collections with corrections and approvals, and day closes (US-091)",
+    summary:
+      "An account's full chronological trail: audit entries, collections with corrections and approvals, and day closes (US-091)",
     pathParams: accountParams,
     responses: {
       200: z.object({
@@ -139,7 +152,13 @@ export const auditContract = {
           id: idSchema,
           accountCode: z.string(),
           customerName: z.string(),
-          status: z.enum(["PENDING", "ACTIVE", "COMPLETED", "DEFAULTED", "WRITTEN_OFF"]),
+          status: z.enum([
+            "PENDING",
+            "ACTIVE",
+            "COMPLETED",
+            "DEFAULTED",
+            "WRITTEN_OFF",
+          ]),
           actualCompletionDate: calendarDateSchema.nullable(),
         }),
         events: z.array(accountHistoryEventSchema),

@@ -18,9 +18,21 @@ import {
 /** The nine notes and coins counted at every handover. */
 export const DENOMINATIONS = [500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
 
-export const dayCloseStatusSchema = z.enum(["OPEN", "CLOSED", "REOPENED", "TALLIED"]);
-export const handoverStatusSchema = z.enum(["PENDING", "ACKNOWLEDGED", "DISPUTED"]);
-export const handoverHopSchema = z.enum(["JUNIOR_TO_SENIOR", "SENIOR_TO_OFFICE"]);
+export const dayCloseStatusSchema = z.enum([
+  "OPEN",
+  "CLOSED",
+  "REOPENED",
+  "TALLIED",
+]);
+export const handoverStatusSchema = z.enum([
+  "PENDING",
+  "ACKNOWLEDGED",
+  "DISPUTED",
+]);
+export const handoverHopSchema = z.enum([
+  "JUNIOR_TO_SENIOR",
+  "SENIOR_TO_OFFICE",
+]);
 
 const errors = {
   400: errorSchema,
@@ -67,7 +79,11 @@ export const handoverSchema = z.object({
   createdAt: z.string(),
   acknowledgedAt: z.string().nullable(),
   denominations: z.array(
-    z.object({ denomination: z.number().int(), count: z.number().int(), subtotal: moneyStringSchema }),
+    z.object({
+      denomination: z.number().int(),
+      count: z.number().int(),
+      subtotal: moneyStringSchema,
+    }),
   ),
   /** The caller is the receiver and it is pending. */
   canAcknowledge: z.boolean(),
@@ -167,14 +183,18 @@ export const dayCloseSchema = z.object({
   canReopen: z.boolean(),
 });
 
-const dayParams = z.object({ lineId: idSchema, businessDate: calendarDateSchema });
+const dayParams = z.object({
+  lineId: idSchema,
+  businessDate: calendarDateSchema,
+});
 const handoverParams = z.object({ handoverId: idSchema });
 
 export const cashContract = {
   reportSync: route({
     method: "POST",
     path: "/api/devices/sync-report",
-    summary: "A Junior's phone reports how many collections it still holds (US-060)",
+    summary:
+      "A Junior's phone reports how many collections it still holds (US-060)",
     body: syncReportBodySchema,
     responses: { 200: z.object({ reportedAt: z.string() }), ...errors },
   }),
@@ -182,7 +202,8 @@ export const cashContract = {
   getDayClose: route({
     method: "GET",
     path: "/api/lines/:lineId/day-closes/:businessDate",
-    summary: "A line's day: totals, Juniors' sync, exceptions and handovers (S-05)",
+    summary:
+      "A line's day: totals, Juniors' sync, exceptions and handovers (S-05)",
     pathParams: dayParams,
     responses: { 200: dayCloseSchema, ...errors },
   }),
@@ -190,7 +211,8 @@ export const cashContract = {
   closeDay: route({
     method: "POST",
     path: "/api/lines/:lineId/day-closes/:businessDate/close",
-    summary: "Close a line's day, marking unvisited slots MISSED (US-060, US-043)",
+    summary:
+      "Close a line's day, marking unvisited slots MISSED (US-060, US-043)",
     pathParams: dayParams,
     body: z.object({
       /** Close even though some Juniors' phones still hold collections. */
@@ -210,23 +232,32 @@ export const cashContract = {
     path: "/api/lines/:lineId/day-closes/:businessDate/reopen",
     summary: "Reopen a closed day, with a reason (BR-16)",
     pathParams: dayParams,
-    body: z.object({ reason: z.string().trim().min(1, "a reason is required").max(500) }),
+    body: z.object({
+      reason: z.string().trim().min(1, "a reason is required").max(500),
+    }),
     responses: { 200: dayCloseSchema, ...errors, 409: errorSchema },
   }),
 
   getCashPosition: route({
     method: "GET",
     path: "/api/cash",
-    summary: "The caller's cash to hand over, and their recent handovers (S-06)",
+    summary:
+      "The caller's cash to hand over, and their recent handovers (S-06)",
     responses: { 200: cashPositionSchema, ...errors },
   }),
 
   handOver: route({
     method: "POST",
     path: "/api/handovers",
-    summary: "Hand cash over with a denomination count; a discrepancy is recorded, never blocked (US-061, US-064)",
+    summary:
+      "Hand cash over with a denomination count; a discrepancy is recorded, never blocked (US-061, US-064)",
     body: handOverBodySchema,
-    responses: { 201: handoverSchema, ...errors, 409: errorSchema, 422: errorSchema },
+    responses: {
+      201: handoverSchema,
+      ...errors,
+      409: errorSchema,
+      422: errorSchema,
+    },
   }),
 
   listHandovers: route({
@@ -240,7 +271,8 @@ export const cashContract = {
   acknowledgeHandover: route({
     method: "POST",
     path: "/api/handovers/:handoverId/acknowledge",
-    summary: "The receiver confirms the cash arrived; the ledger posts it (US-062, BR-17)",
+    summary:
+      "The receiver confirms the cash arrived; the ledger posts it (US-062, BR-17)",
     pathParams: handoverParams,
     body: z.object({}),
     responses: { 200: handoverSchema, ...errors, 409: errorSchema },
@@ -251,7 +283,9 @@ export const cashContract = {
     path: "/api/handovers/:handoverId/dispute",
     summary: "Dispute a pending handover with a note (US-063)",
     pathParams: handoverParams,
-    body: z.object({ note: z.string().trim().min(1, "say what is wrong").max(500) }),
+    body: z.object({
+      note: z.string().trim().min(1, "say what is wrong").max(500),
+    }),
     responses: { 200: handoverSchema, ...errors, 409: errorSchema },
   }),
 } as const;
@@ -260,4 +294,3 @@ export type Handover = z.infer<typeof handoverSchema>;
 export type CashPosition = z.infer<typeof cashPositionSchema>;
 export type DayCloseView = z.infer<typeof dayCloseSchema>;
 export type JuniorSync = z.infer<typeof juniorSyncSchema>;
-

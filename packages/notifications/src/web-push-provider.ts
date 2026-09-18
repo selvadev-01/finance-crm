@@ -1,6 +1,11 @@
 import webpush from "web-push";
 
-import type { PushPayload, PushProvider, PushResult, PushTarget } from "./types.js";
+import type {
+  PushPayload,
+  PushProvider,
+  PushResult,
+  PushTarget,
+} from "./types.js";
 
 export interface VapidKeys {
   subject: string;
@@ -36,7 +41,10 @@ export class WebPushProvider implements PushProvider {
     }
     try {
       await this.transport(
-        { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
+        {
+          endpoint: target.endpoint,
+          keys: { p256dh: target.p256dh, auth: target.auth },
+        },
         JSON.stringify(payload),
         { vapidDetails: this.vapid, TTL: TTL_SECONDS },
       );
@@ -57,7 +65,9 @@ function classify(error: unknown): PushResult {
   const statusCode = (error as { statusCode?: unknown }).statusCode;
   const reason = error instanceof Error ? error.message : String(error);
   if (typeof statusCode !== "number") return { status: "retry", reason };
-  if (statusCode === 404 || statusCode === 410) return { status: "gone", reason: `${statusCode}` };
-  if (statusCode === 429 || statusCode >= 500) return { status: "retry", reason: `${statusCode}` };
+  if (statusCode === 404 || statusCode === 410)
+    return { status: "gone", reason: `${statusCode}` };
+  if (statusCode === 429 || statusCode >= 500)
+    return { status: "retry", reason: `${statusCode}` };
   return { status: "failed", reason: `${statusCode} ${reason}` };
 }

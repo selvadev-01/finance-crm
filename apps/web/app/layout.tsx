@@ -1,6 +1,29 @@
 import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import "./globals.css";
+
+/**
+ * IBM Plex, self-hosted by `next/font` (ADR-0013). `preload: false` is
+ * deliberate: a font is fetched only when text on the page uses it, so the
+ * Junior's route — which sets `font-system` — never downloads it, while the
+ * console picks it up as its stylesheet is read. `latin-ext` carries ₹.
+ */
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex",
+  display: "swap",
+  preload: false,
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: "Rasi",
@@ -28,7 +51,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-density="compact">
+    <html
+      lang="en"
+      data-density="compact"
+      className={`${plexSans.variable} ${plexMono.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

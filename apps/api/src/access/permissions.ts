@@ -80,6 +80,8 @@ export const PERMISSIONS = {
   'staff.resetPassword': ADMINS,
   'audit.view': ADMINS,
   'settings.change': SUPER_ADMIN,
+  // Declaring and removing a future holiday are one permission (M06, US-093).
+  'holiday.view': ALL,
   'holiday.declare': ADMINS,
   'profile.viewOwn': ALL,
 } as const satisfies Record<string, readonly StaffRole[]>;

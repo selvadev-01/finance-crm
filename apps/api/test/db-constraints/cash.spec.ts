@@ -177,14 +177,24 @@ describe('cash constraints (BR-16, BR-17)', () => {
     it('rejects a dispute with no note, and a note on a handover that is not disputed (US-063)', async () => {
       await expect(
         withRollback(prisma, async (tx) => {
-          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
-          await tx.cashHandover.update({ where: { id: created.id }, data: { status: 'DISPUTED', disputeNote: ' ' } });
+          const created = await handover(tx, '500.00', [
+            { denomination: 500, count: 1 },
+          ]);
+          await tx.cashHandover.update({
+            where: { id: created.id },
+            data: { status: 'DISPUTED', disputeNote: ' ' },
+          });
         }),
       ).rejects.toThrow('cash_handover_dispute_note_check');
       await expect(
         withRollback(prisma, async (tx) => {
-          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
-          await tx.cashHandover.update({ where: { id: created.id }, data: { disputeNote: 'One note short' } });
+          const created = await handover(tx, '500.00', [
+            { denomination: 500, count: 1 },
+          ]);
+          await tx.cashHandover.update({
+            where: { id: created.id },
+            data: { disputeNote: 'One note short' },
+          });
         }),
       ).rejects.toThrow('cash_handover_dispute_note_check');
     });
@@ -192,8 +202,13 @@ describe('cash constraints (BR-16, BR-17)', () => {
     it('rejects a count that differs from the system with no note (S-06)', async () => {
       await expect(
         withRollback(prisma, async (tx) => {
-          const created = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
-          await tx.cashHandover.update({ where: { id: created.id }, data: { note: null } });
+          const created = await handover(tx, '500.00', [
+            { denomination: 500, count: 1 },
+          ]);
+          await tx.cashHandover.update({
+            where: { id: created.id },
+            data: { note: null },
+          });
         }),
       ).rejects.toThrow('cash_handover_discrepancy_note_check');
     });
@@ -201,7 +216,9 @@ describe('cash constraints (BR-16, BR-17)', () => {
     it('rejects a second pending handover from the same sender for the same day', async () => {
       await expect(
         withRollback(prisma, async (tx) => {
-          const first = await handover(tx, '500.00', [{ denomination: 500, count: 1 }]);
+          const first = await handover(tx, '500.00', [
+            { denomination: 500, count: 1 },
+          ]);
           await tx.cashHandover.create({
             data: {
               dayCloseId: first.dayCloseId,
@@ -225,12 +242,23 @@ describe('cash constraints (BR-16, BR-17)', () => {
           const { organization } = await createLine(tx);
           const staff = await createStaff(tx, organization.id, 'JUNIOR');
           await tx.deviceSyncReport.create({
-            data: { staffProfileId: staff.id, unsentCount, oldestUnsentAt, reportedAt: new Date() },
+            data: {
+              staffProfileId: staff.id,
+              unsentCount,
+              oldestUnsentAt,
+              reportedAt: new Date(),
+            },
           });
         });
-      await expect(report(-1, new Date())).rejects.toThrow('device_sync_report_unsent_non_negative_check');
-      await expect(report(2, null)).rejects.toThrow('device_sync_report_oldest_when_unsent_check');
-      await expect(report(0, new Date())).rejects.toThrow('device_sync_report_oldest_when_unsent_check');
+      await expect(report(-1, new Date())).rejects.toThrow(
+        'device_sync_report_unsent_non_negative_check',
+      );
+      await expect(report(2, null)).rejects.toThrow(
+        'device_sync_report_oldest_when_unsent_check',
+      );
+      await expect(report(0, new Date())).rejects.toThrow(
+        'device_sync_report_oldest_when_unsent_check',
+      );
       await expect(report(2, new Date())).resolves.toBeUndefined();
     });
   });
@@ -281,7 +309,10 @@ describe('cash constraints (BR-16, BR-17)', () => {
       await expect(
         withRollback(prisma, async (tx) => {
           const day = await openDay(tx);
-          await tx.dayClose.update({ where: { id: day.id }, data: { status: 'REOPENED', reopenReason: '  ' } });
+          await tx.dayClose.update({
+            where: { id: day.id },
+            data: { status: 'REOPENED', reopenReason: '  ' },
+          });
         }),
       ).rejects.toThrow('day_close_reopen_reason_check');
     });

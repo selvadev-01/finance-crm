@@ -41,6 +41,12 @@ export function toBusinessDate(instant: Date): CalendarDate {
  * the day before.
  */
 export function businessDayStart(date: CalendarDate): Date {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return new Date(new TZDate(year, month - 1, day, BUSINESS_TIME_ZONE).getTime());
+  const [year, month, day] = date.split("-").map(Number) as [
+    number,
+    number,
+    number,
+  ];
+  return new Date(
+    new TZDate(year, month - 1, day, BUSINESS_TIME_ZONE).getTime(),
+  );
 }

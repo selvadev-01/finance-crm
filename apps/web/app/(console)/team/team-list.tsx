@@ -3,45 +3,62 @@
 import { type StaffSummary, staffContract } from "@repo/contracts";
 import {
   Button,
-  DataTable,
-  DataTableSkeleton,
+  CodeChip,
+  DataView,
+  FilterBar,
+  FilterField,
   formatBusinessDate,
+  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
   Select,
 } from "@repo/ui";
-import Link from "next/link";
-import { useState } from "react";
 
-import { canManageOrganisation, ROLE_LABEL } from "../../../lib/roles";
-import { useApiQuery } from "../../../lib/use-api-query";
-import { useSignedIn } from "../../../lib/use-me";
 import {
-  LIST_LIMIT,
-  LoadFailed,
-  Surface,
-  TruncatedNote,
-} from "../_organisation/list-controls";
-import { StaffStatusBadge } from "../_organisation/staff-status-badge";
+  displayColumn,
+  identityColumn,
+  valueColumn,
+} from "../../../components/columns";
+import { ListFallback } from "../../../components/list-state";
+import { STATUS, StatusBadge } from "../../../components/status-badge";
+import { LIST_LIMIT } from "../../../lib/list-limit";
+import { canManageOrganisation, ROLE_LABEL } from "../../../lib/roles";
+import { useListState } from "../../../lib/use-list-state";
+import { useSignedIn } from "../../../lib/use-me";
+import { usePagedQuery } from "../../../lib/use-paged-query";
 
-type RoleFilter = "" | StaffSummary["role"];
-type StatusFilter = "" | StaffSummary["status"];
+export const TEAM_FILTERS = { role: "", status: "" };
 
-export function TeamList() {
+type StaffRole = StaffSummary["role"];
+type StaffStatus = StaffSummary["status"];
+
+const ROLES = Object.keys(ROLE_LABEL) as StaffRole[];
+const STATUSES = Object.keys(STATUS.staff) as StaffStatus[];
+
+/** S-14 · Team (US-014): everyone, and the line each works today. */
+export function TeamList({
+  initial,
+}: {
+  initial: Partial<typeof TEAM_FILTERS>;
+}) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
-  const [role, setRole] = useState<RoleFilter>("");
-  const [status, setStatus] = useState<StatusFilter>("");
+  const { filters, setFilter, reset, filtered } = useListState(
+    TEAM_FILTERS,
+    initial,
+  );
+  // A value from the URL the API would refuse is treated as no filter.
+  const role = ROLES.find((each) => each === filters.role);
+  const status = STATUSES.find((each) => each === filters.status);
 
-  const staff = useApiQuery(staffContract.listStaff, {
+  const staff = usePagedQuery(staffContract.listStaff, {
     query: {
       limit: LIST_LIMIT,
       ...(role ? { role } : {}),
       ...(status ? { status } : {}),
     },
   });
-  const filtered = role !== "" || status !== "";
 
   return (
     <>
@@ -54,111 +71,124 @@ export function TeamList() {
         }
       />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-48">
-          Role
+      <FilterBar>
+        <FilterField label="Role" width="sm">
           <Select
-            value={role}
-            onChange={(event) => setRole(event.target.value as RoleFilter)}
+            value={role ?? ""}
+            onChange={(event) => setFilter("role", event.target.value)}
           >
             <option value="">All roles</option>
-            {(Object.keys(ROLE_LABEL) as StaffSummary["role"][]).map((key) => (
+            {ROLES.map((key) => (
               <option key={key} value={key}>
                 {ROLE_LABEL[key]}
               </option>
             ))}
           </Select>
-        </label>
-        <label className="flex w-full flex-col gap-1.5 text-sm font-medium text-ink sm:w-48">
-          Status
+        </FilterField>
+        <FilterField label="Status" width="sm">
           <Select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as StatusFilter)}
+            value={status ?? ""}
+            onChange={(event) => setFilter("status", event.target.value)}
           >
             <option value="">Any status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="SUSPENDED">Suspended</option>
-            <option value="INACTIVE">Inactive</option>
+            {STATUSES.map((key) => (
+              <option key={key} value={key}>
+                {STATUS.staff[key].label}
+              </option>
+            ))}
           </Select>
-        </label>
-      </div>
+        </FilterField>
+      </FilterBar>
 
-      {staff.status === "loading" ? <DataTableSkeleton columns={5} /> : null}
-      {staff.status === "error" ? (
-        <LoadFailed message={staff.message} onRetry={staff.reload} />
-      ) : null}
-
-      {staff.status === "ready" && staff.data.data.length === 0 ? (
-        <Surface>
-          {filtered ? (
-            <NoMatches
-              title="No one matches"
-              description="No staff have this role and status. Clear the filters to see everyone."
-              action={
-                <Button
-                  onClick={() => {
-                    setRole("");
-                    setStatus("");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              }
-            />
-          ) : manages ? (
-            <NothingYet
-              title="No staff yet"
-              description="Staff accounts are created by an administrator. Adding staff from this screen arrives with staff management."
-            />
-          ) : (
-            <NothingYet
-              title="No one on your line today"
-              description="You are not assigned to a line today, so there is no team to show."
-            />
-          )}
-        </Surface>
-      ) : null}
-
-      {staff.status === "ready" && staff.data.data.length > 0 ? (
+      {staff.status === "ready" && staff.rows.length > 0 ? (
         <>
-          <DataTable
+          <DataView
             caption="Team"
-            rows={staff.data.data}
-            rowKey={(person) => person.staffProfileId}
+            rows={staff.rows}
+            getRowId={(person) => person.staffProfileId}
+            complete={!staff.hasMore}
             columns={[
-              {
+              identityColumn<StaffSummary>({
                 header: "Name",
-                cell: (person) => (
-                  <Link
-                    href={`/team/${person.staffProfileId}`}
-                    className="flex flex-col font-medium text-ink hover:text-accent hover:underline"
-                  >
-                    {person.name}
-                    <span className="font-mono text-2xs font-normal text-ink-muted">
-                      {person.staffCode}
-                    </span>
-                  </Link>
-                ),
-              },
-              { header: "Role", cell: (person) => ROLE_LABEL[person.role] },
-              {
+                name: (person) => person.name,
+                code: (person) => person.staffCode,
+                href: (person) => `/team/${person.staffProfileId}`,
+              }),
+              valueColumn<StaffSummary>({
+                id: "role",
+                header: "Role",
+                value: (person) => ROLE_LABEL[person.role],
+              }),
+              valueColumn<StaffSummary>({
+                id: "line",
                 header: "Line today",
-                cell: (person) => person.currentAssignment?.lineName ?? "—",
-              },
-              {
+                value: (person) => person.currentAssignment?.lineName ?? "—",
+                cell: (person) => {
+                  const assignment = person.currentAssignment;
+                  if (!assignment) return "—";
+                  return (
+                    <span className="inline-flex items-center gap-2">
+                      <CodeChip>{assignment.lineCode}</CodeChip>
+                      {assignment.lineName}
+                    </span>
+                  );
+                },
+              }),
+              valueColumn<StaffSummary>({
+                id: "joined",
                 header: "Joined",
+                value: (person) => person.joinedAt,
                 cell: (person) => formatBusinessDate(person.joinedAt),
-              },
-              {
+              }),
+              displayColumn<StaffSummary>({
+                id: "status",
                 header: "Status",
                 align: "end",
-                cell: (person) => <StaffStatusBadge status={person.status} />,
-              },
+                cell: (person) => (
+                  <StatusBadge kind="staff" value={person.status} />
+                ),
+              }),
             ]}
+            footer={
+              <ListFooter
+                shown={staff.rows.length}
+                noun={staff.rows.length === 1 ? "person" : "people"}
+                onMore={staff.loadMore}
+                loadingMore={staff.loadingMore}
+                note={staff.moreError ?? undefined}
+              />
+            }
           />
-          {staff.data.hasMore ? <TruncatedNote noun="staff" /> : null}
         </>
-      ) : null}
+      ) : (
+        <ListFallback
+          query={staff}
+          columns={5}
+          empty={
+            filtered ? (
+              <NoMatches
+                title="No one matches"
+                description="No staff have this role and status. Clear the filters to see everyone."
+                action={
+                  <Button tone="link" onClick={reset}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            ) : manages ? (
+              <NothingYet
+                title="No staff yet"
+                description="Staff accounts are created by an administrator. Adding staff from this screen arrives with staff management."
+              />
+            ) : (
+              <NothingYet
+                title="No one on your line today"
+                description="You are not assigned to a line today, so there is no team to show."
+              />
+            )
+          }
+        />
+      )}
     </>
   );
 }

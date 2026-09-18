@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@repo/db';
-import type { EmailMessage, EmailProvider, EmailResult } from '@repo/notifications';
+import type {
+  EmailMessage,
+  EmailProvider,
+  EmailResult,
+} from '@repo/notifications';
 import type { PinoLogger } from 'nestjs-pino';
 
 import { EmailDispatchService } from '../../src/email/email-dispatch.service.js';
@@ -52,19 +56,30 @@ describe('email (M10, notifications.md#email)', () => {
     const w = await cashWorld(tx);
     const database = new Database(tx);
     const smtp = testNotifications(database, 'NONE', 'SMTP');
-    const alert = (recipients: string[], category: 'ALERT' | 'WARNING' = 'ALERT') =>
+    const alert = (
+      recipients: string[],
+      category: 'ALERT' | 'WARNING' = 'ALERT',
+    ) =>
       database.transaction(() =>
         smtp.notifications.raise({
           recipients,
           category,
-          eventType: category === 'ALERT' ? 'LOW_COLLECTION' : 'EXTRA_COLLECTION',
+          eventType:
+            category === 'ALERT' ? 'LOW_COLLECTION' : 'EXTRA_COLLECTION',
           title: 'Low collection on Line 3',
           body: 'Suresh collected ₹80.00 of ₹100.00 from Guru',
-          link: { entityType: 'collection', entityId: 'col_1', url: '/collections/col_1' },
+          link: {
+            entityType: 'collection',
+            entityId: 'col_1',
+            url: '/collections/col_1',
+          },
         }),
       );
     const email = (userId: string) =>
-      tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true } });
+      tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { email: true },
+      });
     return { w, database, smtp, alert, email };
   }
 
@@ -105,10 +120,17 @@ describe('email (M10, notifications.md#email)', () => {
           status: 'PENDING',
           attempts: 0,
           subject: `Low collection on Line 3 — Rasi Test`,
-          notification: { category: 'ALERT', title: 'Low collection on Line 3' },
+          notification: {
+            category: 'ALERT',
+            title: 'Low collection on Line 3',
+          },
         });
-        expect(rows[0]!.textBody).toContain('Suresh collected ₹80.00 of ₹100.00 from Guru');
-        expect(rows[0]!.textBody).toContain('https://rasi.example/collections/col_1');
+        expect(rows[0]!.textBody).toContain(
+          'Suresh collected ₹80.00 of ₹100.00 from Guru',
+        );
+        expect(rows[0]!.textBody).toContain(
+          'https://rasi.example/collections/col_1',
+        );
       });
     });
 
@@ -126,11 +148,14 @@ describe('email (M10, notifications.md#email)', () => {
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );
-        expect(await tx.notification.count({ where: { userId: w.senior.userId } })).toBe(1);
-        expect(await tx.emailOutbox.count({ where: { userId: w.senior.userId } })).toBe(0);
+        expect(
+          await tx.notification.count({ where: { userId: w.senior.userId } }),
+        ).toBe(1);
+        expect(
+          await tx.emailOutbox.count({ where: { userId: w.senior.userId } }),
+        ).toBe(0);
       });
     });
-
   });
 
   describe('dispatch', () => {
@@ -152,10 +177,11 @@ describe('email (M10, notifications.md#email)', () => {
         });
         const smtp = fakeSmtp();
 
-        const report = await new EmailDispatchService(database, smtp.provider, silent).dispatch(
-          { organizationId: w.organizationId, runId: 'run_1' },
-          now,
-        );
+        const report = await new EmailDispatchService(
+          database,
+          smtp.provider,
+          silent,
+        ).dispatch({ organizationId: w.organizationId, runId: 'run_1' }, now);
 
         expect(report).toEqual({ sent: 1, retrying: 0, failed: 0, expired: 0 });
         expect(smtp.sent).toEqual([
@@ -167,8 +193,16 @@ describe('email (M10, notifications.md#email)', () => {
           }),
         ]);
         expect(
-          await tx.emailOutbox.findFirstOrThrow({ where: { userId: w.senior.userId } }),
-        ).toMatchObject({ status: 'SENT', attempts: 1, sentAt: now, lastError: null, nextAttemptAt: null });
+          await tx.emailOutbox.findFirstOrThrow({
+            where: { userId: w.senior.userId },
+          }),
+        ).toMatchObject({
+          status: 'SENT',
+          attempts: 1,
+          sentAt: now,
+          lastError: null,
+          nextAttemptAt: null,
+        });
       });
     });
 
@@ -177,18 +211,27 @@ describe('email (M10, notifications.md#email)', () => {
         const { w, database, alert, email } = await world(tx);
         await alert([w.senior.userId, w.junior.userId]);
         const smtp = fakeSmtp({
-          [(await email(w.senior.userId)).email]: { status: 'retry', reason: '421 try later' },
-          [(await email(w.junior.userId)).email]: { status: 'failed', reason: '550 no such mailbox' },
+          [(await email(w.senior.userId)).email]: {
+            status: 'retry',
+            reason: '421 try later',
+          },
+          [(await email(w.junior.userId)).email]: {
+            status: 'failed',
+            reason: '550 no such mailbox',
+          },
         });
 
-        const report = await new EmailDispatchService(database, smtp.provider, silent).dispatch(
-          { organizationId: w.organizationId, runId: 'run_1' },
-          now,
-        );
+        const report = await new EmailDispatchService(
+          database,
+          smtp.provider,
+          silent,
+        ).dispatch({ organizationId: w.organizationId, runId: 'run_1' }, now);
 
         expect(report).toEqual({ sent: 0, retrying: 1, failed: 1, expired: 0 });
         expect(
-          await tx.emailOutbox.findFirstOrThrow({ where: { userId: w.senior.userId } }),
+          await tx.emailOutbox.findFirstOrThrow({
+            where: { userId: w.senior.userId },
+          }),
         ).toMatchObject({
           status: 'PENDING',
           attempts: 1,
@@ -196,8 +239,14 @@ describe('email (M10, notifications.md#email)', () => {
           nextAttemptAt: new Date(now.getTime() + 60_000),
         });
         expect(
-          await tx.emailOutbox.findFirstOrThrow({ where: { userId: w.junior.userId } }),
-        ).toMatchObject({ status: 'FAILED', lastError: '550 no such mailbox', nextAttemptAt: null });
+          await tx.emailOutbox.findFirstOrThrow({
+            where: { userId: w.junior.userId },
+          }),
+        ).toMatchObject({
+          status: 'FAILED',
+          lastError: '550 no such mailbox',
+          nextAttemptAt: null,
+        });
       });
     });
 
@@ -210,9 +259,16 @@ describe('email (M10, notifications.md#email)', () => {
           data: { nextAttemptAt: later(30) },
         });
         const smtp = fakeSmtp();
-        const dispatch = new EmailDispatchService(database, smtp.provider, silent);
+        const dispatch = new EmailDispatchService(
+          database,
+          smtp.provider,
+          silent,
+        );
 
-        await dispatch.dispatch({ organizationId: w.organizationId, runId: 'r' }, now);
+        await dispatch.dispatch(
+          { organizationId: w.organizationId, runId: 'r' },
+          now,
+        );
         const other = await cashWorld(tx);
         await dispatch.dispatch(
           { organizationId: other.organizationId, runId: 'r' },
@@ -233,15 +289,18 @@ describe('email (M10, notifications.md#email)', () => {
         });
         const smtp = fakeSmtp();
 
-        const report = await new EmailDispatchService(database, smtp.provider, silent).dispatch(
-          { organizationId: w.organizationId, runId: 'r' },
-          now,
-        );
+        const report = await new EmailDispatchService(
+          database,
+          smtp.provider,
+          silent,
+        ).dispatch({ organizationId: w.organizationId, runId: 'r' }, now);
 
         expect(report.expired).toBe(1);
         expect(smtp.sent).toEqual([]);
         expect(
-          await tx.emailOutbox.findFirstOrThrow({ where: { userId: w.senior.userId } }),
+          await tx.emailOutbox.findFirstOrThrow({
+            where: { userId: w.senior.userId },
+          }),
         ).toMatchObject({ status: 'EXPIRED' });
       });
     });
@@ -251,14 +310,17 @@ describe('email (M10, notifications.md#email)', () => {
         const { w, database, alert } = await world(tx);
         await alert([w.senior.userId]);
 
-        const report = await new EmailDispatchService(database, null, silent).dispatch(
-          { organizationId: w.organizationId, runId: 'r' },
-          now,
-        );
+        const report = await new EmailDispatchService(
+          database,
+          null,
+          silent,
+        ).dispatch({ organizationId: w.organizationId, runId: 'r' }, now);
 
         expect(report).toEqual({ sent: 0, retrying: 0, failed: 0, expired: 0 });
         expect(
-          await tx.emailOutbox.findFirstOrThrow({ where: { userId: w.senior.userId } }),
+          await tx.emailOutbox.findFirstOrThrow({
+            where: { userId: w.senior.userId },
+          }),
         ).toMatchObject({ status: 'PENDING', attempts: 0 });
       });
     });

@@ -235,4 +235,23 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'POST /api/lines/:lineId/junior-assignment': 'assignment.moveJunior',
   'GET /api/staffing': 'staff.list',
   'GET /api/lines/:lineId/assignments': 'assignment.viewHistory',
+  // M11 Dashboards (US-080, US-082): business totals are Admin and Super Admin.
+  'GET /api/dashboards/overview': 'money.businessTotals',
+  'GET /api/dashboards/operations': 'money.businessTotals',
+  // M11 (US-081): sector totals are Admin and Super Admin.
+  'GET /api/dashboards/sectors': 'money.sectorTotals',
+  // M11 (US-083): line totals are Admins, and a Senior for their own line.
+  'GET /api/dashboards/line': 'money.lineTotals',
+  // M12 Reports (US-084): Admins, and a Senior for their own line.
+  'GET /api/reports/line-wise': 'report.view',
+  // M12 Reports (US-085): §22's invested and profit, Admins and a Senior's own line.
+  'GET /api/reports/investment': 'report.view',
+  // M12 Reports (US-086): BR-08 over a range, Admins and a Senior's own line.
+  'GET /api/reports/collection': 'report.view',
+  // M12 Reports (US-087): BR-05's overdue accounts, Admins and a Senior's own line.
+  'GET /api/reports/overdue': 'report.view',
+  // M06 Working calendar (US-093)
+  'GET /api/holidays': 'holiday.view',
+  'POST /api/holidays': 'holiday.declare',
+  'DELETE /api/holidays/:holidayId': 'holiday.declare',
 };

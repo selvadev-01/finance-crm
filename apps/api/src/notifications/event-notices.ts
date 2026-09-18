@@ -316,6 +316,57 @@ export class EventNotices {
     });
   }
 
+  /**
+   * M06 / US-093: a holiday declared or removed changes the routes of the
+   * lines it covers, so their Seniors and Juniors are told — a WARNING, so it
+   * is pushed. Juniors are linked to their route, Seniors to the holiday list.
+   */
+  async holidayChanged(event: {
+    actorUserId: string;
+    organizationId: string;
+    sectorId: string | null;
+    sectorName: string | null;
+    date: CalendarDate;
+    name: string;
+    change: 'DECLARED' | 'REMOVED';
+  }): Promise<void> {
+    const tx = this.database.client;
+    const staff = await this.recipients.lineStaff(
+      tx,
+      event.organizationId,
+      event.sectorId,
+      toBusinessDate(new Date()),
+    );
+    const where = event.sectorName ? ` in ${event.sectorName}` : '';
+    const day = dateText(event.date);
+    const declared = event.change === 'DECLARED';
+    const words = {
+      category: 'WARNING' as const,
+      eventType: declared
+        ? ('HOLIDAY_DECLARED' as const)
+        : ('HOLIDAY_REMOVED' as const),
+      title: `${declared ? 'Holiday declared' : 'Holiday removed'} · ${day}`,
+      body: declared
+        ? `${event.name}: no collections on ${day}${where}. Collections due that day and after move to the next working day.`
+        : `${event.name} on ${day}${where} is a working day again. Collections after it move a day earlier.`,
+      actorUserId: event.actorUserId,
+    };
+    await this.notifications.raise({
+      ...words,
+      recipients: staff.seniors,
+      link: {
+        entityType: 'holiday',
+        entityId: null,
+        url: '/settings/holidays',
+      },
+    });
+    await this.notifications.raise({
+      ...words,
+      recipients: staff.juniors,
+      link: { entityType: 'holiday', entityId: null, url: '/route' },
+    });
+  }
+
   /** US-095: every mismatch is an ALERT to Admins and Super Admins. */
   async reconciliationMismatch(event: {
     organizationId: string;

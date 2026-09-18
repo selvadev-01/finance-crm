@@ -1,12 +1,23 @@
 "use client";
 
 import { signUpContract } from "@repo/contracts";
-import { Button, Field, FormMessage, Input } from "@repo/ui";
+import {
+  Button,
+  Field,
+  Form,
+  FormField,
+  FormMessage,
+  FormRootError,
+  Input,
+  SubmitButton,
+  useZodForm,
+} from "@repo/ui";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 
 import { apiWrite } from "../../../lib/api-write";
 import { authClient } from "../../../lib/auth-client";
+import { applyWriteFailure } from "../../../lib/form-errors";
 
 type FieldName = "organizationName" | "name" | "email" | "phone" | "password";
 
@@ -17,6 +28,8 @@ const LABELS: Record<FieldName, string> = {
   phone: "Mobile number",
   password: "Password",
 };
+
+const FIELDS = Object.keys(LABELS) as FieldName[];
 
 interface Created {
   slug: string;
@@ -30,60 +43,21 @@ interface Created {
  * with the password they just chose and shown that link, to share with staff,
  * before going on as Super Admin. The API's refusals (an email already in
  * use, too many attempts) carry messages written for this screen.
+ *
+ * Validated in the browser against the contract's own body schema (ADR-0013).
  */
 export function SignUpForm() {
   const router = useRouter();
-  const [pending, setPending] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [fields, setFields] = useState<Partial<Record<FieldName, string>>>({});
   const [created, setCreated] = useState<Created | null>(null);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const value = (name: FieldName) => String(form.get(name) ?? "");
-    setPending(true);
-    setProblem(null);
-    setFields({});
-
-    const result = await apiWrite(signUpContract.signUpOrganization, {
-      body: {
-        organizationName: value("organizationName"),
-        name: value("name"),
-        email: value("email"),
-        phone: value("phone"),
-        password: value("password"),
-      },
-    });
-
-    if (!result.ok) {
-      const byField: Partial<Record<FieldName, string>> = {};
-      for (const detail of result.details) {
-        const field = detail.field as FieldName;
-        if (field in LABELS && !byField[field]) {
-          byField[field] = `${LABELS[field]} ${detail.issue}.`;
-        }
-      }
-      setFields(byField);
-      // A refusal that names a field is shown there, once, not twice.
-      setProblem(Object.keys(byField).length > 0 ? null : result.form);
-      setPending(false);
-      return;
-    }
-
-    let signedIn = false;
-    try {
-      const { error } = await authClient.signIn.email({
-        email: value("email"),
-        password: value("password"),
-      });
-      signedIn = !error;
-    } catch {
-      // The business exists; only the automatic sign-in failed.
-    }
-    setCreated({ slug: result.body.slug, signedIn });
-    setPending(false);
-  }
+  const form = useZodForm(signUpContract.signUpOrganization.body, {
+    defaultValues: {
+      organizationName: "",
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+    },
+  });
 
   if (created) {
     const path = `/${created.slug}/sign-in`;
@@ -96,7 +70,11 @@ export function SignUpForm() {
           label="Your business’s sign-in link"
           hint="Share it with your staff. You can also sign in at the usual page."
         >
-          <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
+          <Input
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+          />
         </Field>
         <Button
           tone="primary"
@@ -109,51 +87,60 @@ export function SignUpForm() {
     );
   }
 
-  const field = (name: FieldName) => ({
-    name,
-    disabled: pending,
-    required: true,
-  });
-
   return (
-    <form onSubmit={submit} className="flex flex-col gap-[var(--stack-gap)]">
-      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      <Field label={LABELS.organizationName} error={fields.organizationName}>
-        <Input {...field("organizationName")} autoComplete="organization" />
-      </Field>
-      <Field label={LABELS.name} error={fields.name}>
-        <Input {...field("name")} autoComplete="name" />
-      </Field>
-      <Field label={LABELS.email} error={fields.email}>
-        <Input
-          {...field("email")}
-          type="email"
-          autoComplete="username"
-          inputMode="email"
-        />
-      </Field>
-      <Field
+    <Form
+      form={form}
+      onSubmit={async (body) => {
+        const result = await apiWrite(
+          signUpContract.signUpOrganization,
+          { body },
+          { fields: LABELS },
+        );
+        if (!result.ok) {
+          applyWriteFailure(form.setError, result, { fields: FIELDS });
+          return;
+        }
+
+        let signedIn = false;
+        try {
+          const { error } = await authClient.signIn.email({
+            email: body.email,
+            password: body.password,
+          });
+          signedIn = !error;
+        } catch {
+          // The business exists; only the automatic sign-in failed.
+        }
+        setCreated({ slug: result.body.slug, signedIn });
+      }}
+    >
+      <FormRootError />
+      <FormField name="organizationName" label={LABELS.organizationName}>
+        <Input autoComplete="organization" />
+      </FormField>
+      <FormField name="name" label={LABELS.name}>
+        <Input autoComplete="name" />
+      </FormField>
+      <FormField name="email" label={LABELS.email}>
+        <Input type="email" autoComplete="username" inputMode="email" />
+      </FormField>
+      <FormField
+        name="phone"
         label={LABELS.phone}
         hint="10-digit Indian mobile number."
-        error={fields.phone}
       >
-        <Input {...field("phone")} type="tel" autoComplete="tel" inputMode="tel" />
-      </Field>
-      <Field
+        <Input type="tel" autoComplete="tel" inputMode="tel" />
+      </FormField>
+      <FormField
+        name="password"
         label={LABELS.password}
         hint="At least 10 characters. You’ll sign in with this."
-        error={fields.password}
       >
-        <Input
-          {...field("password")}
-          type="password"
-          autoComplete="new-password"
-          minLength={10}
-        />
-      </Field>
-      <Button tone="primary" type="submit" disabled={pending} className="w-full">
-        {pending ? "Creating your business…" : "Create business"}
-      </Button>
-    </form>
+        <Input type="password" autoComplete="new-password" />
+      </FormField>
+      <SubmitButton pendingLabel="Creating your business…" className="w-full">
+        Create business
+      </SubmitButton>
+    </Form>
   );
 }

@@ -55,7 +55,9 @@ export function installPushHandlers(
         // `navigate` rejects for a tab this worker does not control — one
         // opened before the worker activated, since there is no clientsClaim.
         // Then the link opens in a new window rather than being lost.
-        const navigated = same ? await same.navigate(target.href).catch(() => null) : null;
+        const navigated = same
+          ? await same.navigate(target.href).catch(() => null)
+          : null;
         if (navigated) {
           await navigated.focus();
           return;

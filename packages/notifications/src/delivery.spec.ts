@@ -8,11 +8,25 @@ import { WebPushProvider } from "./web-push-provider.js";
 const payload: PushPayload = {
   title: "Low collection on Line 3",
   body: "Suresh collected ₹80 of ₹100 from Guru",
-  data: { notificationId: "ntf_1", entityType: "collection", entityId: "col_1", url: "/collections/col_1" },
+  data: {
+    notificationId: "ntf_1",
+    entityType: "collection",
+    entityId: "col_1",
+    url: "/collections/col_1",
+  },
 };
-const webTarget = { provider: "WEB_PUSH", endpoint: "https://push.example/abc", p256dh: "p", auth: "a" } as const;
+const webTarget = {
+  provider: "WEB_PUSH",
+  endpoint: "https://push.example/abc",
+  p256dh: "p",
+  auth: "a",
+} as const;
 const fcmTarget = { provider: "FCM", fcmToken: "token-1" } as const;
-const vapid = { subject: "mailto:ops@example.com", publicKey: "pub", privateKey: "priv" };
+const vapid = {
+  subject: "mailto:ops@example.com",
+  publicKey: "pub",
+  privateKey: "priv",
+};
 
 const failWith = (fields: object) => async () => {
   throw Object.assign(new Error("push service said no"), fields);
@@ -25,7 +39,9 @@ describe("Web Push provider (US-071)", () => {
       calls.push(args);
       return { statusCode: 201 };
     });
-    await expect(provider.send(webTarget, payload)).resolves.toEqual({ status: "sent" });
+    await expect(provider.send(webTarget, payload)).resolves.toEqual({
+      status: "sent",
+    });
     expect(calls).toEqual([
       [
         { endpoint: webTarget.endpoint, keys: { p256dh: "p", auth: "a" } },
@@ -59,7 +75,9 @@ describe("FCM provider (US-071)", () => {
       messages.push(message);
       return "projects/x/messages/1";
     });
-    await expect(provider.send(fcmTarget, payload)).resolves.toEqual({ status: "sent" });
+    await expect(provider.send(fcmTarget, payload)).resolves.toEqual({
+      status: "sent",
+    });
     expect(messages[0]).toMatchObject({
       token: "token-1",
       notification: { title: payload.title, body: payload.body },
@@ -101,15 +119,26 @@ describe("delivery policy (notifications.md#delivery-and-retry)", () => {
     const retry = { status: "retry", reason: "503" } as const;
     const delays = [1, 2, 3, 4].map((attempts) => {
       const next = outcome(retry, attempts, now);
-      return next.status === "PENDING" ? (next.nextAttemptAt.getTime() - now.getTime()) / 60_000 : null;
+      return next.status === "PENDING"
+        ? (next.nextAttemptAt.getTime() - now.getTime()) / 60_000
+        : null;
     });
     expect(delays).toEqual([1, 5, 30, 120]);
-    expect(outcome(retry, MAX_ATTEMPTS, now)).toMatchObject({ status: "FAILED", deactivate: true });
+    expect(outcome(retry, MAX_ATTEMPTS, now)).toMatchObject({
+      status: "FAILED",
+      deactivate: true,
+    });
   });
 
   it("a gone subscription is deactivated at once; a refusal fails without deactivating", () => {
-    expect(outcome({ status: "gone", reason: "410" }, 1, now)).toMatchObject({ status: "FAILED", deactivate: true });
-    expect(outcome({ status: "failed", reason: "400" }, 1, now)).toMatchObject({ status: "FAILED", deactivate: false });
+    expect(outcome({ status: "gone", reason: "410" }, 1, now)).toMatchObject({
+      status: "FAILED",
+      deactivate: true,
+    });
+    expect(outcome({ status: "failed", reason: "400" }, 1, now)).toMatchObject({
+      status: "FAILED",
+      deactivate: false,
+    });
     expect(outcome({ status: "sent" }, 1, now)).toEqual({ status: "SENT" });
   });
 });

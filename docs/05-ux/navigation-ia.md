@@ -31,6 +31,18 @@ One Next.js deployment, routed by role at sign-in. A Junior signing in never see
 | Reports       |      ✓      |   ✓   |  Limited  |      —      |
 | Settings      |      ✓      |   —   |     —     |      —      |
 
+**As built, the console sidebar is grouped** by what a person is doing (ADR-0013). Only the areas whose screens exist are listed; Settings joins when it is built.
+
+| Group   | Items                                                |
+| ------- | ---------------------------------------------------- |
+| Operate | Dashboard, Collections, Cash, Reports                |
+| Records | Customers, Lines, Sectors (Admin and above), Team    |
+| System  | Notifications, Holidays, Audit log (Admin and above) |
+
+**Reports** (US-084) is one sidebar item for every console role — Super Admin, Admin and Senior — and it opens `/reports`, an index of the reports that exist, rather than a particular report. There are five reports specified and each is a different question, so a sidebar entry per report would grow the navigation faster than the product; the index is the one page each report story adds itself to. A Senior's "Limited" is enforced in the API, not by hiding the item: their report covers their own line (M12).
+
+The top bar shows the current area, the bell and the account menu (name, role, sign out). The page itself carries its breadcrumb trail above the title (see [drill-down](#drill-down-follows-the-rollup-chain)).
+
 **Hidden, not disabled.** A Senior does not see a greyed-out Sectors link — it is absent. A disabled control invites the question "how do I get access", which is not a conversation the product should start.
 
 Hiding is convenience only; every hidden route independently fails at the API ([rbac-matrix](../01-product/rbac-matrix.md#enforcement)).
@@ -116,6 +128,8 @@ Every money figure descends along `Business → Sector → Line → Customer →
 
 > A total that cannot be explained is a total that will not be trusted, and trust in the numbers is the entire point of replacing the spreadsheet. Real URLs mean a figure can be shared, bookmarked and returned to — which is what people do when they are checking something.
 
+Every detail page shows that chain as a breadcrumb trail above its title (`PageTrail`): for example, Customers / Kumar Traders / ACC-0091, or Sectors / North / LN-07. Each level above the page is a link.
+
 ---
 
 ## Notifications
@@ -129,13 +143,13 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 ## URLs
 
 ```
-/dashboard
+/dashboard            /dashboard/sectors    (sector comparison, Admin and above)
 /customers            /customers/:id
 /sectors              /sectors/:id
 /lines                /lines/:id            /lines/:id/day-closes/:date
 /collections          /collections/:id      /collections/pending-approval
 /team                 /team/:id
-/reports/line-wise    /reports/overdue
+/reports              /reports/line-wise    /reports/investment    /reports/collection    (/reports/overdue and the rest join as they are built)
 /settings/holidays    /settings/audit
 
 /route                            Junior home (S-01)
@@ -147,7 +161,32 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /lines/:lineId/day-closes/:date    day close (S-05)
 ```
 
-Resource-oriented, bookmarkable, shareable. **The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).
+Resource-oriented, bookmarkable, shareable.
+
+### URL state
+
+**A list's filters and a record's tab live in the query string**, so a reload, the back button or a shared link shows the same view. A filter at its default value is left out of the URL.
+
+The page's server component reads them (`readListParams`), and the list keeps them in step (`useListState`).
+
+| Page                  | Parameters                                                         |
+| --------------------- | ------------------------------------------------------------------ |
+| `/dashboard/sectors`  | `date`. Blank means today                                          |
+| `/sectors`            | `inactive=show`                                                    |
+| `/lines`              | `sectorId`, `inactive=show`                                        |
+| `/team`               | `role`, `status`                                                   |
+| `/customers`          | `line`                                                             |
+| `/customers/:id`      | `tab` = `profile` or `accounts`                                    |
+| `/collections`        | `from`, `to`, `line`, `show`. Blank dates mean the last seven days |
+| `/reports/line-wise`  | `from`, `to`, `sector`, `line`. Blank dates mean the month so far  |
+| `/reports/investment` | The same four, read by the same `report-parts.tsx`                 |
+| `/reports/collection` | The same four, plus `junior` and `classification`                  |
+| `/cash`               | `line`, `date` (the day close to open)                             |
+| `/settings/audit`     | `action`, `entityTable`, `entityId`, `actorUserId`, `from`, `to`   |
+
+Paging is not in the URL. "Show more" follows the API's cursor, and a reload starts again from the first page.
+
+**The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).
 
 **The Junior's views are hashes of one page, not separate paths** (decision 2026-09-14). The service worker caches a page by its exact URL, so `/route/collect/:id` would open offline only for customers whose page happened to be visited with signal — most customers, at the door, would get a browser error. A hash never reaches the network: every view is the one cached `/route` document, reloads included. The phone's back button returns to the route, and opening one view from another replaces rather than stacks, so the route is never more than one step back. Entry is per customer rather than per account, because a customer with several accounts confirms each on one screen (BR-01a).
 

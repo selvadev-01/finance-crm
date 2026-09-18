@@ -36,13 +36,17 @@ function EmptyStateShell({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-2 px-6 py-12 text-center",
+        "flex flex-col items-center justify-center gap-1.5 px-6 py-14 text-center",
         className,
       )}
     >
-      <p className="text-base font-medium text-ink">{title}</p>
-      <p className="max-w-[42ch] text-sm text-ink-muted">{description}</p>
-      {action ? <div className="pt-2">{action}</div> : null}
+      <p className="text-heading text-ink">{title}</p>
+      <p className="max-w-[46ch] text-body text-pretty text-ink-muted">
+        {description}
+      </p>
+      {action ? (
+        <div className="flex flex-wrap justify-center gap-2 pt-3">{action}</div>
+      ) : null}
     </div>
   );
 }

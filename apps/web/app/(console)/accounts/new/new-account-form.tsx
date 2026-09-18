@@ -9,82 +9,79 @@ import {
 import { toBusinessDate } from "@repo/domain";
 import {
   Button,
-  DataTable,
-  Field,
+  buttonClass,
+  Card,
+  DataView,
+  EmptyFrame,
+  Form,
+  FormActions,
+  FormField,
   FormMessage,
+  FormRootError,
   formatBusinessDate,
   formatCurrency,
   Input,
   NotPermitted,
   PageHeader,
+  Section,
+  Stat,
+  StatGrid,
+  SubmitButton,
+  useZodForm,
 } from "@repo/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useState } from "react";
+import { type BaseSyntheticEvent, useEffect, useMemo, useState } from "react";
+import { useWatch } from "react-hook-form";
 
+import {
+  displayColumn,
+  moneyColumn,
+  valueColumn,
+} from "../../../../components/columns";
+import { PageTrail } from "../../../../components/page-trail";
+import { RecordNotFound } from "../../../../components/query-state";
 import { api } from "../../../../lib/api-client";
 import { apiWrite } from "../../../../lib/api-write";
+import { applyWriteFailure } from "../../../../lib/form-errors";
+import { LIST_LIMIT } from "../../../../lib/list-limit";
+import { isZeroMoney, subtractMoney } from "../../../../lib/money";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
-import { LIST_LIMIT, RecordNotFound, Surface } from "../../_organisation/list-controls";
 
-type TermsField =
-  | "accountAmount"
-  | "investedAmount"
-  | "dailyAmount"
-  | "termDays"
-  | "disbursementDate"
-  | "collectedToDate";
-
-type Values = Record<TermsField, string>;
-type Errors = Partial<Record<TermsField, string>>;
-
-const LABEL: Record<TermsField, string> = {
-  accountAmount: "Account amount",
-  investedAmount: "Invested amount",
-  dailyAmount: "Daily amount",
-  termDays: "Term",
-  disbursementDate: "Disbursement date",
-  collectedToDate: "Collected to date",
-};
+type Slot = AccountPreview["slots"][number];
+type Terms = (typeof accountTermsSchema)["_zod"]["output"];
 
 const SLOTS_SHOWN = 12;
+const MONEY_TEXT = /^\d{1,12}(\.\d{1,2})?$/;
+const TERM_FIELDS = [
+  "accountAmount",
+  "investedAmount",
+  "dailyAmount",
+  "termDays",
+  "disbursementDate",
+  "collectedToDate",
+] as const;
 
-/** The contract's own checks, as sentences under each field (S-04 error state). */
 /** What is sent: collected to date only for a past date (US-030a). */
-function requestTerms(values: Values, today: string) {
-  const { collectedToDate, ...terms } = values;
-  return values.disbursementDate && values.disbursementDate < today
-    ? { ...terms, collectedToDate }
-    : terms;
+function requestTerms(terms: Terms, today: string): Terms {
+  if (terms.disbursementDate < today) return terms;
+  const { collectedToDate: _dropped, ...rest } = terms;
+  return rest;
 }
 
-function check(values: Values, today: string): { errors: Errors; ok: boolean } {
-  const errors: Errors = {};
-  const midTerm = Boolean(values.disbursementDate) && values.disbursementDate < today;
-  if (midTerm && values.collectedToDate.trim() === "") {
-    errors.collectedToDate =
-      "Enter what the customer has paid so far — 0 if nothing yet.";
-  }
-  const parsed = accountTermsSchema.safeParse(requestTerms(values, today));
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      const field = issue.path[0] as TermsField;
-      if (errors[field] || !(field in LABEL)) continue;
-      errors[field] =
-        field === "termDays" && issue.message.includes("cannot clear")
-          ? `${issue.message.replace(/^(\S+)/, "₹$1").replace("clear ", "clear ₹")}.`
-          : `${LABEL[field]} ${issue.message}.`;
-    }
-  }
-  return { errors, ok: Object.keys(errors).length === 0 };
+/** "50 × 100 days cannot clear 10,000" → with rupee signs, as US-030 words it. */
+function withRupees(message: string): string {
+  return message.includes("cannot clear")
+    ? message.replace(/^(\S+)/, "₹$1").replace("clear ", "clear ₹")
+    : message;
 }
 
 /**
  * S-04 · US-030. Every derived value is visible before saving, because the
  * amounts cannot change after disbursement: profit updates as you type (it is
- * `A − I`, computed here in paise), and once the terms are valid the API's
+ * `A − I`, computed in paise), and once the terms are valid the API's
  * preview — the same code that will create the account — shows the first
  * collection date, the target completion date and every slot.
  */
@@ -105,125 +102,155 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       : null,
   );
 
-  const [values, setValues] = useState<Values>({
-    accountAmount: "",
-    investedAmount: "",
-    dailyAmount: "",
-    termDays: "100",
-    disbursementDate: today,
-    collectedToDate: "",
+  // The contract's terms, plus the one rule it cannot know: a past date
+  // needs what the customer has already paid (US-030a).
+  const schema = useMemo(
+    () =>
+      accountTermsSchema.superRefine((terms, context) => {
+        if (
+          terms.disbursementDate < today &&
+          terms.collectedToDate === undefined
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["collectedToDate"],
+            message:
+              "enter what the customer has paid so far — 0 if nothing yet",
+          });
+        }
+      }),
+    [today],
+  );
+  const form = useZodForm(schema, {
+    defaultValues: {
+      accountAmount: "",
+      investedAmount: "",
+      dailyAmount: "",
+      termDays: "100",
+      disbursementDate: today,
+      collectedToDate: undefined,
+    },
   });
-  const [touched, setTouched] = useState<Partial<Record<TermsField, boolean>>>({});
-  const [submitted, setSubmitted] = useState(false);
-  const [preview, setPreview] = useState<{ key: string; result: AccountPreview | string } | null>(null);
-  const [showAllSlots, setShowAllSlots] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
 
-  const { errors, ok } = check(values, today);
-  const previewKey = JSON.stringify(requestTerms(values, today));
-  const midTerm = values.disbursementDate !== "" && values.disbursementDate < today;
+  const watched = useWatch({ control: form.control });
+  const parsed = schema.safeParse(watched);
+  const valid = parsed.success;
+  const previewKey = parsed.success
+    ? JSON.stringify(requestTerms(parsed.data, today))
+    : null;
+  const disbursementDate =
+    typeof watched.disbursementDate === "string"
+      ? watched.disbursementDate
+      : "";
+  const midTerm = disbursementDate !== "" && disbursementDate < today;
+  const canDisburse = disbursementDate === today;
+
+  const [preview, setPreview] = useState<{
+    key: string;
+    result: AccountPreview | string;
+  } | null>(null);
+  const [showAllSlots, setShowAllSlots] = useState(false);
 
   useEffect(() => {
-    if (!ok || !customerId || !manages) return;
+    if (!previewKey || !customerId || !manages) return;
     let cancelled = false;
     // Debounced: a preview per settled value, not per keystroke.
     const timer = setTimeout(() => {
-      api(accountContract.previewAccount, { body: { customerId, ...JSON.parse(previewKey) } })
+      api(accountContract.previewAccount, {
+        body: { customerId, ...(JSON.parse(previewKey) as Terms) },
+      })
         .then((result) => {
           if (cancelled) return;
           setPreview({
             key: previewKey,
             result: result.ok
               ? result.body
-              : (result.body?.message ?? "The schedule couldn’t be worked out just now."),
+              : (result.body?.message ??
+                "The schedule couldn’t be worked out just now."),
           });
         })
         .catch(() => {
-          if (!cancelled) setPreview({ key: previewKey, result: "Could not reach Rasi to work out the schedule." });
+          if (!cancelled)
+            setPreview({
+              key: previewKey,
+              result: "Could not reach Rasi to work out the schedule.",
+            });
         });
     }, 350);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [ok, previewKey, customerId, manages]);
+  }, [previewKey, customerId, manages]);
 
   if (!manages) {
     return (
-      <Surface>
+      <EmptyFrame>
         <NotPermitted />
-      </Surface>
+      </EmptyFrame>
     );
   }
-  if (!customerId || customer.status === "not-found" || customer.status === "not-permitted") {
+  if (
+    !customerId ||
+    customer.status === "not-found" ||
+    customer.status === "not-permitted"
+  ) {
     return <RecordNotFound noun="Customer" />;
   }
 
-  const shownError = (field: TermsField) =>
-    touched[field] || submitted ? errors[field] : undefined;
-  const set = (field: TermsField) => (event: { target: { value: string } }) =>
-    setValues((current) => ({ ...current, [field]: event.target.value }));
-  const blur = (field: TermsField) => () =>
-    setTouched((current) => ({ ...current, [field]: true }));
-
   // P = A − I, live, in paise — never a floating-point number (BR-11).
-  const profit = (() => {
-    const a = /^\d{1,12}(\.\d{1,2})?$/.test(values.accountAmount.replace(/[\s,]/g, ""));
-    const i = /^\d{1,12}(\.\d{1,2})?$/.test(values.investedAmount.replace(/[\s,]/g, ""));
-    if (!a || !i) return null;
-    const paise = (value: string) => {
-      const [rupees = "0", fraction = ""] = value.replace(/[\s,]/g, "").split(".");
-      return BigInt(rupees) * 100n + BigInt(fraction.padEnd(2, "0"));
-    };
-    const p = paise(values.accountAmount) - paise(values.investedAmount);
-    const sign = p < 0n ? "-" : "";
-    const abs = p < 0n ? -p : p;
-    return `${sign}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
-  })();
+  const accountText = String(watched.accountAmount ?? "").replace(/[\s,]/g, "");
+  const investedText = String(watched.investedAmount ?? "").replace(
+    /[\s,]/g,
+    "",
+  );
+  const profit =
+    MONEY_TEXT.test(accountText) && MONEY_TEXT.test(investedText)
+      ? subtractMoney(accountText, investedText)
+      : null;
 
-  const current = preview && preview.key === previewKey && ok ? preview.result : null;
-  const canDisburse = values.disbursementDate === today;
-  const collectedField =
-    touched.collectedToDate || submitted ? errors.collectedToDate : undefined;
+  const current = preview && preview.key === previewKey ? preview.result : null;
+  const activeCount =
+    existing.status === "ready" ? existing.data.data.length : 0;
+  const cancel = (
+    <Link href={`/customers/${customerId}`} className={buttonClass("ghost")}>
+      Cancel
+    </Link>
+  );
 
-  async function save(disburse: boolean) {
-    setSubmitted(true);
-    if (!ok) {
-      document.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
-      return;
-    }
-    setPending(true);
-    setProblem(null);
+  async function onSubmit(terms: Terms, event?: BaseSyntheticEvent) {
+    const submitter = (event?.nativeEvent as SubmitEvent | undefined)
+      ?.submitter;
+    const disburse =
+      submitter instanceof HTMLButtonElement && submitter.value === "disburse";
     const result = await apiWrite(accountContract.createAccount, {
-      body: { customerId, ...requestTerms(values, today), disburse },
+      body: { customerId, ...requestTerms(terms, today), disburse },
     });
-    setPending(false);
     if (!result.ok) {
-      setProblem(result.form ?? result.details.map((detail) => `${detail.field} ${detail.issue}`).join(". "));
-      return;
+      return applyWriteFailure(form.setError, result, {
+        fields: [...TERM_FIELDS],
+        fallback: "The account was not saved.",
+      });
     }
     router.push(`/accounts/${result.body.id}`);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void save(false);
-  }
-
-  const activeCount = existing.status === "ready" ? existing.data.data.length : 0;
-
   return (
     <>
       <PageHeader
-        eyebrow={
-          customer.status === "ready" ? (
-            <Link href={`/customers/${customerId}`} className="hover:text-ink hover:underline">
-              {customer.data.name} · {customer.data.customerCode}
-            </Link>
-          ) : (
-            "Customer"
-          )
+        trail={
+          <PageTrail
+            steps={[
+              { label: "Customers", href: "/customers" },
+              customer.status === "ready"
+                ? {
+                    label: `${customer.data.name} · ${customer.data.customerCode}`,
+                    href: `/customers/${customerId}`,
+                  }
+                : { label: "Customer" },
+              { label: "New account" },
+            ]}
+          />
         }
         title="New account"
         description="Amounts cannot be changed after disbursement. Check the schedule before saving."
@@ -231,180 +258,276 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
 
       {activeCount > 0 ? (
         <FormMessage tone="info">
-          This customer already has {activeCount} active account{activeCount === 1 ? "" : "s"}. A
-          further account is allowed; each keeps its own schedule and balance.
+          This customer already has {activeCount} active account
+          {activeCount === 1 ? "" : "s"}. A further account is allowed; each
+          keeps its own schedule and balance.
         </FormMessage>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-        <form onSubmit={submit} noValidate className="flex flex-col gap-[var(--stack-gap)]">
-          {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-          <fieldset disabled={pending} className="flex flex-col gap-[var(--stack-gap)]">
-            <Field label="Account amount (₹)" hint="What the customer repays in total." error={shownError("accountAmount")}>
-              <Input inputMode="decimal" autoComplete="off" autoFocus value={values.accountAmount} onChange={set("accountAmount")} onBlur={blur("accountAmount")} />
-            </Field>
-            <Field label="Invested amount (₹)" hint="The cash handed to the customer." error={shownError("investedAmount")}>
-              <Input inputMode="decimal" autoComplete="off" value={values.investedAmount} onChange={set("investedAmount")} onBlur={blur("investedAmount")} />
-            </Field>
-            <div className="flex flex-col gap-1 rounded-[var(--radius-control)] bg-surface-sunken px-3 py-2">
-              <span className="text-sm font-medium text-ink">Profit</span>
-              <span className="text-base font-semibold text-ink" data-numeric aria-live="polite">
-                {profit === null ? "—" : profit.startsWith("-") ? "Not positive" : formatCurrency(profit)}
-              </span>
-              <span className="text-2xs text-ink-muted">Account amount − invested amount. Not editable.</span>
-            </div>
-            <div className="grid gap-[var(--stack-gap)] sm:grid-cols-2">
-              <Field label="Daily amount (₹)" error={shownError("dailyAmount")}>
-                <Input inputMode="decimal" autoComplete="off" value={values.dailyAmount} onChange={set("dailyAmount")} onBlur={blur("dailyAmount")} />
-              </Field>
-              <Field label="Term (days)" error={shownError("termDays")}>
-                <Input inputMode="numeric" autoComplete="off" value={values.termDays} onChange={set("termDays")} onBlur={blur("termDays")} />
-              </Field>
-            </div>
-            <Field label="Disbursement date" hint="Day 0 — collection starts the next working day." error={shownError("disbursementDate")}>
-              <Input type="date" value={values.disbursementDate} onChange={set("disbursementDate")} onBlur={blur("disbursementDate")} />
-            </Field>
-            {midTerm ? (
-              <div className="flex flex-col gap-2 rounded-[var(--radius-surface)] border border-warning/40 bg-warning-subtle p-3">
-                <p className="text-sm font-medium text-ink">
-                  A past date makes this a mid-term account: already disbursed, and collected partway.
-                </p>
-                <Field
-                  label="Collected to date (₹)"
-                  hint="Everything paid up to and including today. Take it from the customer's collection note — never days × daily amount: one underpayment makes that wrong, and the account would finish early with money uncollected."
-                  error={collectedField}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <Card.Root>
+          <Card.Header title="Terms" />
+          <Card.Body>
+            <Form form={form} onSubmit={onSubmit}>
+              <FormRootError />
+              <FormField
+                name="accountAmount"
+                label="Account amount (₹)"
+                hint="What the customer repays in total."
+              >
+                <Input
+                  inputMode="decimal"
+                  autoComplete="off"
+                  autoFocus
+                  data-numeric
+                />
+              </FormField>
+              <FormField
+                name="investedAmount"
+                label="Invested amount (₹)"
+                hint="The cash handed to the customer."
+              >
+                <Input inputMode="decimal" autoComplete="off" data-numeric />
+              </FormField>
+              <div className="flex flex-col gap-0.5 rounded-control border border-border bg-surface-sunken px-3 py-2">
+                <span className="text-label text-ink-muted">Profit</span>
+                <span
+                  className="text-title text-ink"
+                  data-numeric
+                  aria-live="polite"
                 >
-                  <Input inputMode="decimal" autoComplete="off" value={values.collectedToDate} onChange={set("collectedToDate")} onBlur={blur("collectedToDate")} />
-                </Field>
+                  {profit === null
+                    ? "—"
+                    : profit.startsWith("-") || isZeroMoney(profit)
+                      ? "Not positive"
+                      : formatCurrency(profit)}
+                </span>
+                <span className="text-caption text-ink-muted">
+                  Account amount − invested amount. Not editable.
+                </span>
               </div>
-            ) : null}
-          </fieldset>
+              <div className="grid gap-[var(--stack-gap)] sm:grid-cols-2">
+                <FormField name="dailyAmount" label="Daily amount (₹)">
+                  <Input inputMode="decimal" autoComplete="off" data-numeric />
+                </FormField>
+                <FormField
+                  name="termDays"
+                  label="Term (days)"
+                  rewrite={withRupees}
+                >
+                  <Input inputMode="numeric" autoComplete="off" data-numeric />
+                </FormField>
+              </div>
+              <FormField
+                name="disbursementDate"
+                label="Disbursement date"
+                hint="Day 0 — collection starts the next working day."
+              >
+                <Input type="date" />
+              </FormField>
+              {midTerm ? (
+                <FormMessage tone="warning">
+                  <div className="flex flex-col gap-3">
+                    <p className="font-medium">
+                      A past date makes this a mid-term account: already
+                      disbursed, and collected partway.
+                    </p>
+                    <FormField
+                      name="collectedToDate"
+                      label="Collected to date (₹)"
+                      valueAs="optional"
+                      hint="Everything paid up to and including today. Take it from the customer's collection note — never days × daily amount: one underpayment makes that wrong, and the account would finish early with money uncollected."
+                    >
+                      <Input
+                        inputMode="decimal"
+                        autoComplete="off"
+                        data-numeric
+                      />
+                    </FormField>
+                  </div>
+                </FormMessage>
+              ) : null}
 
-          {midTerm ? (
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse sm:justify-start">
-            <Button tone="primary" type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save mid-term account"}
-            </Button>
-            <Link href={`/customers/${customerId}`} className="self-center px-2 text-sm text-ink-muted hover:text-ink hover:underline">
-              Cancel
-            </Link>
-          </div>
-          ) : (
-          <div className="flex flex-col gap-2 pt-2 sm:flex-row-reverse sm:justify-start">
-            <Button
-              tone="primary"
-              onClick={() => void save(true)}
-              disabled={pending || !canDisburse}
-              title={canDisburse ? undefined : "Only an account dated today can be disbursed now"}
-            >
-              {pending ? "Saving…" : "Save and disburse"}
-            </Button>
-            <Button tone="secondary" type="submit" disabled={pending}>
-              Save as pending
-            </Button>
-            <Link href={`/customers/${customerId}`} className="self-center px-2 text-sm text-ink-muted hover:text-ink hover:underline">
-              Cancel
-            </Link>
-          </div>
-          )}
-          {!midTerm && !canDisburse ? (
-            <p className="text-sm text-ink-muted">
-              A future-dated account is saved as pending and disbursed on its day.
-            </p>
-          ) : null}
-        </form>
+              <FormActions className="sm:flex-row-reverse sm:justify-start">
+                {midTerm ? (
+                  <SubmitButton value="create" pendingLabel="Saving…">
+                    Save mid-term account
+                  </SubmitButton>
+                ) : (
+                  <>
+                    {/* "Save as pending" is first in the DOM, so Enter never
+                        disburses: disbursing posts to the ledger and cannot be
+                        undone. "Save and disburse" is moved to the end of the
+                        row by `order`, not by its place in the markup. */}
+                    <SubmitButton
+                      tone={canDisburse ? "secondary" : "primary"}
+                      value="create"
+                      pendingLabel="Saving…"
+                    >
+                      Save as pending
+                    </SubmitButton>
+                    {canDisburse ? (
+                      <SubmitButton
+                        value="disburse"
+                        pendingLabel="Saving…"
+                        className="order-first"
+                      >
+                        Save and disburse
+                      </SubmitButton>
+                    ) : null}
+                  </>
+                )}
+                {cancel}
+              </FormActions>
+              {!midTerm && !canDisburse ? (
+                <p className="text-caption text-ink-muted">
+                  A future-dated account is saved as pending and disbursed on
+                  its day.
+                </p>
+              ) : null}
+            </Form>
+          </Card.Body>
+        </Card.Root>
 
-        <section aria-labelledby="schedule-preview" aria-live="polite" className="flex min-w-0 flex-col gap-3">
-          <h2 id="schedule-preview" className="text-base font-semibold text-ink">
-            Schedule preview
-          </h2>
-          {!ok ? (
-            <p className="text-sm text-ink-muted">
-              Enter valid amounts, a term and a date to see every collection slot.
-            </p>
+        <Section
+          title="Schedule preview"
+          aria-live="polite"
+          className="min-w-0"
+        >
+          {!valid ? (
+            <EmptyFrame>
+              <p className="px-6 py-10 text-center text-body text-ink-muted">
+                Enter valid amounts, a term and a date to see every collection
+                slot.
+              </p>
+            </EmptyFrame>
           ) : current === null ? (
-            <p className="text-sm text-ink-muted" role="status">Working out the schedule…</p>
+            <p className="text-body text-ink-muted" role="status">
+              Working out the schedule…
+            </p>
           ) : typeof current === "string" ? (
             <FormMessage tone="critical">{current}</FormMessage>
           ) : (
-            <>
-              {current.kind === "MID_TERM" ? (
-                <dl className="grid gap-3 sm:grid-cols-3">
-                  <PreviewFigure label="Collected so far">{formatCurrency(current.collectedAmount)}</PreviewFigure>
-                  <PreviewFigure label="Outstanding">{formatCurrency(current.outstandingAmount)}</PreviewFigure>
-                  <PreviewFigure label="Behind schedule">
-                    {current.amountBehind === "0.00" ? "Not behind" : formatCurrency(current.amountBehind)}
-                  </PreviewFigure>
-                </dl>
-              ) : null}
-              <dl className="grid gap-3 sm:grid-cols-3">
-                <PreviewFigure label="First collection">{formatBusinessDate(current.firstCollectionDate)}</PreviewFigure>
-                <PreviewFigure label="Target completion">{formatBusinessDate(current.targetCompletionDate)}</PreviewFigure>
-                <PreviewFigure label={current.kind === "MID_TERM" ? "Collection days left" : "Collection days"}>
-                  {current.slots.filter((slot) => slot.status === "PENDING").length}
-                </PreviewFigure>
-              </dl>
-              {current.holidaysSkipped.length > 0 ? (
-                <p className="text-sm text-ink-muted">
-                  Skips {current.holidaysSkipped.map((holiday) => `${holiday.name} (${formatBusinessDate(holiday.date)})`).join(", ")}, and every Sunday.
-                </p>
-              ) : (
-                <p className="text-sm text-ink-muted">Sundays are skipped.</p>
-              )}
-              <DataTable
-                caption="Collection slots"
-                rows={showAllSlots ? current.slots : current.slots.slice(0, SLOTS_SHOWN)}
-                rowKey={(slot) => String(slot.sequence)}
-                columns={[
-                  { header: "Day", align: "end", cell: (slot) => slot.sequence },
-                  { header: "Date", cell: (slot) => formatBusinessDate(slot.dueDate) },
-                  { header: "Expected", align: "end", cell: (slot) => formatCurrency(slot.expectedAmount) },
-                  ...(current.kind === "MID_TERM"
-                    ? [
-                        {
-                          header: "Status",
-                          align: "end" as const,
-                          cell: (slot: (typeof current.slots)[number]) =>
-                            slot.status === "COLLECTED"
-                              ? "Paid before Rasi"
-                              : slot.status === "PARTIAL"
-                                ? "Part paid"
-                                : "To collect",
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-              {current.slots.length > SLOTS_SHOWN ? (
-                <div>
-                  <Button tone="ghost" onClick={() => setShowAllSlots((all) => !all)}>
-                    {showAllSlots ? "Show fewer" : `Show all ${current.slots.length} slots`}
-                  </Button>
-                </div>
-              ) : null}
-              <p className="text-sm text-ink" data-numeric>
-                {current.kind === "MID_TERM"
-                  ? `Collection in Rasi starts ${formatBusinessDate(current.slots.find((slot) => slot.status === "PENDING")!.dueDate)}; the remaining slots add up to exactly ${formatCurrency(current.outstandingAmount)}.`
-                  : `The last slot expects ${formatCurrency(current.slots.at(-1)!.expectedAmount)}; the slots add up to exactly ${formatCurrency(toTwoPlaces(values.accountAmount))}.`}
-              </p>
-            </>
+            <SchedulePreview
+              preview={current}
+              accountAmount={accountText}
+              showAll={showAllSlots}
+              onToggle={() => setShowAllSlots((all) => !all)}
+            />
           )}
-        </section>
+        </Section>
       </div>
     </>
   );
 }
 
-function toTwoPlaces(value: string): string {
-  const [rupees = "0", fraction = ""] = value.replace(/[\s,]/g, "").split(".");
-  return `${rupees}.${fraction.padEnd(2, "0")}`;
-}
+function SchedulePreview({
+  preview,
+  accountAmount,
+  showAll,
+  onToggle,
+}: {
+  preview: AccountPreview;
+  accountAmount: string;
+  showAll: boolean;
+  onToggle: () => void;
+}) {
+  const midTerm = preview.kind === "MID_TERM";
+  const firstPending = preview.slots.find((slot) => slot.status === "PENDING");
+  const last = preview.slots.at(-1);
+  const [rupees = "0", fraction = ""] = accountAmount.split(".");
+  const total = `${rupees}.${fraction.padEnd(2, "0")}`;
 
-function PreviewFigure({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
-      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">{label}</dt>
-      <dd className="text-base font-semibold text-ink" data-numeric>{children}</dd>
-    </div>
+    <>
+      {midTerm ? (
+        <StatGrid columns={3}>
+          <Stat label="Collected so far">
+            {formatCurrency(preview.collectedAmount)}
+          </Stat>
+          <Stat label="Outstanding">
+            {formatCurrency(preview.outstandingAmount)}
+          </Stat>
+          <Stat
+            label="Behind schedule"
+            tone={isZeroMoney(preview.amountBehind) ? "neutral" : "warning"}
+          >
+            {isZeroMoney(preview.amountBehind)
+              ? "Not behind"
+              : formatCurrency(preview.amountBehind)}
+          </Stat>
+        </StatGrid>
+      ) : null}
+      <StatGrid columns={3}>
+        <Stat label="First collection">
+          {formatBusinessDate(preview.firstCollectionDate)}
+        </Stat>
+        <Stat label="Target completion">
+          {formatBusinessDate(preview.targetCompletionDate)}
+        </Stat>
+        <Stat label={midTerm ? "Collection days left" : "Collection days"}>
+          {preview.slots.filter((slot) => slot.status === "PENDING").length}
+        </Stat>
+      </StatGrid>
+      <p className="text-body text-ink-muted">
+        {preview.holidaysSkipped.length > 0
+          ? `Skips ${preview.holidaysSkipped.map((holiday) => `${holiday.name} (${formatBusinessDate(holiday.date)})`).join(", ")}, and every Sunday.`
+          : "Sundays are skipped."}
+      </p>
+      <DataView
+        caption="Collection slots"
+        rows={showAll ? preview.slots : preview.slots.slice(0, SLOTS_SHOWN)}
+        getRowId={(slot) => String(slot.sequence)}
+        complete={false}
+        columns={[
+          valueColumn<Slot>({
+            id: "day",
+            header: "Day",
+            align: "end",
+            value: (slot) => slot.sequence,
+          }),
+          valueColumn<Slot>({
+            id: "date",
+            header: "Date",
+            value: (slot) => slot.dueDate,
+            cell: (slot) => formatBusinessDate(slot.dueDate),
+          }),
+          moneyColumn<Slot>({
+            id: "expected",
+            header: "Expected",
+            amount: (slot) => slot.expectedAmount,
+          }),
+          ...(midTerm
+            ? [
+                displayColumn<Slot>({
+                  id: "status",
+                  header: "Status",
+                  align: "end",
+                  cell: (slot) =>
+                    slot.status === "COLLECTED"
+                      ? "Paid before Rasi"
+                      : slot.status === "PARTIAL"
+                        ? "Part paid"
+                        : "To collect",
+                }),
+              ]
+            : []),
+        ]}
+      />
+      {preview.slots.length > SLOTS_SHOWN ? (
+        <div>
+          <Button tone="link" onClick={onToggle}>
+            {showAll ? "Show fewer" : `Show all ${preview.slots.length} slots`}
+          </Button>
+        </div>
+      ) : null}
+      <p className="text-body text-ink" data-numeric>
+        {midTerm && firstPending
+          ? `Collection in Rasi starts ${formatBusinessDate(firstPending.dueDate)}; the remaining slots add up to exactly ${formatCurrency(preview.outstandingAmount)}.`
+          : last
+            ? `The last slot expects ${formatCurrency(last.expectedAmount)}; the slots add up to exactly ${formatCurrency(total)}.`
+            : null}
+      </p>
+    </>
   );
 }

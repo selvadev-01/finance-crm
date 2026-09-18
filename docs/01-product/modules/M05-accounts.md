@@ -144,7 +144,7 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 **Emitted:** `account.created`, `account.disbursed` (→ M09 ledger), `account.completed` (→ M10), `account.overdue` (→ M10), `account.written_off` (→ M09).
 
-**Consumed:** `collection.confirmed` (M07) → recompute balances, regenerate tail, check completion. `holiday.declared` (M06) → shift affected pending slots.
+**Consumed:** `collection.confirmed` (M07) → recompute balances, regenerate tail, check completion. `holiday.declared` (M06) → shift affected pending slots (as built: `HolidayService` shifts them directly in the declaring transaction, [M06 as built](M06-working-calendar.md#as-built--holidays-us-093-2026-09-17)).
 
 ---
 
@@ -152,13 +152,13 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 In `apps/api/src/accounts/`, served through `packages/contracts/src/account.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
 
-| Endpoint                                   | Permission             | Refusals                                                                                      |
-| ------------------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------- |
-| `POST /api/accounts/preview`               | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                    |
-| `POST /api/accounts`                       | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`; `disburse: true` also disburses a day-one account |
-| `POST /api/accounts/:accountId/disbursement` | `account.disburse`   | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`                          |
-| `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view` | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior              |
-| `GET /api/accounts/:accountId/schedule`    | `account.viewSchedule` | `404`                                                                                         |
+| Endpoint                                            | Permission             | Refusals                                                                                                                                                      |
+| --------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/accounts/preview`                        | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                                                                                    |
+| `POST /api/accounts`                                | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`; `disburse: true` also disburses a day-one account |
+| `POST /api/accounts/:accountId/disbursement`        | `account.disburse`     | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`                                                                                           |
+| `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                               |
+| `GET /api/accounts/:accountId/schedule`             | `account.viewSchedule` | `404`                                                                                                                                                         |
 
 **Validation.** BR-01's rules are checked in the contract, in US-030's words: "must be below the account amount — profit cannot be zero or negative", and "50 × 100 days cannot clear 10,000". The form and the API therefore give the same answer, and the database CHECKs repeat the rules.
 
@@ -169,11 +169,13 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 **Codes** are `ACC-<creation year>-<n>`, where `n` comes from `account_code_seq` and never restarts (decided 2026-09-13).
 
 **Disbursement** (US-032):
+
 - The status change is a conditional update from `PENDING`, so a concurrent second disbursement is refused before it writes anything.
 - The BR-18 posting goes through `LedgerService` in the same transaction.
 - A pending account whose planned date has passed is disbursed today: its disbursement date moves, its schedule is regenerated, and the audit entry records both dates.
 
 **Mid-term accounts (US-030a, decided 2026-09-13).** A disbursement date before today makes a mid-term account.
+
 - **Collected to date is required** (`422 COLLECTED_TO_DATE_REQUIRED`), and refused for today or later (`COLLECTED_TO_DATE_NOT_ALLOWED`).
 - **Schedule:** `planMidTermSchedule` (domain) pays the original slots in order with the entered amount. Fully paid slots keep their dates as `COLLECTED`, and a slot paid in part is `PARTIAL`. No `MISSED` rows are invented. The rest of the balance is `generateSchedule`'s tail from the next working day after entry, so the account first appears on tomorrow's route, exactly as a day-one account collected down to the same outstanding would (release gate 6, a property test).
 - **Account:** created `ACTIVE`, with `collectedAmount` and `outstandingAmount` set.
@@ -183,6 +185,7 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 Collected slots of a customer who paid ahead keep their original dates, which can fall after the entry day. They are marked `COLLECTED` and never appear on a route.
 
 **Not built:**
+
 - **Updating terms before disbursement.**
 - **Completion, overdue and write-off** (US-033, US-035).
 - **Events and notifications.**

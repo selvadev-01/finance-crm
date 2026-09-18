@@ -42,8 +42,8 @@ export function Field({ label, hint, error, children, className }: FieldProps) {
   const control = Children.only(children);
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-sm font-medium text-ink">
+    <div className={cn("flex flex-col gap-[var(--field-gap)]", className)}>
+      <label htmlFor={id} className="text-label text-ink">
         {label}
       </label>
       {isValidElement(control)
@@ -56,7 +56,10 @@ export function Field({ label, hint, error, children, className }: FieldProps) {
       {message ? (
         <p
           id={messageId}
-          className={cn("text-sm", error ? "text-critical" : "text-ink-muted")}
+          className={cn(
+            "text-caption",
+            error ? "text-critical" : "text-ink-muted",
+          )}
         >
           {message}
         </p>

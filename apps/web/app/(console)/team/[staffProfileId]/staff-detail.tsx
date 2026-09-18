@@ -1,18 +1,32 @@
 "use client";
 
-import { organisationContract as org, staffContract } from "@repo/contracts";
+import {
+  organisationContract as org,
+  type StaffDetail,
+  staffContract,
+} from "@repo/contracts";
 import {
   Badge,
   Button,
-  DataTable,
-  DataTableSkeleton,
+  DataView,
+  Description,
+  DescriptionList,
+  EmptyFrame,
   formatBusinessDate,
   NothingYet,
   PageHeader,
+  recordLinkClass,
+  Section,
 } from "@repo/ui";
 import Link from "next/link";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
+import { identityColumn, valueColumn } from "../../../../components/columns";
+import { PageTrail } from "../../../../components/page-trail";
+import { RecordFallback } from "../../../../components/query-state";
+import { StatusBadge } from "../../../../components/status-badge";
+import { formatMobile } from "../../../../lib/format";
+import { LIST_LIMIT } from "../../../../lib/list-limit";
 import {
   canManageOrganisation,
   canResetPasswordOf,
@@ -22,18 +36,17 @@ import {
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 import { AssignDialog } from "../../_organisation/assign-dialog";
-import {
-  LIST_LIMIT,
-  LoadFailed,
-  RecordNotFound,
-  Surface,
-} from "../../_organisation/list-controls";
-import { StaffStatusBadge } from "../../_organisation/staff-status-badge";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 
 type Open = "assign" | "reset" | null;
+type AssignmentRow = StaffDetail["assignments"][number];
 
-export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) {
+/** A staff member: today's line, contact details and assignment history (US-014, US-015). */
+export function StaffDetailView({
+  staffProfileId,
+}: {
+  staffProfileId: string;
+}) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
   const [open, setOpen] = useState<Open>(null);
@@ -47,57 +60,45 @@ export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) 
     manages ? { query: { limit: LIST_LIMIT, includeInactive: "true" } } : null,
   );
 
-  if (person.status === "loading") {
-    return <DataTableSkeleton columns={4} rows={3} />;
-  }
-  if (person.status === "not-found" || person.status === "not-permitted") {
-    return <RecordNotFound noun="Staff member" />;
-  }
-  if (person.status === "error") {
-    return <LoadFailed message={person.message} onRetry={person.reload} />;
-  }
+  if (person.status !== "ready")
+    return <RecordFallback query={person} noun="Staff member" />;
 
   const record = person.data;
   const allLines = lines.status === "ready" ? lines.data.data : [];
   const lineNames = new Map(allLines.map((line) => [line.id, line.name]));
   const role = record.role;
-  const assignable =
-    manages && worksLines(role) && record.status === "ACTIVE";
+  const assignable = manages && worksLines(role) && record.status === "ACTIVE";
   const current = record.currentAssignment;
-  const lineLink = (lineId: string, name: string) => (
-    <Link href={`/lines/${lineId}`} className="text-ink hover:text-accent hover:underline">
-      {name}
-    </Link>
+  const assignButton = (
+    <Button
+      tone="primary"
+      onClick={() => setOpen("assign")}
+      disabled={lines.status !== "ready"}
+    >
+      Assign to a line
+    </Button>
   );
 
   return (
     <>
       <PageHeader
-        eyebrow={
-          <Link href="/team" className="hover:text-ink hover:underline">
-            Team
-          </Link>
+        trail={
+          <PageTrail
+            steps={[{ label: "Team", href: "/team" }, { label: record.name }]}
+          />
         }
         title={record.name}
-        description={
-          <span className="flex flex-wrap items-center gap-2">
+        meta={
+          <>
             {ROLE_LABEL[role]}
             <span aria-hidden>·</span>
             <span className="font-mono">{record.staffCode}</span>
-            <StaffStatusBadge status={record.status} />
-          </span>
+            <StatusBadge kind="staff" value={record.status} />
+          </>
         }
         actions={
           <>
-            {assignable ? (
-              <Button
-                tone="primary"
-                onClick={() => setOpen("assign")}
-                disabled={lines.status !== "ready"}
-              >
-                Assign to a line
-              </Button>
-            ) : null}
+            {assignable ? assignButton : null}
             {canResetPasswordOf(me, record) ? (
               <Button onClick={() => setOpen("reset")}>Reset password</Button>
             ) : null}
@@ -105,41 +106,38 @@ export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) 
         }
       />
 
-      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Detail label="Line today">
+      <DescriptionList layout="columns">
+        <Description term="Line today">
           {current ? (
-            lineLink(current.lineId, current.lineName)
+            <Link href={`/lines/${current.lineId}`} className={recordLinkClass}>
+              {current.lineName}
+            </Link>
           ) : worksLines(role) ? (
             <Badge tone="warning">No line today</Badge>
-          ) : (
-            "—"
-          )}
-        </Detail>
-        <Detail label="Joined">{formatBusinessDate(record.joinedAt)}</Detail>
-        <Detail label="Phone">
-          <a href={`tel:${record.phone}`} className="hover:text-accent hover:underline">
-            {record.phone}
+          ) : null}
+        </Description>
+        <Description term="Joined">
+          {formatBusinessDate(record.joinedAt)}
+        </Description>
+        <Description term="Phone">
+          <a href={`tel:${record.phone}`} className={recordLinkClass}>
+            {formatMobile(record.phone)}
           </a>
-        </Detail>
-        <Detail label="Email">
+        </Description>
+        <Description term="Email">
           <span className="break-all">{record.email}</span>
-        </Detail>
-      </dl>
+        </Description>
+      </DescriptionList>
 
       {worksLines(role) ? (
-        <section aria-labelledby="staff-history" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <h2 id="staff-history" className="text-base font-semibold text-ink">
-              Assignment history
-            </h2>
-            {!manages ? (
-              <p className="text-sm text-ink-muted">
-                Only assignments on your line are shown.
-              </p>
-            ) : null}
-          </div>
+        <Section
+          title="Assignment history"
+          description={
+            manages ? undefined : "Only assignments on your line are shown."
+          }
+        >
           {record.assignments.length === 0 ? (
-            <Surface>
+            <EmptyFrame>
               <NothingYet
                 title="Never assigned"
                 description={
@@ -148,35 +146,44 @@ export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) 
                     : "No line assignments are recorded for this person."
                 }
                 action={
-                  assignable && lines.status === "ready" ? (
-                    <Button tone="primary" onClick={() => setOpen("assign")}>
-                      Assign to a line
-                    </Button>
-                  ) : undefined
+                  assignable && lines.status === "ready"
+                    ? assignButton
+                    : undefined
                 }
               />
-            </Surface>
+            </EmptyFrame>
           ) : (
-            <DataTable
+            <DataView
               caption="Assignment history"
               rows={record.assignments}
-              rowKey={(entry) => entry.assignmentId}
+              getRowId={(entry) => entry.assignmentId}
+              complete
               columns={[
-                {
+                identityColumn<AssignmentRow>({
                   header: "Line",
-                  cell: (entry) => lineLink(entry.lineId, entry.lineName),
-                },
-                {
+                  name: (entry) => entry.lineName,
+                  code: (entry) => entry.lineCode,
+                  href: (entry) => `/lines/${entry.lineId}`,
+                }),
+                valueColumn<AssignmentRow>({
+                  id: "as",
                   header: "As",
-                  cell: (entry) =>
-                    entry.assignmentRole === "SENIOR" ? "Senior" : "Junior",
-                },
-                {
+                  value: (entry) => ROLE_LABEL[entry.assignmentRole],
+                }),
+                valueColumn<AssignmentRow>({
+                  id: "from",
                   header: "From",
+                  value: (entry) => entry.effectiveFrom,
                   cell: (entry) => formatBusinessDate(entry.effectiveFrom),
-                },
-                {
+                }),
+                valueColumn<AssignmentRow>({
+                  id: "to",
                   header: "To",
+                  // Open and upcoming assignments sort after every closed one.
+                  value: (entry) =>
+                    entry.upcoming || !entry.effectiveTo
+                      ? "9999-12-31"
+                      : entry.effectiveTo,
                   cell: (entry) =>
                     entry.upcoming ? (
                       <Badge tone="info">Starts later</Badge>
@@ -185,16 +192,20 @@ export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) 
                     ) : (
                       <Badge tone="info">Open</Badge>
                     ),
-                },
+                }),
               ]}
             />
           )}
-        </section>
+        </Section>
       ) : null}
 
       {open === "assign" && worksLines(role) ? (
         <AssignDialog
-          target={{ from: "staff", staff: { ...record, role }, lines: allLines }}
+          target={{
+            from: "staff",
+            staff: { ...record, role },
+            lines: allLines,
+          }}
           lineNames={lineNames}
           onClose={() => setOpen(null)}
           onAssigned={() => {
@@ -211,16 +222,5 @@ export function StaffDetailView({ staffProfileId }: { staffProfileId: string }) 
         />
       ) : null}
     </>
-  );
-}
-
-function Detail({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-3">
-      <dt className="text-2xs font-medium tracking-wide text-ink-muted uppercase">
-        {label}
-      </dt>
-      <dd className="text-sm text-ink">{children}</dd>
-    </div>
   );
 }

@@ -1,5 +1,7 @@
 import type { RouteView } from "@repo/contracts";
 
+import { subtractMoney, toPaise } from "../money";
+
 import type { CachedRoute, FieldDb, OutboxEntry } from "./db";
 import { LAST_SYNC_KEY } from "./drain";
 
@@ -97,7 +99,9 @@ export interface OutboxSummary {
 
 export async function summarise(db: FieldDb): Promise<OutboxSummary> {
   const entries = await listOutbox(db);
-  const unsynced = entries.filter((entry) => UNSYNCED.includes(entry.status)).length;
+  const unsynced = entries.filter((entry) =>
+    UNSYNCED.includes(entry.status),
+  ).length;
   return {
     unsynced,
     failed: entries.filter((entry) => entry.status === "FAILED").length,
@@ -115,7 +119,9 @@ export async function summarise(db: FieldDb): Promise<OutboxSummary> {
 export async function queueReport(
   db: FieldDb,
 ): Promise<{ unsentCount: number; oldestUnsentAt?: string }> {
-  const unsent = (await listOutbox(db)).filter((entry) => UNSYNCED.includes(entry.status));
+  const unsent = (await listOutbox(db)).filter((entry) =>
+    UNSYNCED.includes(entry.status),
+  );
   return unsent.length === 0
     ? { unsentCount: 0 }
     : { unsentCount: unsent.length, oldestUnsentAt: unsent[0]!.capturedAt };
@@ -188,12 +194,15 @@ export async function readRoute(
   const rowState: Record<string, RowState> = {};
   for (const customer of route.customers) {
     for (const account of customer.accounts) {
-      rowState[account.accountLoanId] = account.collectedToday ? "SYNCED" : "PENDING";
+      rowState[account.accountLoanId] = account.collectedToday
+        ? "SYNCED"
+        : "PENDING";
     }
   }
   let applied = 0;
   for (const entry of entries) {
-    if (entry.businessDate !== businessDate || entry.status === "FAILED") continue;
+    if (entry.businessDate !== businessDate || entry.status === "FAILED")
+      continue;
     // Oldest first, so the latest entry for an account sets its row.
     if (entry.payload.accountLoanId in rowState) {
       rowState[entry.payload.accountLoanId] = ROW_STATE[entry.status];
@@ -204,12 +213,19 @@ export async function readRoute(
       );
       // Reconciled by key, not by timestamps: a refresh that lands while the
       // entry is still SYNCING already includes it if the server committed.
-      if (!account || account.includedKeys.includes(entry.idempotencyKey)) continue;
+      if (!account || account.includedKeys.includes(entry.idempotencyKey))
+        continue;
       applied += 1;
-      account.outstandingAmount = subtractMoney(account.outstandingAmount, entry.payload.amount);
+      account.outstandingAmount = subtractMoney(
+        account.outstandingAmount,
+        entry.payload.amount,
+      );
       account.collectedToday = {
         amount: entry.payload.amount,
-        classification: classifyLocally(entry.payload.amount, account.expectedAmount),
+        classification: classifyLocally(
+          entry.payload.amount,
+          account.expectedAmount,
+        ),
       };
     }
   }
@@ -272,36 +288,26 @@ export async function clearDeviceData(db: FieldDb): Promise<boolean> {
   const tx = db.transaction(["outbox", "route", "meta"], "readwrite");
   const outbox = tx.objectStore("outbox");
   let unsynced = 0;
-  for (const status of UNSYNCED) unsynced += await outbox.index("byStatus").count(status);
+  for (const status of UNSYNCED)
+    unsynced += await outbox.index("byStatus").count(status);
   if (unsynced > 0) {
     tx.done.catch(() => undefined);
     tx.abort();
     return false;
   }
-  await Promise.all([outbox.clear(), tx.objectStore("route").clear(), tx.objectStore("meta").clear()]);
+  await Promise.all([
+    outbox.clear(),
+    tx.objectStore("route").clear(),
+    tx.objectStore("meta").clear(),
+  ]);
   await tx.done;
   return true;
 }
 
 // ------------------------------------------------------------ money (paise)
 
-function toPaise(value: string): bigint {
-  const negative = value.startsWith("-");
-  const [rupees = "0", fraction = ""] = value.replace("-", "").split(".");
-  const paise = BigInt(rupees) * 100n + BigInt(fraction.padEnd(2, "0").slice(0, 2));
-  return negative ? -paise : paise;
-}
-
-function fromPaise(paise: bigint): string {
-  const negative = paise < 0n;
-  const abs = negative ? -paise : paise;
-  return `${negative ? "-" : ""}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
-}
-
-/** Exact decimal subtraction in paise — never a floating-point number (BR-11). */
-export function subtractMoney(a: string, b: string): string {
-  return fromPaise(toPaise(a) - toPaise(b));
-}
+// The field screens import it from here; the arithmetic lives in lib/money.
+export { subtractMoney };
 
 /** BR-08 on the device, for display only; the server's classification is stored. */
 export function classifyLocally(

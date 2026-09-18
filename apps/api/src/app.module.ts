@@ -3,16 +3,19 @@ import { Module } from '@nestjs/common';
 import { AccessModule } from './access/access.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { CalendarModule } from './calendar/calendar.module.js';
 import { CashModule } from './cash/cash.module.js';
 import { CollectionsModule } from './collections/collections.module.js';
 import { RasiAuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
+import { DashboardsModule } from './dashboards/dashboards.module.js';
 import { EmailModule } from './email/email.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { OrganisationModule } from './organisation/organisation.module.js';
 import { PlatformModule } from './platform/platform.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 
 /**
  * The application root.
@@ -31,10 +34,13 @@ import { PlatformModule } from './platform/platform.module.js';
     AccessModule,
     IdentityModule,
     OrganisationModule,
+    CalendarModule,
     CustomersModule,
     AccountsModule,
     CollectionsModule,
     CashModule,
+    DashboardsModule,
+    ReportsModule,
     JobsModule,
   ],
 })

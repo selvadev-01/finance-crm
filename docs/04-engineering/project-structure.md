@@ -11,15 +11,15 @@ What is actually in the repository right now, as opposed to the target shape des
 ```
 rasi/
 ├─ apps/
-│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M01 staff and password-reset, M04 customer and M05 account endpoints, M07 collection recording, route, history and corrections with approvals, M08 day close, reopen, MISSED marking and cash handovers with denominations (src/cash), M09 LedgerService (disbursement, mid-term catch-up, collection, adjustment and handover postings) and ReconciliationService, M13 audit reads (src/audit: audit log and account history, with a test holding every write route to an audit decision), M10 notifications (src/notifications: centre, preferences, device registration, event notices raised in their transactions, outbox dispatch), M14 jobs (pg-boss 12.32.0 in the pgboss schema, WORKER_ENABLED mode, reconcile / overdue / key-purge / every-minute notification dispatch schedules — not yet run against the database), seed dataset (src/seed, dry run by default), Better Auth, /health/*
-│  ├─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard placeholder, /customers list + onboarding form + profile (US-020), /accounts/new with live schedule preview and /accounts/:id with disbursement (US-030, US-032), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003), /collections list, detail and pending approvals (S-16, S-17, S-18, US-044), /cash and /lines/:id/day-closes/:date (S-05, S-06 for Seniors and Admins), /settings/audit (S-29) and the account page's history (US-091) for Admins, /notifications (S-21) with the bell in the shell and public/push-sw.js (push-only, scope /push/); /design-system preview. Console data is read in the browser through the contract client. /route is the Junior's field app — S-01 route, S-02 record (#collect/:customerId), S-03 sync (#sync), S-06 hand over cash (#handover, needs signal), S-21 notifications (#notifications, needs signal) as hash views of one page — on the offline engine: lib/offline/ (idb 8.0.3 outbox and drain) and app/sw.ts (serwist 9.5.12, @serwist/turbopack 9.5.12 with esbuild 0.28.2, served at /serwist/sw.js, scope /route)
+│  ├─ api/               NestJS 12 — M16 platform (nestjs-pino 5.1.0, pino 10.3.1, zod 4.6.2), M02 access control, M13 audit writer, M03 organisation, M06 declared holidays with schedule shifting (src/calendar), M01 staff and password-reset, M04 customer and M05 account endpoints, M07 collection recording, route, history and corrections with approvals, M08 day close, reopen, MISSED marking and cash handovers with denominations (src/cash), M09 LedgerService (disbursement, mid-term catch-up, collection, adjustment and handover postings) and ReconciliationService, M13 audit reads (src/audit: audit log and account history, with a test holding every write route to an audit decision), M10 notifications (src/notifications: centre, preferences, device registration, event notices raised in their transactions, outbox dispatch), M11 Admin operational and Senior line dashboards (src/dashboards, reading BR-16's per-line figures from src/cash/line-day-figures.ts, shared with the day close), M12 line-wise report, investment overview and collection report (src/reports, the same readers over a date range, with the ledger's position and movement and BR-08's classification breakdown in src/dashboards/business-figures.ts), M14 jobs (pg-boss 12.32.0 in the pgboss schema, WORKER_ENABLED mode, reconcile / overdue / key-purge / every-minute notification dispatch schedules — not yet run against the database), seed dataset (src/seed, dry run by default), Better Auth, /health/*
+│  ├─ web/               Next.js 16 App Router — /sign-in, /change-password, /home role redirect; console shell (@phosphor-icons/react 2.1.10) with /dashboard (S-20 for Admins and Super Admins, US-082; S-19 for Seniors, US-083), /customers list + onboarding form + profile (US-020), /accounts/new with live schedule preview and /accounts/:id with disbursement (US-030, US-032), /sectors and /lines list + detail (S-12, S-13), /team list + detail with assign and password-reset dialogs (S-14, S-15, US-003), /collections list, detail and pending approvals (S-16, S-17, S-18, US-044), /cash and /lines/:id/day-closes/:date (S-05, S-06 for Seniors and Admins), /reports index with /reports/line-wise (S-22, US-084), /reports/investment (US-085) and /reports/collection (US-086) on a shared reports/report-parts.tsx (Admins and Seniors), /settings/holidays (S-27, every console role; changes for Admins), /settings/audit (S-29) and the account page's history (US-091) for Admins, /notifications (S-21) with the bell in the shell and public/push-sw.js (push-only, scope /push/); /design-system preview. The console is built from `@repo/ui` and from apps/web/components/ (the status-badge registry, column builders, list and record fallbacks, page trail, line filter, money display), with lib/use-paged-query.ts (cursor pages), lib/use-list-state.ts (filters in the URL), lib/money.ts (paise arithmetic), lib/format.ts and lib/form-errors.ts. Console data is read in the browser through the contract client. /route is the Junior's field app — S-01 route, S-02 record (#collect/:customerId), S-03 sync (#sync), S-06 hand over cash (#handover, needs signal), S-21 notifications (#notifications, needs signal) as hash views of one page — on the offline engine: lib/offline/ (idb 8.0.3 outbox and drain) and app/sw.ts (serwist 9.5.12, @serwist/turbopack 9.5.12 with esbuild 0.28.2, served at /serwist/sw.js, scope /route)
 │  └─ offline-e2e/       Playwright 1.63.0 in Chrome against a production web build and the real API — offline record, sync, replay, 401, restart. WRITES PERMANENT ROWS (an "Offline E2E" organisation per run)
 ├─ packages/
-│  ├─ contracts/         @repo/contracts — Zod 4.6.2; in-house route contract and fetch client (ADR-0011), M03 routes
+│  ├─ contracts/         @repo/contracts — Zod 4.6.2; in-house route contract and fetch client (ADR-0011), M03 routes, M11 dashboard and M12 report routes
 │  ├─ db/                @repo/db — Prisma 7.10.0, schema, migrations, client
 │  ├─ notifications/     @repo/notifications — push provider interface, WebPushProvider (web-push 3.6.7), FcmProvider (firebase-admin 14.4.0), SmtpEmailProvider (nodemailer 10.0.10), delivery outcome and retry table
-│  ├─ domain/            @repo/domain — working calendar (M06), schedule generation (BR-04/06/07), variance classification (BR-08), profit apportionment (BR-18); decimal.js 10.6.0, date-fns 4.4.0, @date-fns/tz 1.5.0, fast-check 4.10.0 (dev)
-│  ├─ ui/                @repo/ui — Tailwind v4 theme, Button, Badge, empty states, Input, Field, FormMessage, Select, Dialog, DataTable, PageHeader
+│  ├─ domain/            @repo/domain — working calendar (M06), schedule generation (BR-04/06/07) and the holiday shift (BR-02), variance classification (BR-08), profit apportionment (BR-18); decimal.js 10.6.0, date-fns 4.4.0, @date-fns/tz 1.5.0, fast-check 4.10.0 (dev)
+│  ├─ ui/                @repo/ui — Tailwind v4 "soft teal" theme (ADR-0013); base (Button, Badge, empty states, Input, Field, FormMessage, Select, Textarea, Dialog); Radix building blocks (Checkbox, Switch, Choice, Combobox on cmdk, Tabs, Popover, Menu, Tooltip, Toast); layout (AppShell, PageHeader, Section, Card, StatGrid/Stat, DescriptionList, Breadcrumbs, skeletons); DataView on TanStack Table with FilterBar/ListFooter; form layer on react-hook-form (Form, FormField, FormControlField, DialogForm); jsdom test suite with a WCAG contrast test
 │  ├─ eslint-config/     @repo/eslint-config — base, boundaries, next, react-internal
 │  └─ typescript-config/ @repo/typescript-config — base, nextjs, react-library
 └─ docs/                 this specification set
@@ -43,18 +43,22 @@ rasi/
 
 ### Per app
 
-|               | `apps/web`                                  | `apps/api`                                         |
-| ------------- | ------------------------------------------- | -------------------------------------------------- |
-| Framework     | Next.js `16.3.4`, React `19.2.8`            | NestJS `12`, Express platform                      |
-| Module system | ESM                                         | ESM (`"type": "module"`)                           |
-| Lint          | ESLint `10` flat config, `--max-warnings 0` | oxlint `1.58` over `src/` and `test/`              |
+|               | `apps/web`                                                                             | `apps/api`                                         |
+| ------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Framework     | Next.js `16.3.4`, React `19.2.8`                                                       | NestJS `12`, Express platform                      |
+| Module system | ESM                                                                                    | ESM (`"type": "module"`)                           |
+| Lint          | ESLint `10` flat config, `--max-warnings 0`                                            | oxlint `1.58` over `src/` and `test/`              |
 | Tests         | Vitest `4` + fake-indexeddb `6.2.5` (offline engine); Playwright in `apps/offline-e2e` | Vitest `4` — unit + Tier 1, and an HTTP e2e config |
-| Styling       | `globals.css` + CSS Modules                 | —                                                  |
-| Dev port      | `3000`                                      | `3001` (`PORT` env overrides)                      |
+| Styling       | `globals.css` + CSS Modules                                                            | —                                                  |
+| Dev port      | `3000`                                                                                 | `3001` (`PORT` env overrides)                      |
 
 **`apps/api` is pinned to TypeScript 6 deliberately.** TypeScript 7.0 is the native port and ships the `tsc` executable only — it does not expose the programmatic compiler API, which the Nest CLI needs to build. Raising the api to `7.0.2` type-checks fine (`check-types` is plain `tsc --noEmit`) and then fails at `nest build` with _"The installed TypeScript version does not expose the programmatic compiler API"_. The API is expected back in TypeScript 7.1; until then the api stays on `^6.0.2` and the version split is correct, not technical debt.
 
-**Tailwind v4 with an owned component base.** Tokens live in `packages/ui/src/theme.css` as a `@theme` block — v4 has no `presets` mechanism, so the shared layer is CSS rather than a JS config. See [design-system.md](../05-ux/design-system.md) and [ADR-0010](../02-architecture/adr/0010-tailwind-v4-component-base.md).
+**Tailwind v4 with an owned component base.** Tokens live in `packages/ui/src/theme.css` as a `@theme` block — v4 has no `presets` mechanism, so the shared layer is CSS rather than a JS config. See [design-system.md](../05-ux/design-system.md), [ADR-0010](../02-architecture/adr/0010-tailwind-v4-component-base.md) and [ADR-0013](../02-architecture/adr/0013-console-re-theme-and-headless-libraries.md).
+
+**IBM Plex Sans and Mono via `next/font/google`** (Next `16.3.4`), declared in `apps/web/app/layout.tsx` with `preload: false`; the field app opts out with `data-font="system"`.
+
+**`@repo/ui` has a component test suite:** Vitest `4` in jsdom `30.0.1`, `@testing-library/react` `16.3.3`, `@testing-library/dom` `10.4.2`, `@testing-library/jest-dom` `7.0.1` and `@testing-library/user-event` `14.6.7`, configured in `packages/ui/vitest.config.mts`. `@repo/ui` depends on `radix-ui` `1.6.7`, `cmdk` `1.1.1`, `@tanstack/react-table` `8.21.3`, `react-hook-form` `7.88.0`, `@hookform/resolvers` `5.9.1` and `zod` `4.6.2` — the same zod as `@repo/contracts`, so the workspace resolves one copy (ADR-0013). `apps/web` depends on `react-hook-form` `7.88.0` for its form-error helper. `@repo/ui` exports `./field-message` separately, a framework-free module the web app's Node tests can import.
 
 **`@repo/ui` uses Bundler module resolution; `@repo/db` and `@repo/domain` use NodeNext.** This is deliberate and must not be "aligned" — resolution has to match the consumer. `@repo/ui` ships raw TSX compiled by Turbopack, which cannot resolve the `.js` specifiers NodeNext requires; the others are compiled and run by Node, which needs them.
 
@@ -66,15 +70,15 @@ rasi/
 
 Run from the repository root; Turborepo fans them out.
 
-| Script             | What it does                                       |
-| ------------------ | -------------------------------------------------- |
-| `pnpm dev`         | `web` on :3000 and `api` on :3001, both watching   |
-| `pnpm build`       | `next build` + `nest build`, topologically ordered |
-| `pnpm lint`        | ESLint in web/ui, oxlint in api                    |
-| `pnpm check-types` | `tsc --noEmit` across the workspace                |
-| `pnpm test`        | Vitest in api, web (offline engine), domain and contracts |
-| `pnpm --filter offline-e2e test:offline` | Builds web, starts the built API and web, runs the offline Playwright suite — permanent rows |
-| `pnpm format`      | Prettier write across `ts`, `tsx`, `md`            |
+| Script                                   | What it does                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                               | `web` on :3000 and `api` on :3001, both watching                                                               |
+| `pnpm build`                             | `next build` + `nest build`, topologically ordered                                                             |
+| `pnpm lint`                              | ESLint in web/ui, oxlint in api                                                                                |
+| `pnpm check-types`                       | `tsc --noEmit` across the workspace                                                                            |
+| `pnpm test`                              | Vitest in api, web (offline engine and lib helpers), ui (components and contrast, jsdom), domain and contracts |
+| `pnpm --filter offline-e2e test:offline` | Builds web, starts the built API and web, runs the offline Playwright suite — permanent rows                   |
+| `pnpm format`                            | Prettier write across `ts`, `tsx`, `md`                                                                        |
 
 `packages/db` adds its own, run with `pnpm --filter @repo/db <script>`:
 
@@ -114,12 +118,12 @@ Everything in this list is specified but unbuilt. The [roadmap](../06-delivery/r
 
 **This table is maintained.** When one of these lands, delete its row and add it to the workspace tree above with its real version. Per-story progress is not tracked here — it lives in [`backlog.md`](../06-delivery/backlog.md).
 
-| Missing                                                          | Specified in                                                                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| The 24 Rasi models — only Better Auth's four tables exist so far | [data-dictionary.md](../03-data/data-dictionary.md)                                                                             |
-| OpenAPI generated from the contract, served at `/api/docs`       | [ADR-0011](../02-architecture/adr/0011-in-house-api-contract.md)                                                                |
-| Scope predicates beyond customers and collections                | [M02](../01-product/modules/M02-access-control.md)                                                                              |
-| Any of M01–M16                                                   | [prd.md](../01-product/prd.md)                                                                                                  |
+| Missing                                                          | Specified in                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| The 24 Rasi models — only Better Auth's four tables exist so far | [data-dictionary.md](../03-data/data-dictionary.md)              |
+| OpenAPI generated from the contract, served at `/api/docs`       | [ADR-0011](../02-architecture/adr/0011-in-house-api-contract.md) |
+| Scope predicates beyond customers and collections                | [M02](../01-product/modules/M02-access-control.md)               |
+| Any of M01–M16                                                   | [prd.md](../01-product/prd.md)                                   |
 
 The `/design-system` preview in `apps/web` is a canary, not a product screen; the landing placeholders are replaced as each role's real screen lands.
 
@@ -137,6 +141,7 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
 **Twenty-four migrations**:
+
 - `add_better_auth` and `rasi_core`.
 - Twelve `constraints_*` migrations holding CHECKs, triggers and partial unique indexes; `constraints_collection_corrections` (US-044) specifies the collection status transitions and allows one pending correction per collection.
 - `staff_must_change_password` (US-003).

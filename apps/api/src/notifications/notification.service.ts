@@ -196,6 +196,41 @@ export class Recipients {
     return rows.map((row) => row.userId);
   }
 
+  /**
+   * Seniors and Juniors assigned on `on` to the organization's active lines —
+   * every line, or one sector's.
+   */
+  async lineStaff(
+    tx: Tx,
+    organizationId: string,
+    sectorId: string | null,
+    on: CalendarDate,
+  ): Promise<{ seniors: string[]; juniors: string[] }> {
+    const rows = await tx.lineAssignment.findMany({
+      where: {
+        ...assignmentInEffectOn(on),
+        line: {
+          organizationId,
+          isActive: true,
+          ...(sectorId ? { sectorId } : {}),
+        },
+        staffProfile: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: {
+        assignmentRole: true,
+        staffProfile: { select: { userId: true } },
+      },
+    });
+    const of = (role: 'SENIOR' | 'JUNIOR') => [
+      ...new Set(
+        rows
+          .filter((row) => row.assignmentRole === role)
+          .map((row) => row.staffProfile.userId),
+      ),
+    ];
+    return { seniors: of('SENIOR'), juniors: of('JUNIOR') };
+  }
+
   async nameOf(tx: Tx, userId: string): Promise<string> {
     const user = await tx.user.findUnique({
       where: { id: userId },

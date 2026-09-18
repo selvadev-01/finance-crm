@@ -64,7 +64,11 @@ type Terms = {
  * Skipped while a field is itself invalid — its own message is the useful one.
  */
 function checkTerms(terms: Terms, context: z.RefinementCtx) {
-  const amounts = [terms.accountAmount, terms.investedAmount, terms.dailyAmount];
+  const amounts = [
+    terms.accountAmount,
+    terms.investedAmount,
+    terms.dailyAmount,
+  ];
   if (!amounts.every((value) => MONEY_SHAPE.test(value))) return;
   if (!Number.isInteger(terms.termDays) || terms.termDays < 1) return;
   const A = toPaise(terms.accountAmount);
@@ -186,7 +190,8 @@ export const accountContract = {
   createAccount: route({
     method: "POST",
     path: "/api/accounts",
-    summary: "Create an account, optionally disbursing it at once (US-030, US-032)",
+    summary:
+      "Create an account, optionally disbursing it at once (US-030, US-032)",
     body: z
       .object({
         customerId: idSchema,

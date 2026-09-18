@@ -52,7 +52,11 @@ export interface OutboxEntry {
   attempts: number;
   /** Epoch ms before which a retry is not attempted (exponential backoff). */
   nextAttemptAt: number;
-  lastError: { status: number | null; code: string | null; message: string } | null;
+  lastError: {
+    status: number | null;
+    code: string | null;
+    message: string;
+  } | null;
   /** The server's answer once synced. */
   result: CollectionView | null;
   syncedAt: string | null;

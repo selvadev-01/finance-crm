@@ -229,7 +229,10 @@ export class AssignmentService {
           lineName: line.name,
           effectiveFrom,
           previousLineIds: open
-            .filter((row) => row.staffProfileId === staff.id && row.lineId !== line.id)
+            .filter(
+              (row) =>
+                row.staffProfileId === staff.id && row.lineId !== line.id,
+            )
             .map((row) => row.lineId),
         });
 

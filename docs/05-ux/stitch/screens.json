@@ -1,0 +1,230 @@
+{
+  "consoleShell": "Rasi admin console, desktop 1440px wide, light theme, IBM Plex Sans. Left sidebar 240px, white with a right hairline: brand at top (a small teal rounded square with a white 'R' and the word 'Rasi'); grouped navigation with tiny uppercase group labels — OPERATE: Dashboard, Collections, Cash; RECORDS: Customers, Lines, Sectors, Team; SYSTEM: Notifications, Audit log — Phosphor regular icons; the current item has a teal wash background, teal text and a 2px teal bar at its left edge. Top bar 52px, white, bottom hairline: current area name at left in muted text; at right a bell icon with a small coral count badge '3' and an account button (teal-wash circle with initials 'LK', name 'Lakshmi K', role 'Admin' underneath, small chevron). Page body on the mint canvas background, max width 1152px, 32px padding, 28px between sections. Page header: breadcrumb trail in small muted text, a 26px semibold title, an optional meta line, page actions right-aligned, and a hairline rule under the header. Money always in Indian format with ₹ and tabular figures, e.g. ₹1,23,456.50. Use Indian names and shops only.",
+  "juniorShell": "Rasi field app for a Junior collector, mobile 390px, light theme, IBM Plex Sans, used one-handed outdoors. No sidebar, no tab bar. A fixed top status bar: at left a green dot and 'Online' (or amber 'Offline'), in the middle a small amber pill '2 not sent' when entries are queued, at right a bell icon. 16px side padding, every tap target at least 44px tall, body text 16px, amounts 20–24px semibold with tabular figures. Money in Indian format with ₹. Never show invested amount or profit.",
+  "screens": [
+    {
+      "id": "S-30",
+      "slug": "sign-in",
+      "device": "DESKTOP",
+      "shell": "none",
+      "prompt": "Sign-in screen for Rasi. Mint canvas background. A narrow centred column (400px) near the top third: the brand mark (teal rounded square with 'R') and 'Rasi' above a white card with 12px corners and a hairline border. Card: title 'Sign in', one line 'Use the email and password your administrator gave you.', Email field, Password field with a show/hide eye icon, a full-width teal 'Sign in' button, and below a muted line 'Setting up a new business? Create one' with 'Create one' as a teal link. Show a critical message callout at the top of the card: 'That email and password don’t match. Try again, or ask your administrator to reset your password.' No hero, no illustration."
+    },
+    {
+      "id": "US-006",
+      "slug": "sign-up",
+      "device": "DESKTOP",
+      "shell": "none",
+      "prompt": "Create-your-business sign-up screen for Rasi, same centred layout as sign-in (brand mark above a white card, mint background). Card title 'Set up your business', description 'You’ll be the Super Admin. Your staff sign in with a link we create from your business name.' Fields with labels above: Business name ('Sri Murugan Finance'), Your name, Email, Mobile number (hint '10-digit Indian mobile number.'), Password (hint 'At least 10 characters. You’ll sign in with this.'). Full-width teal 'Create business' button. Show the Email field in an error state with coral text 'Email already has an account.' under it."
+    },
+    {
+      "id": "US-003",
+      "slug": "change-password",
+      "device": "DESKTOP",
+      "shell": "none",
+      "prompt": "Forced change-password screen for Rasi, same centred card layout. Title 'Choose a new password', description 'Your administrator gave you a temporary password. Choose your own before you continue.' Fields: Temporary password, New password (hint 'At least 10 characters.'), Confirm new password. Full-width teal 'Save and continue'. An info callout at top in violet wash: 'You are signed in as Priya S · Junior'."
+    },
+    {
+      "id": "S-07",
+      "slug": "business-overview",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Super Admin 'Business overview' dashboard (current nav: Dashboard). Header: title 'Business overview', meta line 'Live · updated 10:42 am', right side a date picker showing '17 Sep 2026' and a secondary 'Export' button. First a 4-column figure strip in one ruled white frame (uppercase labels, big tabular values): TODAY'S EXPECTED ₹1,84,300.00 · COLLECTED ₹1,62,750.00 (caption '88% of expected') · PENDING ₹21,550.00 (amber value) · EXTRA ₹3,200.00. Second strip, 4 columns, smaller: Sectors 3 · Lines 12 · Customers 1,046 · Active accounts 1,121. Third strip: Total account amount ₹2,41,60,000.00 · Total invested ₹1,98,40,000.00 · Total profit ₹43,20,000.00 · Completed accounts 214. Then a section 'Sectors today' as a table: Sector (name + mono code), Lines, Expected, Collected, Shortfall (coral text when >0), Day status badge (Tallied green, Closed amber, Open neutral) — rows North, South, Town Centre. One figure 'Low collections' shows '—' with caption 'Unavailable' to demonstrate that unknown figures are never shown as zero."
+    },
+    {
+      "id": "S-20",
+      "slug": "admin-dashboard",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Admin operational dashboard (current nav: Dashboard). Title 'Today', meta '17 Sep 2026 · Wednesday'. A 4-figure strip: Expected ₹1,84,300.00, Collected ₹1,62,750.00, Pending approvals 4 (amber), Lines not closed 3. Below, a two-column layout. Left (wider): section 'Needs attention' — a white card with ruled rows, each row an icon, a sentence and a teal link: 'LN-07 · Market Road — 6 customers missed today', 'Correction for ACC-2026-0091 waiting for your approval', 'Murugan’s cash for 16 Sep is disputed', 'LN-11 · Temple Street has no Senior from 20 Sep'. Right: section 'Lines today' — compact table: Line, Collected / Expected with a thin teal progress bar, Day status badge. Under it 'Quick actions' as a vertical list of secondary buttons: New customer, New account, Pending approvals."
+    },
+    {
+      "id": "S-19",
+      "slug": "senior-line-dashboard",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Senior's line dashboard (current nav: Dashboard; account menu shows 'Karthik R · Senior'). Title 'LN-07 · Market Road', meta 'North sector · 17 Sep 2026'. Figure strip: Expected ₹24,600.00 · Collected ₹21,350.00 · Shortfall ₹3,250.00 (amber) · Cash received ₹18,000.00. Section 'Juniors today' table: Junior (Priya S, Murugan K, Divya M), Entries, Collected, Phone badge (All sent green / Not sent · 2 amber / Not heard from neutral). Section 'Needs a look' table: Customer (name + mono account code), Expected, Collected, Classification badge (Low amber, No payment coral, Missed coral, Extra violet). Primary button in the header 'Open day close'."
+    },
+    {
+      "id": "S-08",
+      "slug": "customer-list",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Customers list (current nav: Customers). Header: title 'Customers', description 'Everyone who holds or has held an account.', primary button 'New customer' with a plus icon. Filter bar: a search input 'Search name, mobile or code' with magnifier icon, a 'Line' combobox showing 'All lines', a 'Status' select, and a teal 'Clear filters' link at right. Table (white frame, sunken header row with uppercase headers, 40px rows): CUSTOMER (bold name link + mono code under it, e.g. Kumar Traders / CUS-00412), MOBILE (+91 98765 43210), LINE (LN-07 · Market Road), ACTIVE ACCOUNTS (right-aligned number), OUTSTANDING (right-aligned ₹), STATUS badge (Active green, Blacklisted coral, Inactive neutral). 10 realistic rows (Selvi Stores, Anbu Tea Stall, Ramesh Kumar, Fathima Textiles, Balaji Provisions…). Sortable header arrows on Customer and Outstanding. Footer: '48 of 1,046 customers' at left, secondary 'Show more' button at right."
+    },
+    {
+      "id": "S-09",
+      "slug": "customer-360",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Customer 360 page (current nav: Customers). Breadcrumb 'Customers / Kumar Traders'. Title 'Kumar Traders', meta line: mono 'CUS-00412', green 'Active' badge, 'LN-07 · Market Road · North'. Header actions: secondary 'Edit', primary 'New account'. A figure strip of 3: Active accounts 2 · Outstanding (sum across 2 accounts) ₹18,450.00 · Last collection 17 Sep 2026 · ₹500.00. Then tabs: Profile (active, teal underline), Accounts, History. Profile tab in two columns: left a white card 'Details' with a label/value list — Mobile +91 98765 43210, Alternate mobile —, Address '14, Bazaar Street, Tiruppur 641604', Line, Notes '—'; right a card 'Reference persons' listing two people with name, relation and mobile."
+    },
+    {
+      "id": "S-10",
+      "slug": "new-customer",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "New customer form (current nav: Customers), keyboard-first data entry. Breadcrumb 'Customers / New customer'. Title 'New customer', description 'Every customer needs at least one reference person.' An info callout at top: 'Saved Selvi Stores as CUS-01045. Enter the next customer.' Form max 760px wide made of two white cards. Card 'Customer': Name; two columns Mobile (hint '10 digits, e.g. 98765 43210') and Alternate mobile (optional); Address textarea; Line combobox (hint 'Kept for the next customer.'); Notes (optional). Card 'Reference persons' with a small secondary 'Add another reference' button in its header; one numbered row 'Reference 1' with three fields in a row: Name, Mobile, Relation (optional). Show an amber warning callout above the buttons: 'This mobile number is already used by another customer — Kumar Traders (CUS-00412) on LN-07 · Market Road. Families and shops often share a number.' with buttons 'Save anyway' (teal) and 'Save anyway and add another'. Footer action row right-aligned: secondary 'Save and add another', primary 'Save customer'."
+    },
+    {
+      "id": "S-04",
+      "slug": "create-account",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Create account (loan) page (current nav: Customers). Breadcrumb 'Customers / Kumar Traders · CUS-00412 / New account'. Title 'New account', description 'Amounts cannot be changed after disbursement. Check the schedule before saving.' Info callout: 'This customer already has 1 active account. A further account is allowed; each keeps its own schedule and balance.' Two-column layout. Left (420px) white card 'Terms': Account amount (₹) 10,000.00; Invested amount (₹) 8,500.00; a read-only sunken box 'Profit ₹1,500.00 — Account amount − invested amount. Not editable.'; Daily amount (₹) 100.00 and Term (days) 100 side by side; Disbursement date 17 Sep 2026 (hint 'Day 0 — collection starts the next working day.'); action row: 'Cancel' ghost, 'Save as pending' secondary, 'Save and disburse' primary teal. Right column section 'Schedule preview': a 3-figure strip First collection 18 Sep 2026 · Target completion 3 Jan 2027 · Collection days 100; a muted line 'Sundays are skipped.'; a table Day / Date / Expected with 12 rows (Day 1 18 Sep 2026 ₹100.00 …); a teal link 'Show all 100 slots'; a closing line 'The last slot expects ₹100.00; the slots add up to exactly ₹10,000.00.'"
+    },
+    {
+      "id": "S-04b",
+      "slug": "create-account-mid-term",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "The 'New account' page for a mid-term account (current nav: Customers): Disbursement date is in the past (12 Jun 2026). Under the date an amber warning callout containing: 'A past date makes this a mid-term account: already disbursed, and collected partway.' and a field 'Collected to date (₹)' 6,200.00 with a long hint 'Everything paid up to and including today. Take it from the customer's collection note — never days × daily amount.' Only one primary button 'Save mid-term account'. Right preview: a 3-figure strip Collected so far ₹6,200.00 · Outstanding ₹3,800.00 · Behind schedule ₹300.00 (amber); then First collection / Target completion / Collection days left 38; the slot table shows a Status column with 'Paid before Rasi' (muted), 'Part paid' (amber), 'To collect'. Closing line 'Collection in Rasi starts 18 Sep 2026; the remaining slots add up to exactly ₹3,800.00.' Show the 'Term (days)' field in an error state: '₹50 × 100 days cannot clear ₹10,000.'"
+    },
+    {
+      "id": "S-11",
+      "slug": "account-detail",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Account detail page (current nav: Customers). Breadcrumb 'Customers / Kumar Traders / ACC-2026-0091'. Title in mono 'ACC-2026-0091', meta: green 'Active' badge, 'LN-07 · Market Road', 'Disbursed 12 Jun 2026'. Actions: secondary 'View customer', danger 'Write off'. Figure strip of 4: Account amount ₹10,000.00 · Collected ₹6,800.00 · Outstanding ₹3,200.00 · Target completion 3 Jan 2027; second strip: Invested ₹8,500.00 · Profit ₹1,500.00 · Daily amount ₹100.00 · Term 100 days. Section 'Schedule' as a table: Day, Date, Expected, Collected, Status badge (Collected green, Partial amber, Missed coral, Pending neutral) with 10 rows and 'Show more'. Section 'History' (Admins): a vertical timeline of white cards each with a badge, a line of text and a timestamp at right — 'Created · Account · by Lakshmi K', 'Disbursed', 'Correct · ₹100.00 of ₹100.00 · 16 Sep 2026 — Collected by Priya S', 'Low · ₹60.00 of ₹100.00 · 15 Sep 2026', 'Day closed · LN-07 · 15 Sep 2026'."
+    },
+    {
+      "id": "S-13",
+      "slug": "sectors",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Sectors list (current nav: Sectors). Title 'Sectors', description 'Areas of the business. Each sector groups its lines.', primary 'New sector'. Right-aligned in the filter bar a small switch 'Show inactive'. Table: SECTOR (name + mono code: North / SEC-N, South / SEC-S, Town Centre / SEC-TC, Old Market / SEC-OM), ACTIVE LINES (right), CUSTOMERS (right), STATUS badge (Active green, Inactive neutral for Old Market). Footer '4 sectors'. Also show a 'New sector' dialog open over a 35% slate scrim: 16px corners, title 'New sector', description 'A sector groups lines by area.', fields Code (hint 'Letters, digits and hyphens. It can’t be changed later.') and Name, a sunken footer band with 'Cancel' ghost and 'Create sector' teal."
+    },
+    {
+      "id": "S-12",
+      "slug": "lines",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Lines list (current nav: Lines). Title 'Lines', description 'Collection routes and who works them today.', primary 'New line'. Filter bar: 'Sector' select 'All sectors', switch 'Show inactive' at right. Table: LINE (name + mono code: Market Road LN-07, Bus Stand LN-08, Temple Street LN-11…), SECTOR, SENIOR (name, or an amber badge 'No Senior'), JUNIORS (right), CUSTOMERS (right), STATUS badge. 8 rows. Footer '12 lines' with 'Show more'."
+    },
+    {
+      "id": "S-12b",
+      "slug": "line-detail",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Line detail page (current nav: Lines). Breadcrumb 'Sectors / North / LN-07'. Title 'Market Road', meta mono 'LN-07' and green 'Active' badge. Actions: secondary 'Rename', secondary 'Open day close', danger 'Deactivate'. Section 'Staff today' as a 3-figure strip: Senior 'Karthik R' · Juniors 3 · Customers 96. Section 'Senior' card with the current Senior, 'since 1 Aug 2026', and a secondary 'Assign Senior' button in the card header. Section 'Juniors' table: Junior, Since, Customers, Status badge, and a row action button 'Move'. Section 'Assignment history' table: Staff, Role, From, To (or teal badge 'Open'), with 'Show more'."
+    },
+    {
+      "id": "S-14",
+      "slug": "team",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Team list (current nav: Team). Title 'Team', description 'Everyone who can sign in to Rasi.', primary 'Add staff'. Filter bar: 'Role' select, 'Status' select, 'Clear filters' link. Table: NAME (name + small muted email), ROLE (Super Admin / Admin / Senior / Junior), LINE TODAY ('LN-07 · Market Road' or muted 'No line today'), MOBILE, STATUS badge (Active green, Suspended amber, Inactive neutral). 10 rows with names Lakshmi K, Karthik R, Priya S, Murugan K, Divya M, Senthil P, Anitha R. Footer '24 staff'."
+    },
+    {
+      "id": "S-15",
+      "slug": "staff-detail-assign",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Staff detail page for 'Priya S' (current nav: Team) with the Assign dialog open. Page behind: breadcrumb 'Team / Priya S', title 'Priya S', meta 'Junior' and green 'Active' badge, actions 'Assign to a line' primary and 'Reset password' secondary; a Details card (Email, Mobile, Joined) and an 'Assignment history' table. Dialog in front over a slate scrim: title 'Assign Priya S to a line', description 'A Junior works one line. Their current assignment ends the day before this one starts.' Field 'Line' as an open combobox: a search input 'Search lines' and a floating list of options each with name and muted code (Market Road LN-07 with a teal check, Bus Stand LN-08, Temple Street LN-11). Field 'Effective from' date input with hint 'The first day of the new assignment.' and under it a teal link button 'Use today, 17 Sep 2026'. Sunken footer: 'Cancel', 'Assign'."
+    },
+    {
+      "id": "S-16",
+      "slug": "collections",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Collections list (current nav: Collections). Title 'Collections', description 'Every collection and correction, by business date.', secondary header button 'Pending approvals' with a small amber count '4'. Filter bar: From date (11 Sep 2026), To date (17 Sep 2026), Line combobox 'All lines', Show select 'Collections and corrections'. Table: CUSTOMER (name + mono account code), DATE, LINE, COLLECTED BY, AMOUNT (right; corrections shown signed like '−₹40.00' or '+₹20.00'), STATUS badge right-aligned (Correct green, Low amber, Extra violet, No payment coral, 'Correction · awaiting approval' amber, 'Correction · approved' neutral). 12 rows. Footer '50 entries' and 'Show more'."
+    },
+    {
+      "id": "S-17",
+      "slug": "collection-detail",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Collection detail (current nav: Collections). Breadcrumb 'Collections / Anbu Tea Stall'. Title 'Anbu Tea Stall · ACC-2026-0112' (code in mono), meta: amber 'Low' badge, '16 Sep 2026 · LN-07 · Market Road · collected by Priya S'. Actions: secondary 'Request correction', danger 'Reverse'. A violet info callout: 'A correction to −₹20.00 is awaiting approval; nothing has moved yet. Decide it in Pending approvals.' Figure strip: Recorded ₹80.00 · Stands at ₹80.00 · Expected that day ₹100.00 · Account outstanding ₹2,420.00. Muted line 'Note: Shop closed early, paid part'. Section 'Corrections' table: Requested, Change (signed), Why (reason + 'asked by Karthik R' small), Decision badge with 'by Lakshmi K' small under it."
+    },
+    {
+      "id": "S-18",
+      "slug": "pending-approvals",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Pending approvals queue (current nav: Collections). Breadcrumb 'Collections / Pending approvals'. Title 'Pending approvals', description 'Corrections wait for someone other than the person who asked.' A vertical list of white cards, one per request. Each card: top row with customer name + mono account code and a date at right; a large line showing the recorded net struck through beside the new value: '₹100.00 → ₹80.00'; a description list (Reason 'Customer paid ₹80, entered as ₹100', Requested by 'Karthik R · 17 Sep 2026, 9:12 am', Line 'LN-07 · Market Road'); a footer band with 'Reject' (danger outline) and 'Approve' (teal). One card is the viewer's own request and instead of buttons shows a muted note 'You asked for this. Another approver decides.' Also show one Approve dialog open: title 'Approve ACC-2026-0112: ₹100.00 becomes ₹80.00', description 'Anbu Tea Stall’s outstanding rises by ₹20.00, and Priya S’s cash in hand falls by the same. The original collection stays in history.', optional Note field, buttons Cancel / Approve."
+    },
+    {
+      "id": "CASH",
+      "slug": "cash",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Cash page (current nav: Cash). Title 'Cash', description 'Handovers waiting for you, cash to send to the office, and day closes.' Filter bar: Line combobox, Date input, and a primary 'Open day close' button. Section 'Waiting for you' with a count badge: a list of white handover cards — each shows 'Priya S → Karthik R', 'LN-07 · Market Road · 16 Sep 2026' muted; at right a large '₹8,450.00' and under it 'recorded ₹8,470.00 · −₹20.00 short' (short in coral); an amber 'Waiting' badge; buttons 'Dispute' secondary and 'Acknowledge' teal; an expandable 'Denominations' row showing a small table ₹500 × 12 = ₹6,000.00, ₹200 × 10 = ₹2,000.00, ₹100 × 4 = ₹400.00, ₹50 × 1 = ₹50.00. Section 'Cash for the office' table: Line, Date, To hand over, button 'Hand over'. Section 'Recent' with status badges Acknowledged (green) and Disputed (coral)."
+    },
+    {
+      "id": "S-05",
+      "slug": "day-close",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Day close (S-05) for a line (current nav: Lines). Breadcrumb 'Lines / LN-07 · Market Road / Day close'. Title 'Day close · 16 Sep 2026', meta: amber 'Closed' badge and 'closed by Karthik R'. Header actions: a small labelled date input, secondary 'Hand over to office', secondary 'Reopen', primary 'Close day' (disabled). Figure strip: Expected ₹24,600.00 · Collected ₹23,950.00 · Shortfall ₹650.00 (amber) · Cash received ₹23,930.00 with caption '−₹20.00 short' in coral. Section 'Juniors' table: Junior, Entries, Collected, Phone badge. Section 'Needs a look' table: Customer + code, Expected, Collected, badge (Low, No payment, Missed, Not visited yet). Section 'Handovers' as cards. Also show the Close-day dialog open: title 'Close LN-07 · Market Road for 16 Sep 2026', description 'Collected ₹23,950.00 against ₹24,600.00 expected. 3 unvisited slots are marked missed. A collection that arrives later reopens the day.', a violet info callout 'Murugan K has not confirmed everything is sent.', buttons Cancel / Close day."
+    },
+    {
+      "id": "S-21",
+      "slug": "notifications",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Notification centre (current nav: Notifications, which shows a coral count 3 in the sidebar). Title 'Notifications', description '3 unread', actions 'Unread only' and 'Mark all read' secondary. A list grouped by day with small uppercase day headings (TODAY, YESTERDAY): each row has a category badge (Alert coral, Warning amber, Success green, Information violet), a bold title for unread rows with a small teal unread dot, a one-line body, a time at right ('17 Sep, 9:12 am') and a ghost 'Mark read' button. Example rows: 'Low collection on LN-07 — Anbu Tea Stall paid ₹80.00 of ₹100.00', 'Correction waiting for approval', 'Account ACC-2026-0044 completed', 'You were assigned to LN-08 from 20 Sep'. Footer 'Show more'. Below, section 'On this device' with a card and a switch 'Notify me on this device'. Section 'What to notify me about' as a card with four rows each with a switch, a label and a hint; 'Alerts' is on and locked."
+    },
+    {
+      "id": "S-29",
+      "slug": "audit-log",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Audit log (current nav: Audit log). Title 'Audit log', description 'Who did what, and when. Entries cannot be changed or removed.', teal link 'Clear filters'. Filter bar with six labelled controls: Action select, Record type select, Record id input, Staff member combobox, From date, To date. A list of entries as ruled rows in a white frame: time in tabular muted text ('17 Sep 2026, 9:14:02 am'), an action badge (Created green, Changed violet, Approved green, Rejected coral, Sign-in neutral, Day reopened amber), a record ('Account ACC-2026-0091' as a teal link), and who ('Lakshmi K · Admin'). One entry is expanded showing IP address, device, and a before/after table with changed values highlighted (old value struck through, new value in bold). Footer 'Show more'."
+    },
+    {
+      "id": "S-24",
+      "slug": "report-overdue",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Overdue accounts report, a Reports screen (add 'Reports' to the OPERATE nav group and make it current). Title 'Overdue accounts', description 'Active accounts past their target completion date.', secondary 'Export CSV'. Filter bar: Sector select, Line combobox, 'Overdue by' select (Any, 7+ days, 30+ days). A 3-figure strip: Overdue accounts 37 · Outstanding on them ₹2,84,650.00 · Longest overdue 61 days. Table: CUSTOMER (name + account code), LINE, TARGET DATE, DAYS OVERDUE (right, amber when >30), OUTSTANDING (right), LAST COLLECTION. Sortable headers. Footer '37 accounts'."
+    },
+    {
+      "id": "S-27",
+      "slug": "holidays",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Holidays settings page (add a 'Settings' nav item under SYSTEM and make it current). Breadcrumb 'Settings / Holidays'. Title 'Holidays', description 'No collections are due on these days. Schedules skip them, like Sundays.' primary 'Add holiday'. Table: DATE ('20 Oct 2026'), NAME ('Deepavali'), DAY ('Tuesday'), ADDED BY, and a row action menu. Upcoming only; a small muted note 'Past holidays stay in history and cannot be changed.' Show an inline 'Add holiday' card above the table with Date and Name fields and Cancel / Add buttons, with the date in an error state 'Date must be in the future.'"
+    },
+    {
+      "id": "S-28",
+      "slug": "settings",
+      "device": "DESKTOP",
+      "shell": "console",
+      "prompt": "Business settings (Settings nav current; account menu shows 'Sri Murugan · Super Admin'). Breadcrumb 'Settings / Business'. Title 'Business settings', description 'Only the Super Admin can change these. Every change is audited.' A max-760px form of white cards: 'Business' card (Business name, Sign-in link shown read-only as 'rasi.app/sri-murugan-finance/sign-in' with a Copy button); 'Collections' card (Default term (days) 100, Working days: a row of day chips Mon–Sat selected, Sun not selected); 'Notifications' card (Email from address, a switch 'Email the daily summary to Admins'). Footer action row: 'Cancel' ghost and 'Save changes' teal. A toast in the bottom-right: 'Settings saved'."
+    },
+    {
+      "id": "S-01",
+      "slug": "junior-route",
+      "device": "MOBILE",
+      "shell": "junior",
+      "prompt": "Junior 'Today's route' home screen. Under the status bar: title 'Today’s route' (22px semibold), a muted line 'Wed 17 Sep · LN-07 Market Road · updated 8:02 am', and a summary row of two soft chips 'To visit 14' and 'Done 9'. A vertical list of customer cards (white, 12px corners, hairline border), each full-width tappable with a chevron at right: customer name (16px semibold), address in muted text, and at right the expected amount '₹100.00' large. States per card: pending (no badge); 'Saved on phone' amber badge with a dot; 'Syncing' violet badge with a small spinner; 'Sent to office' green badge with a check. One card is a multi-account customer shown as a group: a header with the name 'Fathima Textiles · 2 accounts' and two indented rows, one per account (ACC-2026-0101 ₹200.00, ACC-2026-0145 ₹150.00). No invested amounts or profit anywhere."
+    },
+    {
+      "id": "S-02",
+      "slug": "junior-record-collection",
+      "device": "MOBILE",
+      "shell": "junior",
+      "prompt": "Junior 'Record collection' screen for one customer. Top: a ghost button '← Route', then customer name 'Kumar Traders' (22px semibold) and address '14, Bazaar Street'. One white card per account: mono account code 'ACC-2026-0091', a 3-item row of small figures (Expected ₹100.00 · Outstanding ₹3,200.00 · Days left 32); a large amount input (56px tall, 24px text, ₹ prefix, right-aligned) pre-filled with '100.00', a hint below 'Same as expected'; an optional Note input; a full-width 52px teal button 'Confirm ₹100.00'; and under it a full-width secondary button 'No payment — I visited'. Show a second account card below where the amount was changed to '60.00' with an amber hint 'Low: ₹40.00 less than expected'. Big, thumb-friendly, high contrast, outdoors-readable."
+    },
+    {
+      "id": "S-03",
+      "slug": "junior-sync",
+      "device": "MOBILE",
+      "shell": "junior",
+      "prompt": "Junior 'Sync status' screen answering 'is my day safe'. '← Route' ghost button, title 'Sync'. A large status card: amber icon, '2 collections are on this phone', 'Last sent 9:41 am', and a full-width teal 'Send now' button. A list 'On this phone': rows with customer name, amount right-aligned, time captured, and a badge (Saved on phone amber, Syncing violet, Not accepted coral). The 'Not accepted' row expands to show the reason 'Account completed before this was sent' and a coral outline button 'Remove from phone'. A collapsed section 'Sent today · 9' with green checks. At the bottom, a secondary full-width 'Sign out' button, disabled, with the caption 'Send everything before signing out.'"
+    },
+    {
+      "id": "S-06",
+      "slug": "junior-handover",
+      "device": "MOBILE",
+      "shell": "junior",
+      "prompt": "Junior 'Hand over cash' screen. '← Route', title 'Hand over cash', muted line 'To Karthik R · needs signal'. One white card for 'LN-07 · 16 Sep 2026' with 'Recorded ₹8,470.00'. A list of nine denomination rows, each 56px tall: the note value at left ('₹500', '₹200', '₹100', '₹50', '₹20', '₹10', '₹5', '₹2', '₹1'), a − circle button, a centred count number input, a + circle button, and the row subtotal at right in muted tabular text. Below the list a bold total row 'Counted ₹8,450.00' with coral text '−₹20.00 short' at right. A textarea 'Why the count differs' (required). Full-width teal button 'Hand over ₹8,450.00 to Karthik R'. Under it a 'Recent' list with a card showing an amber 'Waiting' badge and 'waiting for Karthik R to acknowledge'."
+    },
+    {
+      "id": "S-21J",
+      "slug": "junior-notifications",
+      "device": "MOBILE",
+      "shell": "junior",
+      "prompt": "Junior notifications screen. '← Route', title 'Notifications', a ghost 'Mark all read' button. Day headings TODAY / YESTERDAY. Rows at least 64px tall with a category badge, title (bold when unread, with a small teal dot), one-line body and time: 'Your correction was approved — Anbu Tea Stall is now ₹80.00', 'Karthik R acknowledged ₹8,450.00', 'Route updated: 2 new customers on LN-07'. At the bottom a card 'Notify me on this phone' with a large switch. No links to console pages."
+    }
+  ]
+}

@@ -1,12 +1,14 @@
 import {
-  ArrowClockwise,
-  CaretLeft,
+  CaretDown,
   CheckCircle,
   Money,
   SignOut,
+  UploadSimple,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   Button,
+  cn,
   Dialog,
   DialogActions,
   FormMessage,
@@ -18,8 +20,8 @@ import { useState } from "react";
 
 import type { OutboxEntry } from "../../lib/offline/db";
 import type { OutboxSummary } from "../../lib/offline/outbox";
-import { backToRoute, openView } from "./hash-view";
-import { EntryStateMark, formatClockTime } from "./sync-marks";
+import { openView } from "./hash-view";
+import { BackToRoute, EntryStateMark, formatClockTime } from "./sync-marks";
 
 /**
  * S-03 · Sync status — "is my day safe". Everything not yet sent, with when it
@@ -61,49 +63,71 @@ export function SyncScreen({
 
   return (
     <div className="flex flex-col gap-[var(--stack-gap)]" data-testid="sync">
-      <div>
-        <Button tone="ghost" onClick={backToRoute} className="-ml-3">
-          <CaretLeft aria-hidden size={20} weight="regular" />
-          Route
-        </Button>
+      <BackToRoute />
+      <div className="flex flex-col gap-1">
+        <p className="text-2xl font-semibold tracking-tight text-ink">Sync</p>
+        <p className="text-sm text-ink-muted">
+          What is on this phone and what has reached the office
+        </p>
       </div>
 
       {unsent.length === 0 ? (
         <div
-          className="flex flex-col items-center gap-2 rounded-[var(--radius-surface)] border border-border bg-surface-raised p-6 text-center"
+          className="flex items-center gap-3 rounded-surface border border-border bg-surface-raised p-4 shadow-raised"
           data-testid="all-synced"
         >
-          <CheckCircle
-            aria-hidden
-            size={40}
-            weight="fill"
-            className="text-positive"
-          />
-          <h1 className="text-xl font-semibold text-ink">
-            Everything is sent to the office
-          </h1>
-          <p className="text-sm text-ink-muted">{lastSent}</p>
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-control border border-positive-border bg-positive-subtle">
+            <CheckCircle
+              aria-hidden
+              size={24}
+              weight="fill"
+              className="text-positive"
+            />
+          </span>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h1 className="text-lg font-semibold text-ink">
+              Everything is sent to the office
+            </h1>
+            <p className="text-sm text-ink-muted">{lastSent}</p>
+          </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          <h1 className="text-xl font-semibold text-ink" data-numeric>
-            {unsent.length === 1
-              ? "1 collection not sent"
-              : `${unsent.length} collections not sent`}
-          </h1>
-          <p className="text-sm text-ink-muted">{lastSent}</p>
+        <div className="flex flex-col gap-[var(--stack-gap)] rounded-surface border border-border bg-surface-raised p-4 shadow-raised">
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-control border border-warning-border bg-warning-subtle">
+              <Warning
+                aria-hidden
+                size={24}
+                weight="regular"
+                className="text-warning"
+              />
+            </span>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h1 className="text-lg font-semibold text-ink" data-numeric>
+                {unsent.length === 1
+                  ? "1 collection not sent"
+                  : `${unsent.length} collections not sent`}
+              </h1>
+              <p className="text-sm text-ink-muted">{lastSent}</p>
+            </div>
+          </div>
           {!connected ? (
             <FormMessage tone="info">
               No signal. They are safe on this phone and send by themselves when
               signal returns.
             </FormMessage>
           ) : null}
-          <Button tone="primary" onClick={onSendNow} disabled={sending}>
-            <ArrowClockwise
+          <Button
+            tone="primary"
+            onClick={onSendNow}
+            disabled={sending}
+            className="h-13 w-full text-lg font-semibold"
+          >
+            <UploadSimple
               aria-hidden
               size={20}
               weight="regular"
-              className={sending ? "animate-spin" : undefined}
+              className={sending ? "animate-pulse" : undefined}
             />
             Send now
           </Button>
@@ -131,37 +155,65 @@ export function SyncScreen({
       ) : null}
 
       {unsent.length > 0 ? (
-        <ul className="flex flex-col gap-2" data-testid="outbox">
-          {unsent.map((entry) => (
-            <EntryRow
-              key={entry.idempotencyKey}
-              entry={entry}
-              businessDate={businessDate}
-            >
-              {entry.status === "QUEUED" ? (
-                <Button
-                  tone="secondary"
-                  onClick={() => onRetry(entry)}
-                  disabled={sending}
-                >
-                  Retry
-                </Button>
-              ) : entry.status === "FAILED" ? (
-                <Button tone="secondary" onClick={() => setRemoving(entry)}>
-                  Hand in and remove
-                </Button>
-              ) : null}
-            </EntryRow>
-          ))}
-        </ul>
+        <section className="flex flex-col gap-2">
+          <h2
+            className="text-xs font-semibold tracking-wide text-ink-muted uppercase"
+            data-numeric
+          >
+            On this phone · {unsent.length}
+          </h2>
+          <ul
+            className="flex flex-col divide-y divide-border overflow-hidden rounded-surface border border-border bg-surface-raised shadow-raised"
+            data-testid="outbox"
+          >
+            {unsent.map((entry) => (
+              <EntryRow
+                key={entry.idempotencyKey}
+                entry={entry}
+                businessDate={businessDate}
+              >
+                {entry.status === "QUEUED" ? (
+                  <Button
+                    tone="secondary"
+                    onClick={() => onRetry(entry)}
+                    disabled={sending}
+                  >
+                    Retry
+                  </Button>
+                ) : entry.status === "FAILED" ? (
+                  <Button tone="secondary" onClick={() => setRemoving(entry)}>
+                    Hand in and remove
+                  </Button>
+                ) : null}
+              </EntryRow>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {sent.length > 0 ? (
-        <details className="rounded-[var(--radius-surface)] border border-border bg-surface-raised">
-          <summary className="flex min-h-[var(--control-height)] cursor-pointer items-center px-4 text-sm font-medium text-ink">
-            Sent to office ({sent.length})
+        <details className="group overflow-hidden rounded-surface border border-border bg-surface-raised shadow-raised">
+          <summary className="flex min-h-touch cursor-pointer list-none items-center gap-3 px-4 text-base font-medium text-ink [&::-webkit-details-marker]:hidden">
+            <CheckCircle
+              aria-hidden
+              size={20}
+              weight="fill"
+              className="shrink-0 text-positive"
+            />
+            <span className="flex-1">
+              Sent to office{" "}
+              <span className="text-ink-muted" data-numeric>
+                ({sent.length})
+              </span>
+            </span>
+            <CaretDown
+              aria-hidden
+              size={18}
+              weight="regular"
+              className="shrink-0 text-ink-subtle transition-transform group-open:rotate-180"
+            />
           </summary>
-          <ul className="flex flex-col gap-2 p-2">
+          <ul className="flex flex-col divide-y divide-border border-t border-border">
             {sent.map((entry) => (
               <EntryRow
                 key={entry.idempotencyKey}
@@ -173,8 +225,12 @@ export function SyncScreen({
         </details>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-        <Button tone="secondary" onClick={() => openView("#handover")}>
+      <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+        <Button
+          tone="secondary"
+          onClick={() => openView("#handover")}
+          className="w-full"
+        >
           <Money aria-hidden size={20} weight="regular" />
           Hand over cash
         </Button>
@@ -185,7 +241,7 @@ export function SyncScreen({
             still on this phone. Send them before signing out.
           </FormMessage>
         ) : null}
-        <Button tone="ghost" onClick={onSignOut}>
+        <Button tone="ghost" onClick={onSignOut} className="w-full">
           <SignOut aria-hidden size={20} weight="regular" />
           Sign out
         </Button>
@@ -231,23 +287,24 @@ function EntryRow({
   const captured = `${entry.businessDate === businessDate ? "" : `${formatBusinessDate(entry.businessDate)}, `}${formatClockTime(entry.capturedAt)}`;
   return (
     <li
-      className="flex flex-col gap-2 rounded-[var(--radius-surface)] border border-border bg-surface-raised px-4 py-[var(--row-padding-y)]"
+      className={cn(
+        "flex flex-col gap-2 px-4 py-[var(--row-padding-y)]",
+        entry.status === "FAILED" && "bg-critical-subtle",
+      )}
       data-testid="outbox-entry"
       data-status={entry.status}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-base font-medium text-ink">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-base font-semibold text-ink">
             {entry.customerName}
           </span>
-          <span className="text-xs text-ink-muted">
-            {entry.accountCode} · captured {captured}
+          <span className="text-xs text-ink-muted" data-numeric>
+            <span className="font-mono">{entry.accountCode}</span> · captured{" "}
+            {captured}
           </span>
         </div>
-        <span
-          className="shrink-0 text-base font-semibold text-ink"
-          data-numeric
-        >
+        <span className="shrink-0 text-xl font-semibold text-ink" data-numeric>
           {entry.payload.amount === "0"
             ? "No payment"
             : formatCurrency(entry.payload.amount)}
@@ -258,7 +315,9 @@ function EntryRow({
         {children}
       </div>
       {entry.status === "FAILED" && entry.lastError ? (
-        <p className="text-sm text-critical">{entry.lastError.message}</p>
+        <p className="rounded-control border border-critical-border bg-surface-raised px-3 py-2 text-sm font-medium text-critical">
+          {entry.lastError.message}
+        </p>
       ) : null}
       {entry.status !== "SYNCED" && entry.attempts > 0 ? (
         <details className="text-xs text-ink-muted">
