@@ -142,22 +142,40 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
                 header: "Day",
                 align: "end",
                 value: (slot) => slot.sequence,
+                // On the phone card the day heads the row with its date under
+                // it, so a hundred-day schedule is a hundred short rows.
+                cell: (slot) => (
+                  <span className="flex flex-col">
+                    <span data-numeric>
+                      <span className="md:hidden">Day </span>
+                      {slot.sequence}
+                    </span>
+                    <span className="text-caption text-ink-muted md:hidden">
+                      {formatBusinessDate(slot.dueDate)}
+                    </span>
+                  </span>
+                ),
               }),
-              valueColumn<ScheduleSlotView>({
-                id: "date",
-                header: "Date",
-                value: (slot) => slot.dueDate,
-                cell: (slot) => formatBusinessDate(slot.dueDate),
-              }),
+              {
+                ...valueColumn<ScheduleSlotView>({
+                  id: "date",
+                  header: "Date",
+                  value: (slot) => slot.dueDate,
+                  cell: (slot) => formatBusinessDate(slot.dueDate),
+                }),
+                meta: { hideOnCard: true },
+              },
               moneyColumn<ScheduleSlotView>({
                 id: "expected",
                 header: "Expected",
                 amount: (slot) => slot.expectedAmount,
+                card: "headline",
               }),
               displayColumn<ScheduleSlotView>({
                 id: "status",
                 header: "Status",
                 align: "end",
+                card: "status",
                 cell: (slot) => <StatusBadge kind="slot" value={slot.status} />,
               }),
             ]}

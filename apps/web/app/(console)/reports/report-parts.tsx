@@ -13,6 +13,7 @@ import {
   EmptyFrame,
   FilterBar,
   FilterField,
+  formatBusinessDate,
   Input,
   ListSkeleton,
   NoMatches,
@@ -103,9 +104,14 @@ export function ReportFilterBar({
   setFilter: (key: "from" | "to" | "sector" | "line", value: string) => void;
   extra?: ReactNode;
 }) {
-  const { from, to, today, sectorId, lineId } = criteria;
+  const { from, to, today, sectorId, lineId, validRange } = criteria;
+  const dates = validRange
+    ? `${formatBusinessDate(from)} to ${formatBusinessDate(to)}`
+    : "Choose a date range";
   return (
-    <FilterBar>
+    <FilterBar
+      summary={manages ? `${dates}, ${scopeSummary(sectorId, lineId)}` : dates}
+    >
       <FilterField label="From" width="sm">
         <Input
           type="date"
@@ -138,6 +144,13 @@ export function ReportFilterBar({
       {extra}
     </FilterBar>
   );
+}
+
+/** Sector and Line in words, for a folded filter bar's summary. */
+export function scopeSummary(sectorId: string, lineId: string): string {
+  if (lineId) return "one line";
+  if (sectorId) return "one sector";
+  return "every line";
 }
 
 /**

@@ -148,6 +148,7 @@ export const STATUS = {
     REJECT: { label: "Rejected", tone: "critical" },
     LOGIN: { label: "Sign-in", tone: "neutral" },
     REOPEN_DAY: { label: "Day reopened", tone: "warning" },
+    EXPORT: { label: "Exported", tone: "neutral" },
   } satisfies Table<AuditAction>,
 
   /**

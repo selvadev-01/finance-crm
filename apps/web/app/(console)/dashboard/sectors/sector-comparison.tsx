@@ -2,6 +2,7 @@
 
 import {
   dashboardContract,
+  exportContract,
   type SectorComparison as Comparison,
   type SectorComparisonRow as Row,
 } from "@repo/contracts";
@@ -30,6 +31,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { Money } from "../../../../components/money";
 import { PageTrail } from "../../../../components/page-trail";
 import { LoadFailed } from "../../../../components/query-state";
@@ -110,18 +112,25 @@ export function SectorComparison({
         </>
       }
       actions={
-        <FilterField label="Date" width="sm">
-          <Input
-            type="date"
-            value={shown}
-            max={today}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) return;
-              setFilter("date", value === today ? "" : value);
-            }}
+        <div className="flex flex-wrap items-end gap-2">
+          <FilterField label="Date" width="sm">
+            <Input
+              type="date"
+              value={shown}
+              max={today}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) return;
+                setFilter("date", value === today ? "" : value);
+              }}
+            />
+          </FilterField>
+          <ExportMenu
+            route={exportContract.sectorsDashboard}
+            query={filters.date ? { date: filters.date } : {}}
+            disabled={future}
           />
-        </FilterField>
+        </div>
       }
     />
   );
@@ -300,6 +309,7 @@ function SectorTable({ view }: { view: Comparison }) {
         id: "collected",
         header: "Collected",
         amount: (row) => row.today!.collected,
+        card: "headline",
       }),
       moneyColumn<Row>({
         id: "shortfall",
@@ -325,6 +335,7 @@ function SectorTable({ view }: { view: Comparison }) {
         id: "tally",
         header: "Day",
         align: "end",
+        card: "status",
         cell: (row) => (
           <span className="flex flex-col items-end gap-0.5">
             <StatusBadge kind="sectorTally" value={row.today!.tally} />

@@ -216,6 +216,20 @@ Paging is not in the URL. "Show more" follows the API's cursor, and a reload sta
   - the bell as a round action with its unread count;
   - the account menu.
 
+**The phone layout, chosen per device ([ADR-0016](../02-architecture/adr/0016-installable-app-and-per-device-layout.md)).** The table above is the computer layout, which a browser tab shows by default. Each device can instead choose the phone layout:
+
+- an app bar holding the brand or a back arrow, the area, and the bell;
+- a bottom tab bar with four tabs: the role's dashboard (Overview, Today or My line), Collections, Customers and Cash;
+- "More", a bottom sheet listing every other area the role may see, then the layout switch, install and sign out.
+
+Where the choice is made:
+
+- installing Rasi from its account menu asks first;
+- the installed app asks on its first launch when nothing has been chosen;
+- either layout can switch at any time.
+
+The Junior is never asked.
+
 The Junior's app is **phone-only by design** — 360px is the design target, and it is not adapted upward for desktop because it is never used there.
 
 Seniors use both: phone during the day for alerts and cash receipt, laptop in the evening for review.

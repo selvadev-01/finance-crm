@@ -17,6 +17,13 @@ describe("currentHref", () => {
     );
   });
 
+  it("files an account under Customers, where it is reached from", () => {
+    const withCustomers = [...HREFS, "/customers"];
+    expect(currentHref("/accounts/new", withCustomers)).toBe("/customers");
+    expect(currentHref("/accounts/abc-123", withCustomers)).toBe("/customers");
+    expect(currentHref("/accountsx", withCustomers)).toBeUndefined();
+  });
+
   it("does not match a path that only shares a prefix", () => {
     expect(currentHref("/dashboards", HREFS)).toBeUndefined();
     expect(currentHref("/team", HREFS)).toBeUndefined();

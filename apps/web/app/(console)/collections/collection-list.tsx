@@ -1,6 +1,10 @@
 "use client";
 
-import { collectionContract, type CollectionListItem } from "@repo/contracts";
+import {
+  collectionContract,
+  type CollectionListItem,
+  exportContract,
+} from "@repo/contracts";
 import {
   addCalendarDays,
   parseCalendarDate,
@@ -30,6 +34,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../components/columns";
+import { ExportMenu } from "../../../components/export-menu";
 import { LineFilter } from "../../../components/line-filter";
 import { ListFallback } from "../../../components/list-state";
 import { CollectionEntryBadge } from "../../../components/status-badge";
@@ -82,19 +87,15 @@ export function CollectionList({
   const filtered = lineId !== "" || kind !== "";
 
   const validRange = isValidRange(from, to);
+  const query = {
+    from,
+    to,
+    ...(lineId ? { lineId } : {}),
+    ...(kind ? { entryType: kind } : {}),
+  };
   const collections = usePagedQuery(
     collectionContract.listCollections,
-    validRange
-      ? {
-          query: {
-            from,
-            to,
-            limit: LIST_LIMIT,
-            ...(lineId ? { lineId } : {}),
-            ...(kind ? { entryType: kind } : {}),
-          },
-        }
-      : null,
+    validRange ? { query: { limit: LIST_LIMIT, ...query } } : null,
   );
 
   const showToday = () => setFilters({ from: today, to: today });
@@ -110,18 +111,39 @@ export function CollectionList({
             : "Collections and corrections on your line."
         }
         actions={
-          canApproveCorrections(me.role) ? (
-            <Link
-              href="/collections/pending-approval"
-              className={buttonClass("secondary")}
-            >
-              Pending approvals
-            </Link>
-          ) : null
+          <>
+            <ExportMenu
+              route={exportContract.collections}
+              query={query}
+              disabled={!validRange}
+            />
+            {canApproveCorrections(me.role) ? (
+              <Link
+                href="/collections/pending-approval"
+                className={buttonClass("secondary")}
+              >
+                Pending approvals
+              </Link>
+            ) : null}
+          </>
         }
       />
 
-      <FilterBar>
+      <FilterBar
+        summary={[
+          validRange
+            ? `${formatBusinessDate(from)} to ${formatBusinessDate(to)}`
+            : "Choose a date range",
+          ...(manages ? [lineId ? "one line" : "all lines"] : []),
+          kind === "ORIGINAL"
+            ? "collections only"
+            : kind === "ADJUSTMENT"
+              ? "corrections only"
+              : null,
+        ]
+          .filter(Boolean)
+          .join(", ")}
+      >
         <FilterField label="From" width="sm">
           <Input
             type="date"
@@ -209,11 +231,13 @@ export function CollectionList({
                     {signedAmount(entry)}
                   </span>
                 ),
+                card: "headline",
               }),
               displayColumn<CollectionListItem>({
                 id: "status",
                 header: "Status",
                 align: "end",
+                card: "status",
                 cell: (entry) => <CollectionEntryBadge entry={entry} />,
               }),
             ]}

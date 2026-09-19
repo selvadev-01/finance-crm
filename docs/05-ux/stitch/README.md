@@ -4,6 +4,7 @@ Screen designs generated in Google Stitch from [DESIGN.md](DESIGN.md), the soft 
 
 - **Stitch project:** “Rasi — Daily Collections” (`projects/3059148314205483849`), design system “Rasi” (`assets/ea66973b2be54cfe9cd9a25490c81c02`).
 - **Generated:** 17 Sep 2026 with Stitch (Gemini 3.8 Flash). Console screens are at desktop width, the Junior app at mobile width.
+- **Mobile, all roles:** the phone-width set for every role is briefed separately in [../stitch-mobile/](../stitch-mobile/README.md).
 - **Prompts:** [screens.json](screens.json) holds a shared shell per product plus one prompt per screen, so any screen can be regenerated in the same style.
 
 Sample data in the designs is invented (names, shops, amounts). Screens that show a dialog or an error state do so on purpose, to design that state.

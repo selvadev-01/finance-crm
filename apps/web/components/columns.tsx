@@ -52,6 +52,8 @@ export function moneyColumn<Row>(options: {
   amount: (row: Row) => string;
   /** How to show it, when a plain amount is not enough (a signed change). */
   render?: (row: Row) => ReactNode;
+  /** `headline`: the row's key amount, beside its name on the phone card. */
+  card?: "headline";
 }): DataViewColumn<Row> {
   return {
     id: options.id,
@@ -63,7 +65,7 @@ export function moneyColumn<Row>(options: {
       options.render?.(row.original) ?? (
         <Money amount={options.amount(row.original)} />
       ),
-    meta: { align: "end" },
+    meta: { align: "end", card: options.card },
   };
 }
 
@@ -75,13 +77,19 @@ export function displayColumn<Row>(options: {
   align?: "start" | "end";
   /** Left out of the phone card. */
   hideOnCard?: boolean;
+  /** `status`: the row's badge, top right of the phone card. */
+  card?: "headline" | "status";
 }): DataViewColumn<Row> {
   return {
     id: options.id,
     header: options.header,
     enableSorting: false,
     cell: ({ row }) => options.cell(row.original),
-    meta: { align: options.align, hideOnCard: options.hideOnCard },
+    meta: {
+      align: options.align,
+      hideOnCard: options.hideOnCard,
+      card: options.card,
+    },
   };
 }
 
@@ -92,6 +100,8 @@ export function valueColumn<Row>(options: {
   value: (row: Row) => string | number;
   cell?: (row: Row) => ReactNode;
   align?: "start" | "end";
+  /** Where it sits on the phone card, if not in the grid of details. */
+  card?: "headline" | "status";
 }): DataViewColumn<Row> {
   return {
     id: options.id,
@@ -99,6 +109,6 @@ export function valueColumn<Row>(options: {
     accessorFn: options.value,
     cell: ({ row }) =>
       options.cell?.(row.original) ?? options.value(row.original),
-    meta: { align: options.align },
+    meta: { align: options.align, card: options.card },
   };
 }

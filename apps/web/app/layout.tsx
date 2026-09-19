@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
+import { BRAND_TEAL } from "./brand-colours";
 import "./globals.css";
 
 /**
@@ -28,6 +29,9 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Rasi",
   description: "Daily collection management",
+  // Home-screen installs on iPhone and iPad, which read these instead of the
+  // manifest (ADR-0016).
+  appleWebApp: { capable: true, title: "Rasi", statusBarStyle: "default" },
 };
 
 /**
@@ -39,6 +43,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: BRAND_TEAL,
 };
 
 /**

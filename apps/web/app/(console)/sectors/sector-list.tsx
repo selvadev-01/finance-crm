@@ -134,6 +134,7 @@ export function SectorList({
               id: "status",
               header: "Status",
               align: "end",
+              card: "status",
               cell: (sector) => <ActivityBadge isActive={sector.isActive} />,
             }),
           ]}

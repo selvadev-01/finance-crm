@@ -10,7 +10,7 @@
 
 **In:** line-wise, sector-wise, collection, investment and overdue reports; filtering, sorting, pagination.
 
-**Out:** fixed-layout dashboards (M11). Export to Excel/PDF is **deferred to Phase 2**.
+**Out:** fixed-layout dashboards (M11). Export to Excel and PDF was deferred to Phase 2 and **built early on 2026-09-19** at the business's request — for the reports, the dashboards (M11) and the collection list (S-16); see [as built — export](#as-built--excel-and-pdf-export-2026-09-19). The "Not built: export" notes in the as-built sections below record the state on the day each report shipped.
 
 ---
 
@@ -93,11 +93,37 @@ Appendix A's "Limited" for Senior is interpreted throughout as **their own line 
 
 ## Deferred to Phase 2
 
-**Excel and PDF export.** Deliberately excluded from v1 scope.
+~~**Excel and PDF export.**~~ Built 2026-09-19, ahead of this deferral, because the business asked for it — see [as built — export](#as-built--excel-and-pdf-export-2026-09-19). The original reasoning still stands as a caution: an export presents figures, so it reads through the very same services as the screens and never computes one of its own.
 
-> Export is genuinely useful and genuinely not on the critical path. Nothing in the daily operation depends on it, and adding a rendering pipeline before the figures themselves are trusted would be work spent on presenting numbers nobody has verified yet. Once the ledger reconciles for a month, export becomes worth building.
+Still deferred: CSV, scheduled report delivery by email, and custom report builders.
 
-Also deferred: scheduled report delivery by email, and custom report builders.
+---
+
+## As built — Excel and PDF export (2026-09-19)
+
+Every report, every dashboard and the collection list can be downloaded as an Excel workbook or a PDF. Ten routes, each `GET` with the view's own filters plus `format=xlsx|pdf`:
+
+| Route                                                                        | Exports                        | Permission (the view's own) |
+| ---------------------------------------------------------------------------- | ------------------------------ | --------------------------- |
+| `/api/exports/reports/{line-wise,investment,collection,overdue,discrepancy}` | the five reports               | `report.view`               |
+| `/api/exports/collections`                                                   | the collection list (S-16)     | `collection.view`           |
+| `/api/exports/dashboards/overview`, `/operations`                            | S-07, S-20                     | `money.businessTotals`      |
+| `/api/exports/dashboards/sectors`                                            | the sector comparison (US-081) | `money.sectorTotals`        |
+| `/api/exports/dashboards/line`                                               | S-19                           | `money.lineTotals`          |
+
+- **One read, two files.** Each handler calls the same service method as the screen, with the same scope, then a pure builder (`reports/report-exports.ts`, `dashboards/dashboard-exports.ts`, `collections/collection-export.ts`) turns the view into a neutral document of figure lists and typed tables (`exports/export-document.ts`). `xlsx-renderer.ts` (exceljs) and `pdf-renderer.ts` (pdfkit) both draw that one document, so the Excel and the PDF cannot disagree with each other or with the page. Out-of-scope filters are `404` exactly as on the screen, and no RBAC cell changed.
+- **Money stays exact.** Amounts reach the renderers as decimal strings. The PDF draws them with Indian grouping from the string. An Excel cell must be an IEEE-754 number by the file format, so `excelNumber` converts each amount and proves it round-trips to the same `NUMERIC(14,2)` value before writing it, refusing the file otherwise — `NUMERIC(14,2)` is at most 14 significant digits and a double holds 15. Money cells carry a two-place number format and dates are real date cells, so a sheet can be summed and filtered.
+- **Unknown is not zero** (S-07). A group the view could not read is an empty cell in Excel and a dash in the PDF, with a note on every sheet and page saying so; "nothing here" (an account never visited) is a plain blank, and the two are kept apart in the builders.
+- **The whole set, not the page.** The paged views (overdue, discrepancy, the collection list) are read to their end, 200 at a time; past `EXPORT_ROW_LIMIT` (10,000 rows) the export is `422 EXPORT_TOO_LARGE` rather than a silently shortened file, and reading stops as soon as the limit is passed.
+- **Recorded.** Every export writes an `audit_log` entry — action `EXPORT` (new), `entityTable` `export`, `entityId` the export's name (`reports/line-wise`), `after` the format, the filters as sent (ids, dates and enums only), the row count and the file name — inside a transaction, **after** the file is rendered and **before** it is sent: a file that fails to render leaves no entry, and no file leaves unrecorded. `audit_log_export_check` ties the action to the pseudo-table and requires an actor and an `after` (migrations `audit_export`, `constraints_audit_export`). The audit log screen filters and labels them ("Exported", "Export").
+- **Layout.** Excel: a Summary sheet with the headline figures when the view has any, then one sheet per table with a frozen header and a filter; every sheet opens with the title and what it covers (period, filters, when it was read). PDF: A4 landscape, header row repeated on each page, totals in bold, pages numbered.
+- **The contract.** A route may declare `file: true`: its success body is bytes, never parsed, and `ContractResponseInterceptor` passes a `StreamableFile` through untouched. The web calls such a route with `downloadFile` from `@repo/contracts`; errors are still the JSON error body.
+
+**Web:** an **Export** menu (Excel (.xlsx) / PDF) in the header of each of the five reports, the collection list, S-07, S-20, the sector comparison and S-19 (`apps/web/components/export-menu.tsx`), sending exactly the filters on screen. It is disabled while the page's own range is invalid, and on S-19 it appears only once a line is showing.
+
+**Tests:** Tier 1 — cells (grouping, exact Excel numbers, malformed cells refused), both renderers (workbook read back cell by cell; PDF validity and page count), the builders (null against blank, corrections as their own rows), `ExportService` writing the real audit row and writing none when refused or unrenderable, `readAllPages`, and the constraint. HTTP — every route in both formats with its headers and audit entry, a Senior's other line and sector `404` with nothing recorded, Junior `403`, bad format `400`, future date `422`; plus ten RBAC harness rows.
+
+**Limits:** the PDF uses the built-in Helvetica and draws Latin script only; a name in Tamil or another script shows as `?` in the PDF with a note saying so, while the Excel file carries it as written. Not built: CSV, the dashboards' trend chart in the file, and a browser check of the menu.
 
 ---
 

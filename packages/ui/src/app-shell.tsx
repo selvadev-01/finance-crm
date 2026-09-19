@@ -412,14 +412,18 @@ interface TopbarActionProps {
   }>;
 }
 
-/** A round icon action in the top bar, with an optional count. */
+/**
+ * A round icon action in the top bar, with an optional count. It is 40px in
+ * the console's compact density and 44px in `comfortable` — the phone layout's
+ * app bar — where it is tapped, not clicked.
+ */
 function TopbarAction({ label, icon, count, children }: TopbarActionProps) {
   const shown =
     count && count > 0 ? (count > 99 ? "99+" : String(count)) : null;
   return cloneElement(children, {
     "aria-label": shown ? `${label}, ${shown} unread` : label,
     className:
-      "relative grid size-10 shrink-0 place-items-center rounded-pill bg-surface-raised text-ink-muted shadow-raised transition-colors hover:text-ink [&_svg]:size-5",
+      "relative grid size-10 shrink-0 place-items-center rounded-pill bg-surface-raised text-ink-muted shadow-raised transition-colors hover:text-ink [&_svg]:size-5 [[data-density=comfortable]_&]:size-[var(--spacing-touch)]",
     children: (
       <>
         {icon}

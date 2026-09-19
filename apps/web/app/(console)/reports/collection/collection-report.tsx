@@ -3,6 +3,7 @@
 import {
   type CollectionListItem,
   type CollectionReport as Report,
+  exportContract,
   type CollectionReportRow as Row,
   reportContract,
   staffContract,
@@ -28,6 +29,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { PageTrail } from "../../../../components/page-trail";
 import { signedCurrency } from "../../../../components/money";
 import { ActivityBadge, STATUS } from "../../../../components/status-badge";
@@ -91,20 +93,17 @@ export function CollectionReport({
   const classification = filters.classification as Classification | "";
   const narrowed = junior !== "" || classification !== "";
 
+  const query = {
+    from,
+    to,
+    ...(sectorId ? { sectorId } : {}),
+    ...(lineId ? { lineId } : {}),
+    ...(junior ? { collectedByUserId: junior } : {}),
+    ...(classification ? { classification } : {}),
+  };
   const report = useApiQuery(
     reportContract.getCollection,
-    allowed && validRange
-      ? {
-          query: {
-            from,
-            to,
-            ...(sectorId ? { sectorId } : {}),
-            ...(lineId ? { lineId } : {}),
-            ...(junior ? { collectedByUserId: junior } : {}),
-            ...(classification ? { classification } : {}),
-          },
-        }
-      : null,
+    allowed && validRange ? { query } : null,
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -124,6 +123,13 @@ export function CollectionReport({
         />
       }
       title="Collection report"
+      actions={
+        <ExportMenu
+          route={exportContract.collectionReport}
+          query={query}
+          disabled={!validRange}
+        />
+      }
       description={
         manages
           ? "What was collected against what was expected, and how every entry classified (BR-08). Narrow to one Junior or one class to investigate a pattern; expected and the visits missed stay the line’s own."
@@ -378,6 +384,7 @@ function columnsFor(
         id: "collected",
         header: "Collected",
         amount: (row) => row.collections!.collected,
+        card: "headline",
       }),
       moneyColumn<Row>({
         id: "variance",

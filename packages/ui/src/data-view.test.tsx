@@ -2,7 +2,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { DataView, type DataViewColumn, FilterField } from "./data-view";
+import {
+  DataView,
+  type DataViewColumn,
+  FilterBar,
+  FilterField,
+} from "./data-view";
 import { Input } from "./input";
 
 interface Row {
@@ -106,6 +111,61 @@ describe("DataView", () => {
     expect(
       screen.getByRole("columnheader", { name: "Amount" }),
     ).not.toHaveAttribute("aria-sort");
+  });
+});
+
+describe("DataView's phone card", () => {
+  it("puts the headline amount beside the name, and labels the rest", () => {
+    const columns: DataViewColumn<Row>[] = [
+      { accessorKey: "name", header: "Customer" },
+      {
+        id: "amount",
+        header: "Amount",
+        cell: ({ row }) => `₹${row.original.amount}`,
+        meta: { align: "end", card: "headline" },
+      },
+      {
+        id: "line",
+        header: "Line",
+        cell: () => "LN-07",
+      },
+    ];
+    render(
+      <DataView
+        caption="Customers"
+        columns={columns}
+        rows={ROWS.slice(0, 1)}
+        getRowId={(row) => row.id}
+        complete
+      />,
+    );
+    const card = within(
+      screen.getByRole("list", { name: "Customers" }),
+    ).getByRole("listitem");
+    // The headline is shown without a label; other fields keep theirs.
+    expect(within(card).getByText("₹500.00")).toBeInTheDocument();
+    expect(within(card).queryByText("Amount")).not.toBeInTheDocument();
+    expect(within(card).getByText("Line")).toBeInTheDocument();
+    expect(within(card).getByText("LN-07")).toBeInTheDocument();
+  });
+});
+
+describe("FilterBar", () => {
+  it("folds the filters behind a button that says what they are set to", async () => {
+    const user = userEvent.setup();
+    render(
+      <FilterBar summary="14 to 20 Sep, all lines">
+        <FilterField label="From">
+          <Input type="date" />
+        </FilterField>
+      </FilterBar>,
+    );
+    const toggle = screen.getByRole("button", { name: /Filters/ });
+    expect(toggle).toHaveTextContent("14 to 20 Sep, all lines");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("From")).toBeInTheDocument();
   });
 });
 

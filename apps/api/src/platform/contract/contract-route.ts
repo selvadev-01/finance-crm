@@ -9,6 +9,7 @@ import {
   RequestMapping,
   RequestMethod,
   SetMetadata,
+  StreamableFile,
   UseInterceptors,
 } from '@nestjs/common';
 import {
@@ -94,6 +95,17 @@ export class ContractResponseInterceptor implements NestInterceptor {
     const schema = definition.responses[successStatus(definition)];
     return next.handle().pipe(
       map((result: unknown) => {
+        if (definition.file) {
+          // An export: bytes with their own headers, nothing to shape. Nest
+          // writes a StreamableFile itself; anything else is a handler bug.
+          if (!(result instanceof StreamableFile)) {
+            throw new InternalError(
+              'FILE_ROUTE_RETURNED_JSON',
+              `${definition.method} ${definition.path} is a file route but returned no file`,
+            );
+          }
+          return result;
+        }
         let body = result;
         if (result instanceof Replayed) {
           if (definition.replayStatus === undefined) {

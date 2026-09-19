@@ -1,24 +1,35 @@
-import { Controller } from '@nestjs/common';
+import { Controller, StreamableFile } from '@nestjs/common';
 import {
   dashboardContract as api,
+  exportContract as download,
   type RouteInput,
   type RouteSuccess,
 } from '@repo/contracts';
 import { parseCalendarDate } from '@repo/domain';
 
 import { CurrentContext, RequirePermission } from '../access/decorators.js';
+import { ExportService } from '../exports/export.service.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import {
   ContractInput,
   ContractRoute,
 } from '../platform/contract/contract-route.js';
 import { BusinessOverviewService } from './business-overview.service.js';
+import {
+  lineDocument,
+  operationsDocument,
+  overviewDocument,
+  sectorsDocument,
+} from './dashboard-exports.js';
 import { DashboardTrendService } from './dashboard-trend.service.js';
 import { LineDashboardService } from './line-dashboard.service.js';
 import { OperationsDashboardService } from './operations-dashboard.service.js';
 import { SectorComparisonService } from './sector-comparison.service.js';
 
-/** M11 Dashboards. Read-only: nothing here is audited. */
+/**
+ * M11 Dashboards. Viewing is read-only and unaudited; an export writes an
+ * `EXPORT` audit entry (M13) and nothing else.
+ */
 @Controller()
 export class DashboardController {
   constructor(
@@ -27,6 +38,7 @@ export class DashboardController {
     private readonly lines: LineDashboardService,
     private readonly sectors: SectorComparisonService,
     private readonly trend: DashboardTrendService,
+    private readonly exporter: ExportService,
   ) {}
 
   /**
@@ -115,4 +127,81 @@ export class DashboardController {
       lineId: query.lineId,
     });
   }
+
+  // ---------------------------------------------------------------- Export
+  //
+  // Each dashboard as Excel or PDF (M12): read through the same service call
+  // and permission as the screen, then rendered and recorded as an EXPORT in
+  // the audit log (M13) by `ExportService`.
+
+  @RequirePermission('money.businessTotals')
+  @ContractRoute(download.overviewDashboard)
+  async exportOverview(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    { query: { format, date } }: RouteInput<typeof download.overviewDashboard>,
+  ): Promise<StreamableFile> {
+    const overview = await this.overview.view(context, dateOf(date));
+    return this.exporter.deliver(
+      context,
+      { name: 'dashboards/overview', format, filters: { date } },
+      overviewDocument(overview),
+    );
+  }
+
+  @RequirePermission('money.businessTotals')
+  @ContractRoute(download.operationsDashboard)
+  async exportOperations(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    {
+      query: { format, date },
+    }: RouteInput<typeof download.operationsDashboard>,
+  ): Promise<StreamableFile> {
+    const dashboard = await this.operations.view(context, dateOf(date));
+    return this.exporter.deliver(
+      context,
+      { name: 'dashboards/operations', format, filters: { date } },
+      operationsDocument(dashboard),
+    );
+  }
+
+  @RequirePermission('money.sectorTotals')
+  @ContractRoute(download.sectorsDashboard)
+  async exportSectors(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    { query: { format, date } }: RouteInput<typeof download.sectorsDashboard>,
+  ): Promise<StreamableFile> {
+    const comparison = await this.sectors.view(context, dateOf(date));
+    return this.exporter.deliver(
+      context,
+      { name: 'dashboards/sectors', format, filters: { date } },
+      sectorsDocument(comparison),
+    );
+  }
+
+  @RequirePermission('money.lineTotals')
+  @ContractRoute(download.lineDashboard)
+  async exportLine(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    {
+      query: { format, date, lineId },
+    }: RouteInput<typeof download.lineDashboard>,
+  ): Promise<StreamableFile> {
+    const dashboard = await this.lines.view(context, {
+      date: dateOf(date),
+      lineId,
+    });
+    return this.exporter.deliver(
+      context,
+      { name: 'dashboards/line', format, filters: { date, lineId } },
+      lineDocument(dashboard),
+    );
+  }
+}
+
+function dateOf(date: string | undefined) {
+  return date === undefined ? undefined : parseCalendarDate(date);
 }

@@ -287,6 +287,9 @@ enum AuditAction {
   REJECT
   LOGIN
   REOPEN_DAY
+  /// A report, dashboard or list downloaded as Excel or PDF (M12). Nothing
+  /// changed: the entry records that business figures left the system.
+  EXPORT
 }
 
 /// Why a security-relevant attempt was refused (M13, `security_event`).

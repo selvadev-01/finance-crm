@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "./app-shell";
-import { AreaChart } from "./area-chart";
+import { AreaChart, keptOnPhone } from "./area-chart";
 import { formatBusinessDate, formatCurrency } from "./format";
 import { Meter, RadialMeter } from "./meter";
 
@@ -63,6 +63,18 @@ describe("AreaChart", () => {
     expect(
       screen.getByText("06 Jan 2026: Collected -₹50.00, Expected ₹1,400.00"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the first and last day labels on a phone, and every other one between", () => {
+    const kept = (count: number) =>
+      Array.from({ length: count }, (_, position) =>
+        keptOnPhone(position, count),
+      );
+    // Six labels, as at full width: 1st, 3rd, 5th and the last. The 5th
+    // crowds the last, so it goes too.
+    expect(kept(6)).toEqual([true, false, true, false, false, true]);
+    expect(kept(7)).toEqual([true, false, true, false, true, false, true]);
+    expect(kept(2)).toEqual([true, true]);
   });
 
   it("labels the value axis in rounded rupees", () => {

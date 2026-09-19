@@ -1,17 +1,24 @@
-import { Controller } from '@nestjs/common';
+import { Controller, StreamableFile } from '@nestjs/common';
 import {
   collectionContract as api,
+  exportContract as download,
   type RouteInput,
   type RouteSuccess,
 } from '@repo/contracts';
 
 import { CurrentContext, RequirePermission } from '../access/decorators.js';
+import {
+  EXPORT_PAGE_SIZE,
+  ExportService,
+  readAllPages,
+} from '../exports/export.service.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import {
   ContractInput,
   ContractRoute,
   Replayed,
 } from '../platform/contract/contract-route.js';
+import { collectionListDocument } from './collection-export.js';
 import { CollectionHistoryService } from './collection-history.service.js';
 import { CollectionService } from './collection.service.js';
 import { CorrectionService } from './correction.service.js';
@@ -25,6 +32,7 @@ export class CollectionController {
     private readonly routes: RouteService,
     private readonly history: CollectionHistoryService,
     private readonly corrections: CorrectionService,
+    private readonly exporter: ExportService,
   ) {}
 
   /** `201` when recorded now; `200` with the original body on a replay (BR-13). */
@@ -60,6 +68,31 @@ export class CollectionController {
     @ContractInput() { query }: RouteInput<typeof api.listCollections>,
   ): Promise<RouteSuccess<typeof api.listCollections>> {
     return this.history.list(context, query);
+  }
+
+  /**
+   * S-16 as Excel or PDF (M12): every entry the list's filters match, read
+   * through the list itself, and recorded as an EXPORT in the audit log (M13).
+   */
+  @RequirePermission('collection.view')
+  @ContractRoute(download.collections)
+  async exportCollections(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    { query: { format, ...filters } }: RouteInput<typeof download.collections>,
+  ): Promise<StreamableFile> {
+    const { rows } = await readAllPages((cursor) =>
+      this.history.list(context, {
+        ...filters,
+        cursor,
+        limit: EXPORT_PAGE_SIZE,
+      }),
+    );
+    return this.exporter.deliver(
+      context,
+      { name: 'collections', format, filters },
+      collectionListDocument(rows, filters, new Date()),
+    );
   }
 
   /** S-17 — the collection, its adjustments and their approvals. */

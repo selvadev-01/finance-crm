@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ExportsModule } from '../exports/exports.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { CollectionReportService } from './collection-report.service.js';
 import { DiscrepancyReportService } from './discrepancy-report.service.js';
@@ -16,7 +17,8 @@ import { ReportController } from './report.controller.js';
  */
 @Module({
   // M15: the overdue report reads `account.overdueGraceDays` (BR-05, US-094).
-  imports: [SettingsModule],
+  // M12 export: the reports as Excel and PDF.
+  imports: [SettingsModule, ExportsModule],
   controllers: [ReportController],
   providers: [
     LineWiseReportService,

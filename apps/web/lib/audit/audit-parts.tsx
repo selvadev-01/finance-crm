@@ -15,6 +15,7 @@ export const ACTION_LABEL: Record<AuditAction, string> = {
   REJECT: statusLabel("auditAction", "REJECT"),
   LOGIN: statusLabel("auditAction", "LOGIN"),
   REOPEN_DAY: statusLabel("auditAction", "REOPEN_DAY"),
+  EXPORT: statusLabel("auditAction", "EXPORT"),
 };
 
 export const TABLE_LABEL: Record<AuditedTable, string> = {
@@ -32,6 +33,8 @@ export const TABLE_LABEL: Record<AuditedTable, string> = {
   holiday: "Holiday",
   organization: "Business",
   setting: "Business setting",
+  /** Not a table: the entity id names what was exported, `reports/line-wise`. */
+  export: "Export",
 };
 
 export function tableLabel(table: string): string {

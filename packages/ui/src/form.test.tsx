@@ -94,6 +94,36 @@ describe("field messages", () => {
   });
 });
 
+describe("FormActions on a phone", () => {
+  it("knows the primary submit button as the commit, and no other", () => {
+    function Harness() {
+      const form = useZodForm(lineSchema, {
+        defaultValues: { code: "", name: "", sectorId: "" },
+      });
+      return (
+        <Form form={form} onSubmit={vi.fn()}>
+          <FormActions>
+            <SubmitButton pendingLabel="Saving…" tone="secondary">
+              Save as pending
+            </SubmitButton>
+            <SubmitButton pendingLabel="Saving…">
+              Save and disburse
+            </SubmitButton>
+          </FormActions>
+        </Form>
+      );
+    }
+    render(<Harness />);
+    // The bar gives the commit a row of its own below 640px.
+    expect(
+      screen.getByRole("button", { name: "Save and disburse" }),
+    ).toHaveAttribute("data-commit");
+    expect(
+      screen.getByRole("button", { name: "Save as pending" }),
+    ).not.toHaveAttribute("data-commit");
+  });
+});
+
 describe("Form", () => {
   it("shows an error when a required field is left empty, and replaces the hint", async () => {
     const user = userEvent.setup();

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  exportContract,
   type LineWiseReport as Report,
   type LineWiseRow as Row,
   reportContract,
@@ -24,6 +25,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { Money } from "../../../../components/money";
 import { PageTrail } from "../../../../components/page-trail";
 import { ActivityBadge } from "../../../../components/status-badge";
@@ -66,18 +68,15 @@ export function LineWiseReport({
   const criteria = reportCriteria(filters, manages);
   const { from, to, sectorId, lineId, filtered, validRange } = criteria;
 
+  const query = {
+    from,
+    to,
+    ...(sectorId ? { sectorId } : {}),
+    ...(lineId ? { lineId } : {}),
+  };
   const report = useApiQuery(
     reportContract.getLineWise,
-    allowed && validRange
-      ? {
-          query: {
-            from,
-            to,
-            ...(sectorId ? { sectorId } : {}),
-            ...(lineId ? { lineId } : {}),
-          },
-        }
-      : null,
+    allowed && validRange ? { query } : null,
   );
   if (!allowed) return <ReportNotPermitted />;
 
@@ -95,6 +94,13 @@ export function LineWiseReport({
         />
       }
       title="Line-wise report"
+      actions={
+        <ExportMenu
+          route={exportContract.lineWiseReport}
+          query={query}
+          disabled={!validRange}
+        />
+      }
       description={
         manages
           ? "Each line’s people, book and collections. Customers and amounts follow each customer’s current line; collections stay with the line they were recorded on."
@@ -355,6 +361,7 @@ function columnsFor(
         id: "collected",
         header: "Collected",
         amount: (row) => row.collections!.collected,
+        card: "headline",
       }),
       moneyColumn<Row>({
         id: "pending",

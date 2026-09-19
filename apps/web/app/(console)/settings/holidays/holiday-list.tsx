@@ -98,7 +98,7 @@ export function HolidayList({
         are told.
       </FormMessage>
 
-      <FilterBar>
+      <FilterBar summary={period === "past" ? "Past" : "Upcoming"}>
         <FilterField label="Show" width="sm">
           <Select
             value={period}
@@ -142,6 +142,7 @@ export function HolidayList({
             displayColumn<Holiday>({
               id: "scope",
               header: "Applies to",
+              card: "status",
               cell: (holiday) =>
                 holiday.sector ? (
                   <Badge tone="neutral">{holiday.sector.name}</Badge>

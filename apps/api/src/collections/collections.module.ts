@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { CashModule } from '../cash/cash.module.js';
+import { ExportsModule } from '../exports/exports.module.js';
 import { LedgerModule } from '../ledger/ledger.module.js';
 import { AccountSettlement } from './account-settlement.js';
 import { CollectionController } from './collection.controller.js';
@@ -12,7 +13,8 @@ import { RouteService } from './route.service.js';
 
 /** M07 Collections — the route, recording, replay safety. */
 @Module({
-  imports: [LedgerModule, CashModule],
+  // M12 export: the collection list (S-16) as Excel and PDF.
+  imports: [LedgerModule, CashModule, ExportsModule],
   controllers: [CollectionController],
   providers: [
     AccountSettlement,

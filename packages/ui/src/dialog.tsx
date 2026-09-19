@@ -37,8 +37,22 @@ const dialogFrame = cva("", {
       md: "w-[min(32rem,calc(100vw-2rem))]",
       lg: "w-[min(44rem,calc(100vw-2rem))]",
     },
+    /**
+     * `center` floats in the middle of the screen. `sheet` rises from the
+     * foot, full width, for the phone layout (ADR-0016): the thumb is there.
+     */
+    placement: {
+      center:
+        "m-auto max-h-[calc(100dvh-2rem)] rounded-overlay border border-border",
+      sheet:
+        "mx-auto mt-auto mb-0 max-h-[85dvh] w-full max-w-3xl rounded-t-overlay border-t border-border pb-[env(safe-area-inset-bottom)]",
+    },
   },
-  defaultVariants: { size: "md" },
+  compoundVariants: [
+    // A sheet spans the screen, whatever size the dialog asked for.
+    { placement: "sheet", className: "w-full" },
+  ],
+  defaultVariants: { size: "md", placement: "center" },
 });
 
 export interface DialogProps extends VariantProps<typeof dialogFrame> {
@@ -56,6 +70,7 @@ export function Dialog({
   title,
   description,
   size,
+  placement,
   children,
   className,
 }: DialogProps) {
@@ -105,8 +120,8 @@ export function Dialog({
       }}
       {...backdropPress}
       className={cn(
-        dialogFrame({ size }),
-        "m-auto max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-overlay border border-border bg-surface-raised p-0 text-ink shadow-overlay",
+        dialogFrame({ size, placement }),
+        "overflow-y-auto bg-surface-raised p-0 text-ink shadow-overlay",
         "open:animate-in backdrop:bg-ink/35",
         className,
       )}

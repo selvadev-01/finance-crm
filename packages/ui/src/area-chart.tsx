@@ -73,6 +73,16 @@ function showKeyLabel(index: number, count: number, every: number): boolean {
   return index % every === 0 && last - index >= Math.ceil(every / 2);
 }
 
+/**
+ * On a phone the axis has half the room, so every other label is dropped —
+ * never the first or the last, and never the one crowding the last.
+ */
+export function keptOnPhone(position: number, count: number): boolean {
+  const last = count - 1;
+  if (position === 0 || position === last) return true;
+  return position % 2 === 0 && position !== last - 1;
+}
+
 export function AreaChart({
   label,
   series,
@@ -113,6 +123,9 @@ export function AreaChart({
   const area = series.find((line) => line.variant === "area");
 
   const labelEvery = Math.max(1, Math.ceil(points.length / X_LABELS));
+  const labelled = points.flatMap((_, index) =>
+    showKeyLabel(index, points.length, labelEvery) ? [index] : [],
+  );
   const shown = active === null ? null : points[active];
 
   const pick = (event: PointerEvent<HTMLDivElement>) => {
@@ -298,8 +311,9 @@ export function AreaChart({
         {/* The day axis. */}
         <div aria-hidden />
         <div aria-hidden className="relative mt-2 h-4 text-2xs text-ink-subtle">
-          {points.map((point, index) =>
-            showKeyLabel(index, points.length, labelEvery) ? (
+          {labelled.map((index, position) => {
+            const point = points[index]!;
+            return (
               <span
                 key={point.key}
                 className={cn(
@@ -309,13 +323,14 @@ export function AreaChart({
                     : index === points.length - 1
                       ? "-translate-x-full"
                       : "-translate-x-1/2",
+                  !keptOnPhone(position, labelled.length) && "hidden sm:block",
                 )}
                 style={{ left: `${(xOf(index) / WIDTH) * 100}%` }}
               >
                 {formatKey(point.key)}
               </span>
-            ) : null,
-          )}
+            );
+          })}
         </div>
       </div>
 
@@ -340,31 +355,37 @@ export function AreaChart({
         {active === null ? "" : describe(active)}
       </p>
 
-      <table className="sr-only">
-        <caption>{label}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Day</th>
-            {series.map((line) => (
-              <th key={line.id} scope="col">
-                {line.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((point) => (
-            <tr key={point.key}>
-              <th scope="row">{formatKeyLong(point.key)}</th>
+      {/*
+       * Hidden in a wrapper, not on the table: a table ignores `width: 1px`
+       * and grows to its content, which pushed a 360px page 26px wide.
+       */}
+      <div className="sr-only">
+        <table>
+          <caption>{label}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
               {series.map((line) => (
-                <td key={line.id}>
-                  {formatValue(point.values[line.id] ?? "0")}
-                </td>
+                <th key={line.id} scope="col">
+                  {line.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((point) => (
+              <tr key={point.key}>
+                <th scope="row">{formatKeyLong(point.key)}</th>
+                {series.map((line) => (
+                  <td key={line.id}>
+                    {formatValue(point.values[line.id] ?? "0")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

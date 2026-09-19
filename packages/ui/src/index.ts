@@ -1,5 +1,6 @@
 export { ActivityList } from "./activity-list";
 export { AppShell, type SidebarMode, useSidebarMode } from "./app-shell";
+export { MobileShell } from "./mobile-shell";
 export {
   AreaChart,
   type AreaChartPoint,
@@ -7,6 +8,7 @@ export {
 } from "./area-chart";
 export { Badge, type BadgeProps } from "./badge";
 export {
+  arrowLinkClass,
   Button,
   buttonClass,
   type ButtonProps,

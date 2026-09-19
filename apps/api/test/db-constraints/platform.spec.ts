@@ -456,6 +456,61 @@ describe('platform constraints (M10, M13, M15)', () => {
         }),
       ).resolves.toBeUndefined();
     });
+
+    describe('audit_log_export_check (M12 export)', () => {
+      async function exportEntry(
+        tx: PrismaClient,
+        data: Record<string, unknown>,
+      ) {
+        const { organization } = await createLine(tx);
+        const user = await createUser(tx);
+        return tx.auditLog.create({
+          data: {
+            organizationId: organization.id,
+            actorUserId: user.id,
+            entityTable: 'export',
+            entityId: 'reports/line-wise',
+            action: 'EXPORT',
+            after: { format: 'xlsx', filters: {}, rows: 0 },
+            ...data,
+          },
+        });
+      }
+
+      it('accepts an export by a person, recording what was taken', async () => {
+        await expect(
+          withRollback(prisma, async (tx) => {
+            await exportEntry(tx, {});
+          }),
+        ).resolves.toBeUndefined();
+      });
+
+      it('rejects an EXPORT against anything but the export pseudo-table', async () => {
+        await expect(
+          withRollback(prisma, (tx) =>
+            exportEntry(tx, { entityTable: 'customer' }),
+          ),
+        ).rejects.toThrow('audit_log_export_check');
+      });
+
+      it('rejects any other action against the export pseudo-table', async () => {
+        await expect(
+          withRollback(prisma, (tx) => exportEntry(tx, { action: 'CREATE' })),
+        ).rejects.toThrow('audit_log_export_check');
+      });
+
+      it('rejects an export with no actor, or with nothing recorded', async () => {
+        await expect(
+          withRollback(prisma, (tx) => exportEntry(tx, { actorUserId: null })),
+        ).rejects.toThrow('audit_log_export_check');
+        await expect(
+          withRollback(prisma, (tx) =>
+            // Undefined omits the column, so it is written as NULL.
+            exportEntry(tx, { after: undefined }),
+          ),
+        ).rejects.toThrow('audit_log_export_check');
+      });
+    });
   });
 
   /**

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  exportContract,
   type InvestmentReport as Report,
   type InvestmentRow as Row,
   reportContract,
@@ -24,6 +25,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { PageTrail } from "../../../../components/page-trail";
 import { ActivityBadge } from "../../../../components/status-badge";
 import { formatTimestamp } from "../../../../lib/format";
@@ -68,18 +70,15 @@ export function InvestmentReport({
   const criteria = reportCriteria(filters, manages);
   const { from, to, sectorId, lineId, filtered, validRange } = criteria;
 
+  const query = {
+    from,
+    to,
+    ...(sectorId ? { sectorId } : {}),
+    ...(lineId ? { lineId } : {}),
+  };
   const report = useApiQuery(
     reportContract.getInvestment,
-    allowed && validRange
-      ? {
-          query: {
-            from,
-            to,
-            ...(sectorId ? { sectorId } : {}),
-            ...(lineId ? { lineId } : {}),
-          },
-        }
-      : null,
+    allowed && validRange ? { query } : null,
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -98,6 +97,13 @@ export function InvestmentReport({
         />
       }
       title="Investment overview"
+      actions={
+        <ExportMenu
+          route={exportContract.investmentReport}
+          query={query}
+          disabled={!validRange}
+        />
+      }
       description={
         manages
           ? "What every line was lent, and what has come back. Account amount, invested and profit are the terms each account was disbursed on; outstanding, returned and profit earned are what the ledger holds now. The two dated columns are the capital deployed and the profit recognised between the dates."
@@ -298,6 +304,7 @@ function columnsFor(
         id: "invested",
         header: "Invested",
         amount: (row) => row.position!.invested,
+        card: "headline",
       }),
       moneyColumn<Row>({
         id: "profit",

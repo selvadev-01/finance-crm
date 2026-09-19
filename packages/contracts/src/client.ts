@@ -46,6 +46,66 @@ function buildQuery(query: Record<string, unknown> | undefined): string {
   return text ? `?${text}` : "";
 }
 
+/** What a file route (`file: true`) answers: the bytes and their name, or the API's error. */
+export type DownloadResult =
+  | { ok: true; status: number; blob: Blob; filename: string }
+  | { ok: false; status: number; body: ApiError | null };
+
+/** `attachment; filename="rasi-line-wise.xlsx"` → `rasi-line-wise.xlsx`. */
+export function filenameFromDisposition(
+  header: string | null,
+  fallback: string,
+): string {
+  const match = header ? /filename="([^"]+)"/.exec(header) : null;
+  return match?.[1] ?? fallback;
+}
+
+/**
+ * Calls a file route (an export, M12). The success body is bytes, never
+ * parsed; an error is the API's JSON error body, exactly as `createApiClient`
+ * returns it.
+ */
+export async function downloadFile<Route extends RouteDefinition>(
+  options: ApiClientOptions,
+  definition: Route,
+  request: RouteRequest<Route>,
+): Promise<DownloadResult> {
+  if (!definition.file) {
+    throw new Error(`${definition.method} ${definition.path} is not a file route`);
+  }
+  const parts = request as {
+    params?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+  };
+  const url =
+    options.baseUrl +
+    buildPath(definition.path, parts.params) +
+    buildQuery(parts.query);
+  const response = await (options.fetch ?? fetch)(url, {
+    method: definition.method,
+    credentials: "include",
+  });
+  if (response.status === successStatus(definition)) {
+    return {
+      ok: true,
+      status: response.status,
+      blob: await response.blob(),
+      filename: filenameFromDisposition(
+        response.headers.get("Content-Disposition"),
+        "rasi-export",
+      ),
+    };
+  }
+  const text = await response.text();
+  let body: ApiError | null = null;
+  try {
+    body = text ? (JSON.parse(text) as ApiError) : null;
+  } catch {
+    // A proxy's HTML error page: the status is all there is to go on.
+  }
+  return { ok: false, status: response.status, body };
+}
+
 export function createApiClient(options: ApiClientOptions) {
   const doFetch = options.fetch ?? fetch;
 

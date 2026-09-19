@@ -19,10 +19,12 @@ import {
 import {
   type BusinessOverview as Overview,
   dashboardContract,
+  exportContract,
   type SectorOverview,
 } from "@repo/contracts";
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
+  arrowLinkClass,
   buttonClass,
   CodeChip,
   DetailSkeleton,
@@ -43,6 +45,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ExportMenu } from "../../../components/export-menu";
 import { LoadFailed } from "../../../components/query-state";
 import { STATUS, StatusBadge } from "../../../components/status-badge";
 import { formatPerMille, isZeroMoney, perMille } from "../../../lib/money";
@@ -129,18 +132,25 @@ export function BusinessOverview({
         ) : null
       }
       actions={
-        <FilterField label="Date" width="sm">
-          <Input
-            type="date"
-            value={shown}
-            max={today}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) return;
-              setFilter("date", value === today ? "" : value);
-            }}
+        <div className="flex flex-wrap items-end gap-2">
+          <FilterField label="Date" width="sm">
+            <Input
+              type="date"
+              value={shown}
+              max={today}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) return;
+                setFilter("date", value === today ? "" : value);
+              }}
+            />
+          </FilterField>
+          <ExportMenu
+            route={exportContract.overviewDashboard}
+            query={filters.date ? { date: filters.date } : {}}
+            disabled={future}
           />
-        </FilterField>
+        </div>
       }
     />
   );
@@ -459,15 +469,12 @@ function SectorsToday({ view }: { view: Overview }) {
           <CompareSectorsLink date={view.businessDate} />
           <Link
             href={collectionsHref(view.businessDate)}
-            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+            className={arrowLinkClass}
           >
             Collections this day
             <ArrowRight aria-hidden size={14} />
           </Link>
-          <Link
-            href="/lines"
-            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-          >
+          <Link href="/lines" className={arrowLinkClass}>
             All lines
             <ArrowRight aria-hidden size={14} />
           </Link>

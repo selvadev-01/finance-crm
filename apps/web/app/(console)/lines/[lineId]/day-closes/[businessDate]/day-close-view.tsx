@@ -230,11 +230,13 @@ export function DayCloseScreen({
                 id: "collected",
                 header: "Collected",
                 amount: (junior) => junior.collectedAmount,
+                card: "headline",
               }),
               displayColumn<Junior>({
                 id: "phone",
                 header: "Phone",
                 align: "end",
+                card: "status",
                 cell: (junior) => (
                   <StatusBadge
                     kind="sync"
@@ -289,11 +291,13 @@ export function DayCloseScreen({
                   entry.amount === null ? (
                     <span data-numeric>—</span>
                   ) : undefined,
+                card: "headline",
               }),
               displayColumn<Exception>({
                 id: "kind",
                 header: "",
                 align: "end",
+                card: "status",
                 cell: (entry) =>
                   entry.kind === "MISSED" ? (
                     <StatusBadge kind="slot" value="MISSED" />

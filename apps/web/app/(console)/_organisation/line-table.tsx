@@ -92,6 +92,7 @@ export function LineTable({
       id: "status",
       header: "Status",
       align: "end",
+      card: "status",
       cell: (line) => <ActivityBadge isActive={line.isActive} />,
     }),
   ];

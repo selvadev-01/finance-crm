@@ -156,23 +156,31 @@ export const Card = {
  * formatted by the caller (formatCurrency); this only lays it out.
  * ---------------------------------------------------------------------- */
 
-const statGrid = cva("grid", {
-  variants: {
-    columns: {
-      2: "grid-cols-1 sm:grid-cols-2",
-      3: "grid-cols-1 sm:grid-cols-3",
-      4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+/*
+ * Two figures to a row on a phone (docs/05-ux/stitch-mobile), so a strip of
+ * four is one glance rather than a screen of scrolling. An odd one out spans
+ * the row, so a ruled frame never shows an empty cell.
+ */
+const statGrid = cva(
+  "grid grid-cols-2 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1",
+  {
+    variants: {
+      columns: {
+        2: "",
+        3: "sm:grid-cols-3",
+        4: "lg:grid-cols-4",
+      },
+      frame: {
+        /** One frame, hairline dividers: a ledger's totals row. */
+        ruled:
+          "gap-px overflow-hidden rounded-surface border border-border bg-border shadow-raised",
+        /** A flat tile per figure, on the page: the dashboards' KPI row (ADR-0015). */
+        tiles: "gap-4",
+      },
     },
-    frame: {
-      /** One frame, hairline dividers: a ledger's totals row. */
-      ruled:
-        "gap-px overflow-hidden rounded-surface border border-border bg-border shadow-raised",
-      /** A flat tile per figure, on the page: the dashboards' KPI row (ADR-0015). */
-      tiles: "gap-4",
-    },
+    defaultVariants: { columns: 4, frame: "ruled" },
   },
-  defaultVariants: { columns: 4, frame: "ruled" },
-});
+);
 
 /**
  * Figures side by side, ruled like a ledger's totals row: one frame, hairline
@@ -195,8 +203,10 @@ export function StatGrid({
   );
 }
 
+// One size smaller on a phone, where a figure has half the screen's width:
+// "₹1,98,40,000.00" must fit without wrapping.
 const statValue = cva(
-  "text-title tabular-nums group-data-[frame=tiles]/stats:text-display",
+  "text-heading tabular-nums group-data-[frame=tiles]/stats:text-title sm:text-title sm:group-data-[frame=tiles]/stats:text-display",
   {
     variants: {
       tone: {

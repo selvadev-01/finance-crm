@@ -325,7 +325,14 @@ export function FormRootError({ action }: { action?: ReactNode }) {
   );
 }
 
-/** The action row at the foot of a page form: secondary first, commit last. */
+/**
+ * The action row at the foot of a page form: secondary first, commit last.
+ *
+ * On a phone it sticks to the bottom of the screen while the form scrolls
+ * (docs/05-ux/stitch-mobile), so the commit button is never below the fold of
+ * a long form. It sits on `--shell-bottom`, which the phone layout's shell sets
+ * to its tab bar's height; with no tab bar it is the screen's edge.
+ */
 export function FormActions({
   children,
   className,
@@ -337,6 +344,11 @@ export function FormActions({
     <div
       className={cn(
         "flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end",
+        "max-sm:sticky max-sm:bottom-[var(--shell-bottom,0px)] max-sm:z-10 max-sm:-mx-[var(--page-padding)] max-sm:bg-surface-raised max-sm:px-[var(--page-padding)] max-sm:pb-3",
+        // On a phone: the other actions share one row, and the commit button
+        // (`SubmitButton` in its primary tone) takes the full row below them,
+        // so the bar stays two rows high however many actions it holds.
+        "max-sm:flex-row max-sm:flex-wrap max-sm:[&>*]:min-w-0 max-sm:[&>*]:flex-1 max-sm:[&>[data-commit]]:order-last max-sm:[&>[data-commit]]:basis-full",
         className,
       )}
     >
@@ -376,6 +388,8 @@ export function SubmitButton({
       name={name}
       value={value}
       onClick={onClick}
+      // `FormActions` gives the form's one commit button a row of its own on a phone.
+      data-commit={tone === "primary" ? "" : undefined}
     >
       {isSubmitting ? pendingLabel : children}
     </Button>

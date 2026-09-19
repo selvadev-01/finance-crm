@@ -18,6 +18,10 @@ const MIN_LENGTH = 3;
 export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // apps/web top-level routes
   'accounts',
+  // The installed app's icons (ADR-0016): a folder, and a file route the
+  // folder check in the spec cannot see.
+  'apple-icon',
+  'pwa-icon',
   'cash',
   'change-password',
   'collections',

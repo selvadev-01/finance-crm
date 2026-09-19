@@ -24,14 +24,15 @@
 
 ## What is audited
 
-| Action               | Recorded                                             |
-| -------------------- | ---------------------------------------------------- |
-| `CREATE`             | Customers, accounts, staff, sectors, lines, holidays |
-| `UPDATE`             | Any change to the above, with before/after           |
-| `DELETE`             | Soft deletes; a removed future holiday (US-093)      |
-| `APPROVE` / `REJECT` | Collection corrections                               |
-| `LOGIN`              | Every sign-in, success and failure                   |
-| `REOPEN_DAY`         | Manual reopen, with reason                           |
+| Action               | Recorded                                                                                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CREATE`             | Customers, accounts, staff, sectors, lines, holidays                                                                                                                                                                                                                            |
+| `UPDATE`             | Any change to the above, with before/after                                                                                                                                                                                                                                      |
+| `DELETE`             | Soft deletes; a removed future holiday (US-093)                                                                                                                                                                                                                                 |
+| `APPROVE` / `REJECT` | Collection corrections                                                                                                                                                                                                                                                          |
+| `LOGIN`              | Every sign-in, success and failure                                                                                                                                                                                                                                              |
+| `REOPEN_DAY`         | Manual reopen, with reason                                                                                                                                                                                                                                                      |
+| `EXPORT`             | A report, dashboard or the collection list downloaded as Excel or PDF (M12): `entityTable` `export`, `entityId` the export's name, `after` its format, filters, rows and file name. Like `LOGIN`, nothing changed — it records which figures left the system, and who took them |
 
 Each entry records actor, entity table and id, action, before/after JSON, IP address, user agent and timestamp. System actions (scheduled jobs, automatic day reopen) record a null actor and are labelled as system.
 

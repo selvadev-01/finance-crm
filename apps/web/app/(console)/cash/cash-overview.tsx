@@ -143,6 +143,12 @@ export function CashOverview({
 
       <Section title="Day close">
         <FilterBar
+          summary={[
+            manages ? (lineId ? "One line" : "Choose a line") : null,
+            date ? formatBusinessDate(date) : "Choose a date",
+          ]
+            .filter(Boolean)
+            .join(", ")}
           actions={
             lineId && date ? (
               <Link

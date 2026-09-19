@@ -322,7 +322,7 @@ erDiagram
         string actorUserId FK
         string entityTable
         string entityId
-        enum action "CREATE|UPDATE|DELETE|APPROVE|REJECT|LOGIN|REOPEN_DAY"
+        enum action "CREATE|UPDATE|DELETE|APPROVE|REJECT|LOGIN|REOPEN_DAY|EXPORT"
         json before
         json after
         string ipAddress

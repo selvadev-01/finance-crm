@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { CashModule } from '../cash/cash.module.js';
+import { ExportsModule } from '../exports/exports.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { BusinessOverviewService } from './business-overview.service.js';
 import { DashboardController } from './dashboard.controller.js';
@@ -18,7 +19,8 @@ import { SectorComparisonService } from './sector-comparison.service.js';
  */
 @Module({
   // M15: the line dashboard reads `account.overdueGraceDays` (BR-05, US-094).
-  imports: [CashModule, SettingsModule],
+  // M12 export: the dashboards as Excel and PDF.
+  imports: [CashModule, SettingsModule, ExportsModule],
   controllers: [DashboardController],
   providers: [
     BusinessOverviewService,

@@ -86,7 +86,11 @@ export function TeamList({
         }
       />
 
-      <FilterBar>
+      <FilterBar
+        summary={`${role ? ROLE_LABEL[role] : "All roles"}, ${
+          status ? STATUS.staff[status].label.toLowerCase() : "any status"
+        }`}
+      >
         <FilterField label="Role" width="sm">
           <Select
             value={role ?? ""}
@@ -159,6 +163,7 @@ export function TeamList({
                 id: "status",
                 header: "Status",
                 align: "end",
+                card: "status",
                 cell: (person) => (
                   <StatusBadge kind="staff" value={person.status} />
                 ),

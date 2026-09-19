@@ -152,3 +152,4 @@ vite.config.ts.timestamp-*
 apps/offline-e2e/.fixture.json
 apps/offline-e2e/test-results/
 apps/offline-e2e/playwright-report/
+docs/05-ux/stitch-mobile/screens/*

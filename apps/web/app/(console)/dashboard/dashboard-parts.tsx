@@ -1,5 +1,5 @@
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
-import { RadialMeter, Meter as UiMeter } from "@repo/ui";
+import { arrowLinkClass, RadialMeter, Meter as UiMeter } from "@repo/ui";
 import Link from "next/link";
 
 import { formatTimestamp } from "../../../lib/format";
@@ -10,10 +10,7 @@ import { formatPerMille } from "../../../lib/money";
 /** Opens the sector comparison (US-081) for the date shown. */
 export function CompareSectorsLink({ date }: { date: string }) {
   return (
-    <Link
-      href={`/dashboard/sectors?date=${date}`}
-      className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-    >
+    <Link href={`/dashboard/sectors?date=${date}`} className={arrowLinkClass}>
       Compare sectors
       <ArrowRight aria-hidden size={14} />
     </Link>

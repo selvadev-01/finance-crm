@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:offline": "playwright test",
+    "test:layout": "playwright test --config playwright.layout.config.ts",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {

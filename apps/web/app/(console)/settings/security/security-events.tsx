@@ -27,6 +27,7 @@ import { EntityRef } from "../../../../lib/audit/audit-parts";
 import { formatTimestamp } from "../../../../lib/format";
 import { ROLE_LABEL } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
+import { filterCountSummary } from "../../../../lib/filter-summary";
 import { useListState } from "../../../../lib/use-list-state";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 
@@ -87,7 +88,7 @@ export function SecurityEvents({ initial }: { initial: SecurityFilters }) {
         aria-label="Filter the refused attempts"
         onSubmit={(event) => event.preventDefault()}
       >
-        <FilterBar>
+        <FilterBar summary={filterCountSummary(filters, "Every attempt")}>
           <FilterField label="Reason" width="md">
             <Select
               value={filters.kind}

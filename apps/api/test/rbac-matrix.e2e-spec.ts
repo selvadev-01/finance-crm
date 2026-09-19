@@ -261,6 +261,18 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /api/reports/overdue': 'report.view',
   // M12 Reports (discrepancy): BR-17's cash discrepancies, Admins and a Senior's own line.
   'GET /api/reports/discrepancy': 'report.view',
+  // M12 export: each export carries the permission of the view it exports,
+  // so no cell changes — a file never shows more than the screen.
+  'GET /api/exports/reports/line-wise': 'report.view',
+  'GET /api/exports/reports/investment': 'report.view',
+  'GET /api/exports/reports/collection': 'report.view',
+  'GET /api/exports/reports/overdue': 'report.view',
+  'GET /api/exports/reports/discrepancy': 'report.view',
+  'GET /api/exports/collections': 'collection.view',
+  'GET /api/exports/dashboards/overview': 'money.businessTotals',
+  'GET /api/exports/dashboards/operations': 'money.businessTotals',
+  'GET /api/exports/dashboards/sectors': 'money.sectorTotals',
+  'GET /api/exports/dashboards/line': 'money.lineTotals',
   // M15 Settings (US-094): the owner's alone, both halves.
   'GET /api/settings': 'settings.view',
   'PATCH /api/settings/:key': 'settings.change',

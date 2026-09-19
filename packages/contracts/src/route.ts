@@ -31,6 +31,12 @@ export interface RouteDefinition {
    * record, `200` when it had already. The client treats both as success.
    */
   replayStatus?: 200;
+  /**
+   * The success response is a file download (an export, M12), not JSON: its
+   * schema is {@link fileBodySchema} and is never parsed. Errors are still the
+   * JSON `errorSchema` body. Call it with `downloadFile`, not `createApiClient`.
+   */
+  file?: true;
 }
 
 /** Declares a route, keeping its literal types for both server and client. */

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  exportContract,
   type DiscrepancyRow as Row,
   type DiscrepancyShow,
   type DiscrepancySummary,
@@ -29,6 +30,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { Discrepancy, signedCurrency } from "../../../../components/money";
 import { PageTrail } from "../../../../components/page-trail";
 import { StatusBadge } from "../../../../components/status-badge";
@@ -95,21 +97,17 @@ export function DiscrepancyReport({
       : "unresolved"
   ) as DiscrepancyShow;
 
+  const query = {
+    from,
+    to,
+    show,
+    ...(sectorId ? { sectorId } : {}),
+    ...(lineId ? { lineId } : {}),
+    ...(junior ? { collectedByUserId: junior } : {}),
+  };
   const report = usePagedQuery(
     reportContract.getDiscrepancy,
-    allowed && validRange
-      ? {
-          query: {
-            limit: LIST_LIMIT,
-            from,
-            to,
-            show,
-            ...(sectorId ? { sectorId } : {}),
-            ...(lineId ? { lineId } : {}),
-            ...(junior ? { collectedByUserId: junior } : {}),
-          },
-        }
-      : null,
+    allowed && validRange ? { query: { limit: LIST_LIMIT, ...query } } : null,
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -194,6 +192,13 @@ export function DiscrepancyReport({
           />
         }
         title="Cash discrepancies"
+        actions={
+          <ExportMenu
+            route={exportContract.discrepancyReport}
+            query={query}
+            disabled={!validRange}
+          />
+        }
         description={
           manages
             ? "What each Junior collected against the cash they counted out, day by day (BR-17). Open a row for the handover and its denomination count."
@@ -398,11 +403,13 @@ function columnsFor(manages: boolean): DataViewColumn<Row>[] {
         ) : (
           <Discrepancy amount={row.cash.difference} />
         ),
+      card: "headline",
     }),
     displayColumn<Row>({
       id: "state",
       header: "Cash",
       align: "end",
+      card: "status",
       cell: (row) =>
         row.cash === null ? (
           <Unknown />

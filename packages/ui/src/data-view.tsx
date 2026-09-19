@@ -4,6 +4,8 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowsDownUp,
+  CaretDown,
+  SlidersHorizontal,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   type ColumnDef,
@@ -34,6 +36,12 @@ declare module "@tanstack/react-table" {
     align?: "start" | "end";
     /** Left out of the card a row becomes below 768px. */
     hideOnCard?: boolean;
+    /**
+     * Where the cell sits on that card. `headline`: the row's key amount,
+     * large, beside the identity. `status`: its badge, under the headline.
+     * Anything else goes in the two-column grid below.
+     */
+    card?: "headline" | "status";
   }
 }
 
@@ -203,33 +211,78 @@ export function DataView<Row>({
         ) : null}
       </div>
 
+      {/*
+       * The phone card (docs/05-ux/stitch-mobile): the identity with the
+       * headline amount and status beside it, then the other fields as small
+       * label-over-value pairs, two to a row, so a screen holds several.
+       */}
       <ul aria-label={caption} className="flex flex-col gap-2 md:hidden">
         {tableRows.map((row) => {
           const [identity, ...rest] = row.getVisibleCells();
+          const shown = rest.filter(
+            (cell) => !cell.column.columnDef.meta?.hideOnCard,
+          );
+          const headline = shown.filter(
+            (cell) => cell.column.columnDef.meta?.card === "headline",
+          );
+          const status = shown.filter(
+            (cell) => cell.column.columnDef.meta?.card === "status",
+          );
+          const details = shown.filter(
+            (cell) => !cell.column.columnDef.meta?.card,
+          );
+          const aside = [...headline, ...status];
           return (
             <li
               key={row.id}
-              className={cn("flex flex-col gap-2 p-4", surface, linkedRow)}
+              className={cn("flex flex-col gap-3 p-3.5", surface, linkedRow)}
             >
-              {identity ? (
-                <div className="text-body">
-                  {flexRender(
-                    identity.column.columnDef.cell,
-                    identity.getContext(),
-                  )}
-                </div>
-              ) : null}
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
-                {rest
-                  .filter((cell) => !cell.column.columnDef.meta?.hideOnCard)
-                  .map((cell) => {
+              <div className="flex items-start justify-between gap-3">
+                {identity ? (
+                  <div className="min-w-0 text-body">
+                    {flexRender(
+                      identity.column.columnDef.cell,
+                      identity.getContext(),
+                    )}
+                  </div>
+                ) : null}
+                {aside.length > 0 ? (
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {headline.map((cell) => (
+                      <div
+                        key={cell.id}
+                        className="text-heading text-ink tabular-nums"
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </div>
+                    ))}
+                    {status.map((cell) => (
+                      <div key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {details.length > 0 ? (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border pt-3">
+                  {details.map((cell) => {
                     const header = cell.column.columnDef.header;
                     return (
-                      <div key={cell.id} className="contents">
-                        <dt className="text-ink-muted">
+                      <div
+                        key={cell.id}
+                        className="flex min-w-0 flex-col gap-0.5"
+                      >
+                        <dt className="text-caption text-ink-subtle">
                           {typeof header === "string" ? header : cell.column.id}
                         </dt>
-                        <dd className="flex justify-end text-right text-ink tabular-nums">
+                        <dd className="min-w-0 text-body break-words text-ink tabular-nums">
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext(),
@@ -238,7 +291,8 @@ export function DataView<Row>({
                       </div>
                     );
                   })}
-              </dl>
+                </dl>
+              ) : null}
             </li>
           );
         })}
@@ -250,21 +304,71 @@ export function DataView<Row>({
 
 /**
  * The controls above a list, in a light framed panel. Filters sit left and
- * wrap on a narrow screen; `actions` (a clear-filters link, an export) sit
- * right, level with the controls.
+ * wrap; `actions` (a clear-filters link, an export) sit right, level with the
+ * controls.
+ *
+ * Below 768px the filters fold behind a "Filters" button, so the first
+ * records are on the first screen of a phone (docs/05-ux/stitch-mobile).
+ * `summary` says what they are set to while folded — "14 to 20 Sep, all
+ * lines" — so nobody has to open them to know what the list shows.
  */
 export function FilterBar({
   children,
   actions,
+  summary,
 }: {
   children?: ReactNode;
   actions?: ReactNode;
+  summary?: ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   return (
-    <div className="flex flex-wrap items-end gap-x-3 gap-y-3 rounded-surface border border-border bg-surface-raised p-3 shadow-raised">
-      {children}
+    <div className="flex flex-col gap-3 rounded-surface border border-border bg-surface-raised p-3 shadow-raised md:flex-row md:flex-wrap md:items-end">
+      {children ? (
+        <div className="flex items-center gap-2 md:hidden">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen((was) => !was)}
+            className="flex min-h-[var(--control-height)] min-w-0 flex-1 items-center gap-2 rounded-control text-left text-label text-ink"
+          >
+            <SlidersHorizontal aria-hidden size={18} className="shrink-0" />
+            <span className="flex min-w-0 flex-col">
+              <span>Filters</span>
+              {summary ? (
+                <span className="truncate text-caption text-ink-muted">
+                  {summary}
+                </span>
+              ) : null}
+            </span>
+            <CaretDown
+              aria-hidden
+              size={14}
+              className={cn(
+                "ml-auto shrink-0 text-ink-subtle transition-transform motion-reduce:transition-none",
+                open && "rotate-180",
+              )}
+            />
+          </button>
+        </div>
+      ) : null}
+      {children ? (
+        <div
+          id={panelId}
+          className={cn(
+            // From 768px the wrapper dissolves, so the filters sit in the
+            // panel's own row beside the actions, as before.
+            "flex-wrap items-end gap-x-3 gap-y-3 md:contents",
+            open ? "flex" : "hidden",
+          )}
+        >
+          {children}
+        </div>
+      ) : null}
       {actions ? (
-        <div className="ml-auto flex min-h-[var(--control-height)] items-center gap-2">
+        <div className="flex min-h-[var(--control-height)] flex-wrap items-center gap-2 md:ml-auto">
           {actions}
         </div>
       ) : null}

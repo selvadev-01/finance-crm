@@ -12,11 +12,13 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   dashboardContract,
+  exportContract,
   type LineDashboard as Dashboard,
   type WatchedAccount,
 } from "@repo/contracts";
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
+  arrowLinkClass,
   Badge,
   buttonClass,
   DataView,
@@ -45,6 +47,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../components/columns";
+import { ExportMenu } from "../../../components/export-menu";
 import { Discrepancy, signedCurrency } from "../../../components/money";
 import { LoadFailed } from "../../../components/query-state";
 import { StatusBadge } from "../../../components/status-badge";
@@ -134,6 +137,15 @@ export function LineDashboard({ date }: { date: string | undefined }) {
               }}
             />
           </FilterField>
+          {view ? (
+            <ExportMenu
+              route={exportContract.lineDashboard}
+              query={{
+                lineId: view.line.lineId,
+                ...(date ? { date } : {}),
+              }}
+            />
+          ) : null}
           {view ? (
             <Link
               href={`/lines/${view.line.lineId}/day-closes/${view.businessDate}`}
@@ -316,10 +328,7 @@ function LineHealth({ view, day }: { view: LineView; day: Day | null }) {
           }
         />
         <HealthCard.Detail>
-          <Link
-            href="/collections/pending-approval"
-            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-          >
+          <Link href="/collections/pending-approval" className={arrowLinkClass}>
             {approvals === null
               ? "Pending approvals"
               : approvals.awaitingYou > 0
@@ -453,11 +462,13 @@ function JuniorsToday({ juniors }: { juniors: Junior[] }) {
               id: "collected",
               header: "Collected",
               amount: (junior) => junior.collectedAmount,
+              card: "headline",
             }),
             displayColumn<Junior>({
               id: "phone",
               header: "Phone sync",
               align: "end",
+              card: "status",
               cell: (junior) => (
                 <span className="inline-flex flex-col items-end gap-0.5">
                   <StatusBadge
@@ -508,7 +519,7 @@ function NeedsALook({ view, day }: { view: LineView; day: Day }) {
           ) : approvals.total > 0 ? (
             <Link
               href="/collections/pending-approval"
-              className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+              className={arrowLinkClass}
             >
               {approvals.total}{" "}
               {approvals.total === 1 ? "correction" : "corrections"} waiting
@@ -554,6 +565,7 @@ function NeedsALook({ view, day }: { view: LineView; day: Day }) {
               amount: (entry) => entry.amount ?? "0",
               render: (entry) =>
                 entry.amount === null ? <span data-numeric>—</span> : undefined,
+              card: "headline",
             }),
             moneyColumn<Exception>({
               id: "variance",
@@ -567,6 +579,7 @@ function NeedsALook({ view, day }: { view: LineView; day: Day }) {
               id: "kind",
               header: "Classification",
               align: "end",
+              card: "status",
               cell: (entry) =>
                 entry.kind === "MISSED" ? (
                   <StatusBadge kind="slot" value="MISSED" />
@@ -662,6 +675,7 @@ function WatchList({
                 id: "outstanding",
                 header: "Outstanding",
                 amount: (account) => account.outstanding,
+                card: "headline",
               }),
               kind === "overdue"
                 ? valueColumn<WatchedAccount>({

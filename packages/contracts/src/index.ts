@@ -25,6 +25,7 @@ export * from "./client.js";
 export * from "./collection.contract.js";
 export * from "./customer.contract.js";
 export * from "./dashboard.contract.js";
+export * from "./export.contract.js";
 export * from "./holiday.contract.js";
 export * from "./notification.contract.js";
 export * from "./organisation.contract.js";

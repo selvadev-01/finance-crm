@@ -68,7 +68,7 @@ export function CustomerList({
       />
 
       {manages ? (
-        <FilterBar>
+        <FilterBar summary={filters.line ? "One line" : "All lines"}>
           <LineFilter
             value={filters.line}
             onChange={(value) => setFilter("line", value)}
@@ -107,6 +107,7 @@ export function CustomerList({
                 id: "status",
                 header: "Status",
                 align: "end",
+                card: "status",
                 cell: (customer) => (
                   <StatusBadge kind="customer" value={customer.status} />
                 ),

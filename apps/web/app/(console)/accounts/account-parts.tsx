@@ -93,6 +93,7 @@ export function CustomerAccounts({
             id: "status",
             header: "Status",
             cell: (account) => <AccountStatusBadge account={account} />,
+            card: "status",
           }),
           moneyColumn<Account>({
             id: "amount",
@@ -103,6 +104,7 @@ export function CustomerAccounts({
             id: "outstanding",
             header: "Outstanding",
             amount: (account) => account.outstandingAmount,
+            card: "headline",
           }),
           valueColumn<Account>({
             id: "target",

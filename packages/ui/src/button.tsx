@@ -67,6 +67,14 @@ export function buttonClass(
   return cn(button({ tone, size }), className);
 }
 
+/**
+ * A standalone "Open day close →" link at the foot of a card or a section.
+ * Its padding is cancelled by an equal negative margin, so the text sits where
+ * it would but the tap target is 44px tall — a thumb finds it on a phone.
+ */
+export const arrowLinkClass =
+  "-my-[0.8125rem] inline-flex items-center gap-1 py-[0.8125rem] text-label text-accent underline-offset-4 hover:underline";
+
 export function Button({ tone, size, className, type, ...props }: ButtonProps) {
   return (
     <button

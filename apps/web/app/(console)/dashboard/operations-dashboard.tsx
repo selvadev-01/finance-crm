@@ -21,6 +21,7 @@ import {
 import {
   type AttentionItem,
   dashboardContract,
+  exportContract,
   type LineToday,
   type OperationsDashboard as Dashboard,
   type SectorToday,
@@ -28,6 +29,7 @@ import {
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
   ActivityList,
+  arrowLinkClass,
   Badge,
   buttonClass,
   Card,
@@ -60,6 +62,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../components/columns";
+import { ExportMenu } from "../../../components/export-menu";
 import { Discrepancy, Money } from "../../../components/money";
 import { LoadFailed } from "../../../components/query-state";
 import { StatusBadge } from "../../../components/status-badge";
@@ -132,20 +135,27 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
         ) : null
       }
       actions={
-        <FilterField label="Date" width="sm">
-          <Input
-            type="date"
-            value={shown}
-            max={today}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) return;
-              router.push(
-                value === today ? "/dashboard" : `/dashboard?date=${value}`,
-              );
-            }}
+        <div className="flex flex-wrap items-end gap-2">
+          <FilterField label="Date" width="sm">
+            <Input
+              type="date"
+              value={shown}
+              max={today}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) return;
+                router.push(
+                  value === today ? "/dashboard" : `/dashboard?date=${value}`,
+                );
+              }}
+            />
+          </FilterField>
+          <ExportMenu
+            route={exportContract.operationsDashboard}
+            query={date ? { date } : {}}
+            disabled={future}
           />
-        </FilterField>
+        </div>
       }
     />
   );
@@ -516,10 +526,7 @@ function NeedsAttention({
                       meta={row.detail}
                     />
                     <ActivityList.Aside>
-                      <Link
-                        href={row.href}
-                        className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-                      >
+                      <Link href={row.href} className={arrowLinkClass}>
                         {row.action}
                         <ArrowRight aria-hidden size={14} />
                       </Link>
@@ -638,11 +645,13 @@ function LinesToday({ view }: { view: Dashboard }) {
               header: "Collected / expected",
               amount: (line) => line.collected,
               render: (line) => <LineProgress line={line} />,
+              card: "headline",
             }),
             displayColumn<LineToday>({
               id: "status",
               header: "Day",
               align: "end",
+              card: "status",
               cell: (line) =>
                 line.day.kind !== "WORKING" ? (
                   <StatusBadge kind="dayKind" value={line.day.kind} />
@@ -743,6 +752,7 @@ function SectorsToday({
               id: "collected",
               header: "Collected",
               amount: (sector) => sector.collected,
+              card: "headline",
             }),
           ]}
         />

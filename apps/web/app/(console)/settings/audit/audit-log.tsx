@@ -33,6 +33,7 @@ import {
 } from "../../../../lib/audit/audit-parts";
 import { formatTimestamp } from "../../../../lib/format";
 import { useApiQuery } from "../../../../lib/use-api-query";
+import { filterCountSummary } from "../../../../lib/filter-summary";
 import { useListState } from "../../../../lib/use-list-state";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 
@@ -92,7 +93,7 @@ export function AuditLog({ initial }: { initial: AuditFilters }) {
         aria-label="Filter the audit log"
         onSubmit={(event) => event.preventDefault()}
       >
-        <FilterBar>
+        <FilterBar summary={filterCountSummary(filters, "Every entry")}>
           <FilterField label="Action" width="sm">
             <Select
               value={filters.action}

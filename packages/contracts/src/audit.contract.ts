@@ -30,6 +30,8 @@ export const AUDITED_TABLES = [
   "holiday",
   "organization",
   "setting",
+  /** Not a table: a report, dashboard or list downloaded (M12), action `EXPORT`. */
+  "export",
 ] as const;
 
 export const auditActionSchema = z.enum([
@@ -40,6 +42,8 @@ export const auditActionSchema = z.enum([
   "REJECT",
   "LOGIN",
   "REOPEN_DAY",
+  /** Business figures downloaded as Excel or PDF; nothing changed (M12). */
+  "EXPORT",
 ]);
 
 const snapshotSchema = z.record(z.string(), z.unknown()).nullable();

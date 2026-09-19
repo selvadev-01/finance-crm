@@ -145,6 +145,12 @@ export function LineList({
 
       {manages ? (
         <FilterBar
+          summary={
+            (sectorId && sectors.status === "ready"
+              ? (sectors.data.data.find((sector) => sector.id === sectorId)
+                  ?.name ?? "One sector")
+              : "All sectors") + (showInactive ? ", inactive shown" : "")
+          }
           actions={
             <ShowInactiveToggle
               checked={showInactive}

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  exportContract,
   type OverdueAccount as Row,
   type OverdueSort,
   type OverdueSummary,
@@ -29,6 +30,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../../components/columns";
+import { ExportMenu } from "../../../../components/export-menu";
 import { PageTrail } from "../../../../components/page-trail";
 import { formatTimestamp } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
@@ -43,6 +45,7 @@ import {
   ReportNotPermitted,
   ReportScopeFilters,
   reportScope,
+  scopeSummary,
 } from "../report-parts";
 
 /**
@@ -99,19 +102,15 @@ export function OverdueReport({
   ) as OverdueSort;
   const narrowed = filtered || minDaysOverdue !== "";
 
+  const query = {
+    sort,
+    ...(sectorId ? { sectorId } : {}),
+    ...(lineId ? { lineId } : {}),
+    ...(minDaysOverdue ? { minDaysOverdue } : {}),
+  };
   const report = usePagedQuery(
     reportContract.getOverdue,
-    allowed
-      ? {
-          query: {
-            limit: LIST_LIMIT,
-            sort,
-            ...(sectorId ? { sectorId } : {}),
-            ...(lineId ? { lineId } : {}),
-            ...(minDaysOverdue ? { minDaysOverdue } : {}),
-          },
-        }
-      : null,
+    allowed ? { query: { limit: LIST_LIMIT, ...query } } : null,
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -132,6 +131,9 @@ export function OverdueReport({
           />
         }
         title="Overdue accounts"
+        actions={
+          <ExportMenu route={exportContract.overdueReport} query={query} />
+        }
         description={
           manages
             ? "Accounts still being collected past their target completion date (BR-05). “Behind” is every collection day’s shortfall; a Sunday or a holiday is not a collection day."
@@ -149,7 +151,17 @@ export function OverdueReport({
         }
       />
 
-      <FilterBar>
+      <FilterBar
+        summary={[
+          manages ? scopeSummary(sectorId, lineId) : null,
+          minDaysOverdue
+            ? `${minDaysOverdue}+ days overdue`
+            : "any days overdue",
+          SORTS.find((option) => option.value === sort)?.label.toLowerCase(),
+        ]
+          .filter(Boolean)
+          .join(", ")}
+      >
         {manages ? (
           <ReportScopeFilters
             sectorId={sectorId}
@@ -363,11 +375,13 @@ function columnsFor(manages: boolean): DataViewColumn<Row>[] {
       align: "end",
       value: (row) => row.daysOverdue,
       cell: (row) => <DaysOverdue days={row.daysOverdue} />,
+      card: "status",
     }),
     moneyColumn<Row>({
       id: "outstanding",
       header: "Outstanding",
       amount: (row) => row.outstanding,
+      card: "headline",
     }),
     moneyColumn<Row>({
       id: "arrears",

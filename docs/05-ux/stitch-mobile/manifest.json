@@ -1,0 +1,346 @@
+[
+  {
+    "id": "S-30",
+    "slug": "sign-in",
+    "role": "all",
+    "title": "S-30 Sign In",
+    "screen": "projects/12354143998208125224/screens/2d34a85322c047c98757875b6d22952e",
+    "file": "screens/s-30-sign-in.png"
+  },
+  {
+    "id": "US-006",
+    "slug": "sign-up",
+    "role": "super-admin",
+    "title": "US-006 Set up your business",
+    "screen": "projects/12354143998208125224/screens/afbc54f248cd433b9696c618eb45e91a",
+    "file": "screens/us-006-sign-up.png"
+  },
+  {
+    "id": "US-003",
+    "slug": "change-password",
+    "role": "all",
+    "title": "US-003 Choose a New Password",
+    "screen": "projects/12354143998208125224/screens/79e235d471d345e593584b1bbe652b01",
+    "file": "screens/us-003-change-password.png"
+  },
+  {
+    "id": "NAV-SA",
+    "slug": "more-super-admin",
+    "role": "super-admin",
+    "title": "NAV-SA Super Admin More",
+    "screen": "projects/12354143998208125224/screens/4a6e3c9ba2c3486bbb3a1b4a6876b9ce",
+    "file": "screens/nav-sa-more-super-admin.png"
+  },
+  {
+    "id": "NAV-AD",
+    "slug": "more-admin",
+    "role": "admin",
+    "title": "NAV-AD Admin More",
+    "screen": "projects/12354143998208125224/screens/c8f1a270d21f4011a9dbbe39cbf34b79",
+    "file": "screens/nav-ad-more-admin.png"
+  },
+  {
+    "id": "NAV-SR",
+    "slug": "more-senior",
+    "role": "senior",
+    "title": "NAV-SR Senior More",
+    "screen": "projects/12354143998208125224/screens/e01eaf2f24a74e09a37f6d925ed54cbf",
+    "file": "screens/nav-sr-more-senior.png"
+  },
+  {
+    "id": "S-07",
+    "slug": "business-overview",
+    "role": "super-admin",
+    "title": "S-07 Super Admin Business overview",
+    "screen": "projects/12354143998208125224/screens/1fc447fe879f443ab8ea5c596e79435d",
+    "file": "screens/s-07-business-overview.png"
+  },
+  {
+    "id": "S-07b",
+    "slug": "sector-comparison",
+    "role": "super-admin",
+    "title": "S-07b Sector comparison",
+    "screen": "projects/12354143998208125224/screens/9a16b35115d24d38aacd0a5556fb0300",
+    "file": "screens/s-07b-sector-comparison.png"
+  },
+  {
+    "id": "S-20",
+    "slug": "admin-today",
+    "role": "admin",
+    "title": "S-20 Admin Today Dashboard",
+    "screen": "projects/12354143998208125224/screens/86c46e689326445da326895750356ccc",
+    "file": "screens/s-20-admin-today.png"
+  },
+  {
+    "id": "S-19",
+    "slug": "senior-my-line",
+    "role": "senior",
+    "title": "S-19 Senior My line dashboard",
+    "screen": "projects/12354143998208125224/screens/ed52a4e11ff74422b7579dbded805f4c",
+    "file": "screens/s-19-senior-my-line.png"
+  },
+  {
+    "id": "S-08",
+    "slug": "customer-list",
+    "role": "admin",
+    "title": "S-08 Customers list",
+    "screen": "projects/12354143998208125224/screens/e808627aa0994c3e8d31756191466a48",
+    "file": "screens/s-08-customer-list.png"
+  },
+  {
+    "id": "S-09",
+    "slug": "customer-360",
+    "role": "admin",
+    "title": "S-09 Customer 360",
+    "screen": "projects/12354143998208125224/screens/a1faf4cadf0741dcb38d573cefcd99b8",
+    "file": "screens/s-09-customer-360.png"
+  },
+  {
+    "id": "S-10",
+    "slug": "new-customer",
+    "role": "admin",
+    "title": "S-10 New Customer Form",
+    "screen": "projects/12354143998208125224/screens/10e8321945ea4858b36f2dac121f2515",
+    "file": "screens/s-10-new-customer.png"
+  },
+  {
+    "id": "S-04",
+    "slug": "new-account",
+    "role": "admin",
+    "title": "S-04 New account form",
+    "screen": "projects/12354143998208125224/screens/7270d7a5375245d48eb0c5d976fe514e",
+    "file": "screens/s-04-new-account.png"
+  },
+  {
+    "id": "S-04b",
+    "slug": "new-account-mid-term",
+    "role": "admin",
+    "title": "S-04b New Mid-term Account",
+    "screen": "projects/12354143998208125224/screens/30696e7365c84cbea41d101da5c9d4fb",
+    "file": "screens/s-04b-new-account-mid-term.png"
+  },
+  {
+    "id": "S-11",
+    "slug": "account-detail",
+    "role": "admin",
+    "title": "S-11 Account Detail",
+    "screen": "projects/12354143998208125224/screens/a4dbcb724d8c481db881370646e90410",
+    "file": "screens/s-11-account-detail.png"
+  },
+  {
+    "id": "S-13",
+    "slug": "sectors",
+    "role": "admin",
+    "title": "S-13 Sectors",
+    "screen": "projects/12354143998208125224/screens/a538096b54a64b1597873c9e5e641b52",
+    "file": "screens/s-13-sectors.png"
+  },
+  {
+    "id": "S-12",
+    "slug": "lines",
+    "role": "admin",
+    "title": "S-12 Lines list",
+    "screen": "projects/12354143998208125224/screens/8d230fd619524b41a1f5a3a34fe3383b",
+    "file": "screens/s-12-lines.png"
+  },
+  {
+    "id": "S-12b",
+    "slug": "line-detail",
+    "role": "admin",
+    "title": "S-12b Line Detail",
+    "screen": "projects/12354143998208125224/screens/705a41ff9aaf4b478e7734857b546d19",
+    "file": "screens/s-12b-line-detail.png"
+  },
+  {
+    "id": "S-14",
+    "slug": "team",
+    "role": "admin",
+    "title": "S-14 Team list",
+    "screen": "projects/12354143998208125224/screens/8b2380dfb76c40749628b17980f4e4e2",
+    "file": "screens/s-14-team.png"
+  },
+  {
+    "id": "S-14b",
+    "slug": "add-staff-password",
+    "role": "admin",
+    "title": "S-14b Staff Created",
+    "screen": "projects/12354143998208125224/screens/f740dcf5853f42dc8028c028e40a08f8",
+    "file": "screens/s-14b-add-staff-password.png"
+  },
+  {
+    "id": "S-15",
+    "slug": "staff-detail-assign",
+    "role": "admin",
+    "title": "S-15 Staff Detail & Assign Sheet",
+    "screen": "projects/12354143998208125224/screens/bbd14a90a6c54a27b9524a767d193655",
+    "file": "screens/s-15-staff-detail-assign.png"
+  },
+  {
+    "id": "S-16",
+    "slug": "collections",
+    "role": "admin",
+    "title": "S-16 Collections list",
+    "screen": "projects/12354143998208125224/screens/2c9054ba5f9f41cbaf5efe3b75600910",
+    "file": "screens/s-16-collections.png"
+  },
+  {
+    "id": "S-17",
+    "slug": "collection-detail",
+    "role": "senior",
+    "title": "S-17 Collection Detail",
+    "screen": "projects/12354143998208125224/screens/42bb518398ea4d0ba0da4238333a9943",
+    "file": "screens/s-17-collection-detail.png"
+  },
+  {
+    "id": "S-18",
+    "slug": "pending-approvals",
+    "role": "admin",
+    "title": "S-18 Pending approvals",
+    "screen": "projects/12354143998208125224/screens/16ad7afe430549cdbd4fd1cb122925de",
+    "file": "screens/s-18-pending-approvals.png"
+  },
+  {
+    "id": "CASH",
+    "slug": "cash-senior",
+    "role": "senior",
+    "title": "S-21 Senior Cash",
+    "screen": "projects/12354143998208125224/screens/25c762bd330144ffafae4fee7f0078e4",
+    "file": "screens/cash-cash-senior.png"
+  },
+  {
+    "id": "S-05",
+    "slug": "day-close",
+    "role": "senior",
+    "title": "S-05 Day close",
+    "screen": "projects/12354143998208125224/screens/d7da9dc85514427f8359129a24e75f42",
+    "file": "screens/s-05-day-close.png"
+  },
+  {
+    "id": "S-21",
+    "slug": "notifications",
+    "role": "admin",
+    "title": "S-21 Notifications",
+    "screen": "projects/12354143998208125224/screens/38338dc366874052878e4661a237ca35",
+    "file": "screens/s-21-notifications.png"
+  },
+  {
+    "id": "S-22",
+    "slug": "reports-index",
+    "role": "admin",
+    "title": "S-22 Reports",
+    "screen": "projects/12354143998208125224/screens/5033a03966564327a0cc595d1ad2fecf",
+    "file": "screens/s-22-reports-index.png"
+  },
+  {
+    "id": "S-22a",
+    "slug": "report-line-wise",
+    "role": "senior",
+    "title": "S-22a Line-wise Report",
+    "screen": "projects/12354143998208125224/screens/9c8e0b1438504d1984bd57e40a6c067f",
+    "file": "screens/s-22a-report-line-wise.png"
+  },
+  {
+    "id": "S-24",
+    "slug": "report-overdue",
+    "role": "admin",
+    "title": "S-24 Overdue accounts",
+    "screen": "projects/12354143998208125224/screens/f664fd45ca2149bfa686d9b6233e0e45",
+    "file": "screens/s-24-report-overdue.png"
+  },
+  {
+    "id": "S-25",
+    "slug": "report-discrepancy",
+    "role": "admin",
+    "title": "S-25 Discrepancy report",
+    "screen": "projects/12354143998208125224/screens/3d62e53c99984867a48e0ace7ff5a071",
+    "file": "screens/s-25-report-discrepancy.png"
+  },
+  {
+    "id": "S-27",
+    "slug": "holidays",
+    "role": "admin",
+    "title": "S-27 Holidays",
+    "screen": "projects/12354143998208125224/screens/d66e4e59e1ac437798ed79daaabdef61",
+    "file": "screens/s-27-holidays.png"
+  },
+  {
+    "id": "S-28",
+    "slug": "business-settings",
+    "role": "super-admin",
+    "title": "S-28 Business settings",
+    "screen": "projects/12354143998208125224/screens/99f84887650b429ebe781a01b56c1422",
+    "file": "screens/s-28-business-settings.png"
+  },
+  {
+    "id": "S-29",
+    "slug": "audit-log",
+    "role": "admin",
+    "title": "S-29 Audit log",
+    "screen": "projects/12354143998208125224/screens/f01afc9d74944dcabcca5da2efb0ee73",
+    "file": "screens/s-29-audit-log.png"
+  },
+  {
+    "id": "S-31",
+    "slug": "refused-attempts",
+    "role": "admin",
+    "title": "S-31 Refused attempts",
+    "screen": "projects/12354143998208125224/screens/e2a9581e2703419b9cdba638fe027b8f",
+    "file": "screens/s-31-refused-attempts.png"
+  },
+  {
+    "id": "OFFLINE-C",
+    "slug": "console-offline",
+    "role": "senior",
+    "title": "OFFLINE-C Senior My line (Offline)",
+    "screen": "projects/12354143998208125224/screens/110497d708fe465b93f216458342dfbe",
+    "file": "screens/offline-c-console-offline.png"
+  },
+  {
+    "id": "S-01",
+    "slug": "junior-route",
+    "role": "junior",
+    "title": "S-01 Junior Home - Today's Route",
+    "screen": "projects/12354143998208125224/screens/5db1b57ada8945b2ba67daa2f78b0a09",
+    "file": "screens/s-01-junior-route.png"
+  },
+  {
+    "id": "S-01e",
+    "slug": "junior-route-holiday",
+    "role": "junior",
+    "title": "S-01e Junior Route (Holiday)",
+    "screen": "projects/12354143998208125224/screens/9b4a1bb1d0d04f1a947f2cba6df000e9",
+    "file": "screens/s-01e-junior-route-holiday.png"
+  },
+  {
+    "id": "S-02",
+    "slug": "junior-record-collection",
+    "role": "junior",
+    "title": "S-02 Junior Record Collection",
+    "screen": "projects/12354143998208125224/screens/1d3d06626ffe415bbbcb514472a72ff4",
+    "file": "screens/s-02-junior-record-collection.png"
+  },
+  {
+    "id": "S-03",
+    "slug": "junior-sync",
+    "role": "junior",
+    "title": "S-03 Junior Sync",
+    "screen": "projects/12354143998208125224/screens/0606be58a48348e9b93300a1960205f9",
+    "file": "screens/s-03-junior-sync.png"
+  },
+  {
+    "id": "S-06",
+    "slug": "junior-handover",
+    "role": "junior",
+    "title": "S-06 Junior Hand over cash",
+    "screen": "projects/12354143998208125224/screens/2e5507d4b5844661943f65c6ece53e14",
+    "file": "screens/s-06-junior-handover.png"
+  },
+  {
+    "id": "S-21J",
+    "slug": "junior-notifications",
+    "role": "junior",
+    "title": "S-21J Junior Notifications",
+    "screen": "projects/12354143998208125224/screens/90c4ee366dc541e6ad9afa0d1dab6659",
+    "file": "screens/s-21j-junior-notifications.png"
+  }
+]
