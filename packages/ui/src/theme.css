@@ -37,6 +37,9 @@
   --color-surface-raised: oklch(100% 0 0);
   --color-surface-sunken: oklch(96.3% 0.009 190);
   --color-surface-overlay: oklch(100% 0 0);
+  /* The console sidebar: a layer a step below the page, so the current item's
+   * tab — drawn in `surface` — reads as part of the page (ADR-0015). */
+  --color-surface-nav: oklch(95% 0.014 192);
   --color-border: oklch(91.5% 0.012 195);
   /* Input and control outlines: 3:1 against white (WCAG 1.4.11). */
   --color-border-strong: oklch(64% 0.02 205);
@@ -134,6 +137,10 @@
   --radius-surface: 0.75rem;
   --radius-overlay: 1rem;
   --radius-pill: 9999px;
+  /* Icon tiles: the 36px nav tiles and the dashboard's tinted icon squares. */
+  --radius-tile: 0.625rem;
+  /* The current nav item's tab, where it joins the page (ADR-0015). */
+  --radius-nav: 1rem;
 
   --shadow-raised: 0 1px 2px oklch(25% 0.025 225 / 0.05);
   --shadow-popover:

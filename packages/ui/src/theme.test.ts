@@ -23,6 +23,12 @@ const PAIRS: [string, string, number][] = [
       (text): [string, string, number] => [text, surface, TEXT],
     ),
   ),
+  // The sidebar's labels and section titles on its own layer.
+  ...["ink", "ink-muted", "ink-subtle"].map(
+    (text): [string, string, number] => [text, "surface-nav", TEXT],
+  ),
+  // The unread count on a nav item.
+  ["ink-inverse", "critical", TEXT],
   ["accent-ink", "accent", TEXT],
   ["accent", "accent-subtle", TEXT],
   ["ink", "accent-subtle", TEXT],

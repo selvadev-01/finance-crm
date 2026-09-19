@@ -21,7 +21,11 @@ import {
   createStaff,
   decimal,
 } from '../db-constraints/fixtures.js';
+import { testRecorder } from '../security/recorder.js';
 import { withRollback } from '../with-rollback.js';
+
+/** What the security log records these refusals against (M13, ADR-0014). */
+const SETTINGS_ROUTE = { method: 'PATCH', path: '/api/settings/:key' };
 
 /**
  * Business settings (US-094) against real rows, rolled back, so the `setting`
@@ -73,7 +77,11 @@ describe('SettingsService (US-094)', () => {
       organizationId: id,
       database,
       reader: new SettingReader(database),
-      service: new SettingsService(database, new AuditWriter(database)),
+      service: new SettingsService(
+        database,
+        new AuditWriter(database),
+        testRecorder(tx, { route: SETTINGS_ROUTE }),
+      ),
     };
   }
 
@@ -444,6 +452,90 @@ describe('SettingsService (US-094)', () => {
         expect(find(result, 'organisation.name')).toMatchObject({
           editable: true,
         });
+      });
+    });
+  });
+
+  /**
+   * The security log (ADR-0014) — a locked setting is where an owner-level guard gets tested, and a
+   * lock that was reached for repeatedly is exactly what a security log is for.
+   */
+  describe('the refused attempt is recorded (M13, ADR-0014)', () => {
+    const events = (tx: PrismaClient, organizationId: string) =>
+      tx.securityEvent.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    it('records both locks and the unknown key, against the setting that was aimed at', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organization } = await createActiveAccount(tx);
+        const { context, service } = await world(tx, organization.id);
+
+        await refusal(service.update(context, 'organisation.timezone', 'UTC'));
+        await refusal(service.update(context, 'organisation.currency', 'AED'));
+        await refusal(service.update(context, 'account.interestRate', '12'));
+
+        expect(await events(tx, organization.id)).toMatchObject([
+          {
+            actorUserId: context.userId,
+            actorRole: 'SUPER_ADMIN',
+            kind: 'SETTING_LOCKED',
+            code: 'SETTING_IMMUTABLE',
+            status: 422,
+            method: SETTINGS_ROUTE.method,
+            path: SETTINGS_ROUTE.path,
+            targetTable: 'setting',
+            targetId: 'organisation.timezone',
+          },
+          {
+            kind: 'SETTING_LOCKED',
+            code: 'SETTING_LOCKED_BY_HISTORY',
+            targetId: 'organisation.currency',
+          },
+          {
+            kind: 'OUT_OF_SCOPE',
+            code: 'SETTING_NOT_FOUND',
+            status: 404,
+            targetId: 'account.interestRate',
+          },
+        ]);
+      });
+    });
+
+    it('survives the rollback of the transaction the lock was raised inside', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organization } = await createActiveAccount(tx);
+        const { context, service } = await world(tx, organization.id);
+
+        // SETTING_LOCKED_BY_HISTORY is thrown after the organisation row has
+        // been taken FOR UPDATE, inside `Database.transaction`. The record is
+        // written once that has rejected — so the refusal is still there.
+        await refusal(service.update(context, 'organisation.currency', 'AED'));
+
+        expect(
+          (
+            await tx.organization.findUniqueOrThrow({
+              where: { id: organization.id },
+            })
+          ).currency,
+        ).toBe('INR');
+        expect(await events(tx, organization.id)).toHaveLength(1);
+      });
+    });
+
+    it('records nothing for a value the registry simply rejects', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, organizationId } = await world(tx);
+
+        await refusal(
+          service.update(context, 'account.defaultTermDays', 'ninety'),
+        );
+        await refusal(
+          service.update(context, 'organisation.name', 'Rasi Test'),
+        );
+
+        expect(await events(tx, organizationId)).toEqual([]);
       });
     });
   });

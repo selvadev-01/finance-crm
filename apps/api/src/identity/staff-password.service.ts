@@ -5,10 +5,12 @@ import { AuditWriter } from '../audit/audit.writer.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import {
+  AppError,
   AuthorizationError,
   DomainError,
   NotFoundError,
 } from '../platform/errors/errors.js';
+import { SecurityEventRecorder } from '../security/security-event.recorder.js';
 import { PasswordHasher } from './password-hasher.js';
 import { generateTemporaryPassword } from './temporary-password.js';
 
@@ -29,7 +31,22 @@ export class StaffPasswordService {
     private readonly database: Database,
     private readonly audit: AuditWriter,
     private readonly hasher: PasswordHasher,
+    private readonly security: SecurityEventRecorder,
   ) {}
+
+  /**
+   * Record the attempt and hand back the very same error to `throw`, as
+   * `staff-admin.service.ts` does (M13, ADR-0014). Both refusals here are
+   * raised before the transaction opens, so nothing rolls the record back.
+   */
+  private async refusal<Error extends AppError>(
+    context: RequestContext,
+    error: Error,
+    target: { id?: string },
+  ): Promise<Error> {
+    await this.security.refused(context, error, target);
+    return error;
+  }
 
   async resetPassword(
     context: RequestContext,
@@ -44,7 +61,13 @@ export class StaffPasswordService {
       select: { id: true, userId: true, role: true },
     });
     if (!target) {
-      throw new NotFoundError('STAFF_NOT_FOUND', 'Staff not found');
+      // Recorded like the same refusal on the other staff routes: a staff id
+      // is never handed around in ordinary work, so a miss is someone guessing.
+      throw await this.refusal(
+        context,
+        new NotFoundError('STAFF_NOT_FOUND', 'Staff not found'),
+        { id: staffProfileId },
+      );
     }
     if (target.id === context.staffProfileId) {
       throw new DomainError(
@@ -52,11 +75,16 @@ export class StaffPasswordService {
         'Change your own password from your account, not with a reset',
       );
     }
-    // Otherwise an Admin could take over the owner's account.
+    // Otherwise an Admin could take over the owner's account — which is why
+    // the attempt is recorded, not merely refused (ADR-0014).
     if (target.role === 'SUPER_ADMIN' && context.role !== 'SUPER_ADMIN') {
-      throw new AuthorizationError(
-        'CANNOT_RESET_SUPER_ADMIN',
-        "Only a Super Admin can reset a Super Admin's password",
+      throw await this.refusal(
+        context,
+        new AuthorizationError(
+          'CANNOT_RESET_SUPER_ADMIN',
+          "Only a Super Admin can reset a Super Admin's password",
+        ),
+        { id: target.id },
       );
     }
 

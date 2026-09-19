@@ -4,6 +4,10 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 
 import { loadConfig } from '../platform/config/config.js';
 import { completePasswordChange, passwordChange } from './password-change.js';
+import {
+  SESSION_EXPIRES_IN_SECONDS,
+  SESSION_UPDATE_AGE_SECONDS,
+} from './session-policy.js';
 import { signInAudit, writeSignInAudit } from './sign-in-audit.js';
 import { createSignInHooks } from './sign-in-policy.js';
 
@@ -50,13 +54,12 @@ export const auth = betterAuth({
   // US-001: only ACTIVE staff sign in, and every attempt is audited.
   hooks: createSignInHooks(prisma),
 
+  // 7 days rolling with "Keep me signed in", 30 days absolute — the reasoning
+  // and the limit's enforcement are in session-policy.ts. Suspension still
+  // revokes at once, server-side (M02).
   session: {
-    // 30 days, rolling. Deliberately far longer than a typical web app: a
-    // Junior signs in once and works for weeks, and re-authenticating needs
-    // connectivity they may not have. The compensating control is immediate
-    // server-side revocation when a staff member is suspended (M02).
-    expiresIn: 60 * 60 * 24 * 30,
-    updateAge: 60 * 60 * 24,
+    expiresIn: SESSION_EXPIRES_IN_SECONDS,
+    updateAge: SESSION_UPDATE_AGE_SECONDS,
   },
 
   advanced: {

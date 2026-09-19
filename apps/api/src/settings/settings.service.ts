@@ -10,6 +10,7 @@ import {
   InternalError,
   NotFoundError,
 } from '../platform/errors/errors.js';
+import { SecurityEventRecorder } from '../security/security-event.recorder.js';
 import {
   SETTING_DEFINITIONS,
   type SettingDefinition,
@@ -54,6 +55,7 @@ export class SettingsService {
   constructor(
     private readonly database: Database,
     private readonly audit: AuditWriter,
+    private readonly security: SecurityEventRecorder,
   ) {}
 
   /** S-28: every setting, its value, its default, and whether it may move. */
@@ -100,6 +102,24 @@ export class SettingsService {
     key: string,
     value: string | null,
   ): Promise<BusinessSettings> {
+    try {
+      return await this.change(context, key, value);
+    } catch (error) {
+      // Outside the transaction by construction: `change` has already rejected,
+      // so `SETTING_LOCKED_BY_HISTORY` — the one refusal raised inside one —
+      // has rolled back and cannot take the record with it. Only the locks and
+      // the unknown key are recorded; a bad value is a typo, not an attempt
+      // (security-refusals.ts). The original error is rethrown untouched.
+      await this.security.refused(context, error, { id: key });
+      throw error;
+    }
+  }
+
+  private async change(
+    context: RequestContext,
+    key: string,
+    value: string | null,
+  ): Promise<BusinessSettings> {
     const definition = settingDefinition(key);
     // An unknown key is the same answer as one outside the caller's scope (M02).
     if (!definition) {
@@ -115,18 +135,8 @@ export class SettingsService {
     const parsed = value === null ? null : definition.parse(value);
 
     return this.database.transaction(async (tx) => {
-      // Inside the transaction: an account created concurrently either is seen
-      // here or waits, so the currency can never move under the first one.
-      const history = await tx.accountLoan.findFirst({
-        where: { organizationId: context.organizationId },
-        select: { id: true },
-      });
-      if (definition.lock.kind === 'ONCE_ACCOUNTS_EXIST' && history) {
-        throw new DomainError(
-          'SETTING_LOCKED_BY_HISTORY',
-          definition.lock.reason,
-          [{ field: 'value', issue: 'the business already has accounts' }],
-        );
+      if (definition.lock.kind === 'ONCE_ACCOUNTS_EXIST') {
+        await this.refuseOnceAccountsExist(tx, context, definition.lock.reason);
       }
       if (definition.storage.kind === 'ORGANIZATION') {
         await this.writeOrganisation(tx, context, definition, parsed);
@@ -135,6 +145,52 @@ export class SettingsService {
       }
       return this.list(context);
     });
+  }
+
+  /**
+   * The currency, once the business has an account (`ONCE_ACCOUNTS_EXIST`).
+   *
+   * **The lock is a real one, not a read.** `Database.transaction` runs at
+   * READ COMMITTED, where a plain `SELECT` blocks nothing — the first account
+   * could be inserted in the window between reading `account_loan` and
+   * committing the new currency. So the organisation's own row is taken
+   * `FOR UPDATE` first: PostgreSQL takes a `FOR KEY SHARE` lock on that same
+   * row for every `account_loan` insert, to check the foreign key, and
+   * `FOR UPDATE` conflicts with it.
+   *
+   * What that guarantees: the currency change and the business's first account
+   * are **ordered**. Either the insert commits first and the read below sees
+   * it (READ COMMITTED takes a fresh snapshot per statement, after the lock is
+   * granted) and the change is refused, or the change commits first and the
+   * account is created under the currency it settled on. An account is never
+   * created under a currency this call is in the middle of replacing.
+   *
+   * What it does not guarantee: anything about accounts created **after** the
+   * change commits — by then the currency is simply the new one — and nothing
+   * at all if a future write path inserts an `account_loan` without that
+   * foreign key. `FOR UPDATE` at READ COMMITTED waits rather than raising a
+   * serialization error, so contention cannot surface as a coded conflict; the
+   * only failure is the transaction timeout, which is an infrastructure error.
+   *
+   * The race itself is untested: `withRollback` runs Tier 1 on one connection,
+   * so a second concurrent transaction cannot be opened honestly there, and a
+   * test that only appeared to prove it would be worse than none.
+   */
+  private async refuseOnceAccountsExist(
+    tx: Tx,
+    context: RequestContext,
+    reason: string,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM organization WHERE id = ${context.organizationId} FOR UPDATE`;
+    const history = await tx.accountLoan.findFirst({
+      where: { organizationId: context.organizationId },
+      select: { id: true },
+    });
+    if (history) {
+      throw new DomainError('SETTING_LOCKED_BY_HISTORY', reason, [
+        { field: 'value', issue: 'the business already has accounts' },
+      ]);
+    }
   }
 
   /** The organisation's own row. Only `name` and `currency` ever reach here. */

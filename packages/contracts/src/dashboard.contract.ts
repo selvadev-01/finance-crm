@@ -404,6 +404,35 @@ export const lineDashboardSchema = z.discriminatedUnion("state", [
   }),
 ]);
 
+// ------------------------------------------------ Dashboard trend (S-07/S-19/S-20)
+
+/** Working days a trend covers by default, and at most. */
+export const TREND_DAYS = 30;
+export const MAX_TREND_DAYS = 60;
+
+/** One working day of the caller's lines, summed (BR-16 per line, BR-15 attribution). */
+export const trendPointSchema = z.object({
+  businessDate: calendarDateSchema,
+  expected: moneyStringSchema,
+  /** Signed: a day of only negative adjustments is below zero. */
+  collected: signedMoneyStringSchema,
+});
+
+/**
+ * Expected against collected per working day, ending on `businessDate` — every
+ * line for an Admin (the business), a Senior's own line for them (M02).
+ */
+export const dashboardTrendSchema = z.object({
+  /** The last date asked for; the series ends on it, or on the working day before it. */
+  businessDate: calendarDateSchema,
+  generatedAt: z.string(),
+  days: count,
+  /** Lines in the caller's scope that were summed; 0 means there is nothing to chart. */
+  lineCount: count,
+  /** Oldest first, working days only. Null when it could not be read — never zeros (S-07). */
+  points: z.array(trendPointSchema).nullable(),
+});
+
 export const dashboardContract = {
   getOverview: route({
     method: "GET",
@@ -473,6 +502,33 @@ export const dashboardContract = {
       422: errorSchema,
     },
   }),
+
+  getTrend: route({
+    method: "GET",
+    path: "/api/dashboards/trend",
+    summary:
+      "Expected against collected per working day, for the caller's lines — every line for an Admin, their own for a Senior — ending today by default",
+    query: z.object({
+      date: calendarDateSchema.optional(),
+      days: z.coerce
+        .number()
+        .int()
+        .min(2)
+        .max(MAX_TREND_DAYS)
+        .default(TREND_DAYS),
+      /** Another line is 404 for a Senior (M02); omitted, every line in scope. */
+      lineId: idSchema.optional(),
+    }),
+    responses: {
+      200: dashboardTrendSchema,
+      400: errorSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      /** A date after today. */
+      422: errorSchema,
+    },
+  }),
 } as const;
 
 export type BusinessOverview = z.infer<typeof businessOverviewSchema>;
@@ -488,3 +544,5 @@ export type AttentionItem = z.infer<typeof attentionItemSchema>;
 export type DayKind = z.infer<typeof dayKindSchema>;
 export type LineDashboard = z.infer<typeof lineDashboardSchema>;
 export type WatchedAccount = z.infer<typeof watchedAccountSchema>;
+export type TrendPoint = z.infer<typeof trendPointSchema>;
+export type DashboardTrend = z.infer<typeof dashboardTrendSchema>;

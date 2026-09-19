@@ -1,4 +1,4 @@
-import { type DataViewColumn, RecordIdentity, recordLinkClass } from "@repo/ui";
+import { type DataViewColumn, RecordIdentity, rowLinkClass } from "@repo/ui";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -12,7 +12,7 @@ import { Money } from "./money";
 
 /**
  * The first column: the record's name linked to its page, with its code
- * under it. It sorts by name.
+ * under it. The link covers the whole row. It sorts by name.
  */
 export function identityColumn<Row>(options: {
   header: string;
@@ -30,7 +30,7 @@ export function identityColumn<Row>(options: {
       return (
         <RecordIdentity code={options.code?.(row.original)}>
           {href ? (
-            <Link href={href} className={recordLinkClass}>
+            <Link href={href} className={rowLinkClass} data-row-link>
               {name}
             </Link>
           ) : (

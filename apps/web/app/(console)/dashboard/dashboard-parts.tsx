@@ -1,6 +1,8 @@
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { RadialMeter, Meter as UiMeter } from "@repo/ui";
 import Link from "next/link";
 
+import { formatTimestamp } from "../../../lib/format";
 import { formatPerMille } from "../../../lib/money";
 
 /** Shared by the dashboards: S-07 (US-080), S-20 (US-082) and S-19 (US-083). */
@@ -39,26 +41,73 @@ export function Unknown() {
   );
 }
 
+type MeterTone = "accent" | "positive" | "warning" | "critical";
+
 /**
  * Collected against expected as a bar. The share is computed in exact paise;
  * past 100% the bar stays full and the figure beside it says how far.
  */
-export function Meter({ share, label }: { share: number; label: string }) {
-  const filled = Math.min(share, 1000);
+export function Meter({
+  share,
+  label,
+  tone,
+}: {
+  share: number;
+  label: string;
+  tone?: MeterTone;
+}) {
   return (
-    <span
-      role="meter"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={filled / 10}
-      aria-valuetext={formatPerMille(share)}
-      className="block h-1.5 w-full min-w-16 overflow-hidden rounded-pill bg-surface-sunken"
-    >
+    <UiMeter
+      value={share}
+      label={label}
+      valueText={formatPerMille(share)}
+      tone={tone}
+    />
+  );
+}
+
+/**
+ * A headline share in the hero (ADR-0015). `share` null — nothing was due,
+ * or the figure is unknown — shows no ring rather than an empty one.
+ */
+export function ShareRing({
+  share,
+  label,
+  caption,
+  tone,
+}: {
+  share: number | null;
+  label: string;
+  caption: string;
+  tone?: MeterTone;
+}) {
+  if (share === null) return null;
+  return (
+    <RadialMeter
+      value={share}
+      label={label}
+      caption={caption}
+      valueText={formatPerMille(share)}
+      tone={tone}
+    />
+  );
+}
+
+/** A count as a share of a whole, in tenths of a percent; null when the whole is 0. */
+export function countShare(part: number, whole: number): number | null {
+  if (whole <= 0) return null;
+  return Math.floor((part * 1000) / whole);
+}
+
+/** The hero's "Live · updated 14:30", beside the date. */
+export function LiveStamp({ at }: { at: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
       <span
-        className="block h-full rounded-pill bg-accent"
-        style={{ width: `${filled / 10}%` }}
+        aria-hidden
+        className="size-2 animate-pulse rounded-pill bg-positive-bright motion-reduce:animate-none"
       />
+      Live · updated {formatTimestamp(at, "clock")}
     </span>
   );
 }

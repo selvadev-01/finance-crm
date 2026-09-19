@@ -39,7 +39,7 @@ export const auth = betterAuth({
   // Only ACTIVE staff sign in; every attempt writes a LOGIN audit entry.
   hooks: createSignInHooks(prisma),
   session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days — see below
+    expiresIn: 60 * 60 * 24 * 7, // 7 days with "Keep me signed in" — see below
     updateAge: 60 * 60 * 24, // rolling renewal
   },
   trustedOrigins: [process.env.WEB_ORIGIN!],
@@ -70,7 +70,7 @@ Two details that fail quietly if missed:
 
 ### Guards and decorators
 
-The library's own global `AuthGuard` is disabled (`disableGlobalAuthGuard`). **M02's `PolicyGuard` is the only global guard**: it lets `@AllowAnonymous()` routes through without touching the session, then runs the library's session check through `RasiAuthGuard` (`apps/api/src/auth/rasi-auth.guard.ts`), then staff status, permission and — in repositories — scope ([M02 as built](../01-product/modules/M02-access-control.md#as-built)). The library guard on its own resolves the session — a database query — _before_ checking whether a route is public, which would make `/health/live` fail whenever the database is down.
+The library's own global `AuthGuard` is disabled (`disableGlobalAuthGuard`). **M02's `PolicyGuard` is the only global guard**: it lets `@AllowAnonymous()` routes through without touching the session, then resolves the session through `RasiAuthGuard` (`apps/api/src/auth/rasi-auth.guard.ts`), then staff status, permission and — in repositories — scope ([M02 as built](../01-product/modules/M02-access-control.md#as-built)). `RasiAuthGuard` calls `auth.api.getSession` itself instead of wrapping the library's `AuthGuard`, for two reasons. The library guard resolves the session — a database query — _before_ checking whether a route is public, which would make `/health/live` fail whenever the database is down. It also drops the renewed session cookie ([Session duration](#session-duration)).
 
 | Decorator                     | Purpose                                                  |
 | ----------------------------- | -------------------------------------------------------- |
@@ -85,7 +85,20 @@ Every route carries `@AllowAnonymous()` or `@RequirePermission`; the application
 
 ## Session duration
 
-30 days, rolling. Far longer than a typical web application, and deliberate.
+The sign-in form has a **Keep me signed in** checkbox, on by default, sent as Better Auth's `rememberMe`.
+
+| Keep me signed in | Cookie                               | Server session                                                 |
+| ----------------- | ------------------------------------ | -------------------------------------------------------------- |
+| On (default)      | Persistent, `maxAge` 7 days          | 7 days, rolling: renewed at most once a day; 30 days at most   |
+| Off               | Browser-session, gone when it closes | 1 day, never renewed (Better Auth's fixed value); same 30 days |
+
+Rolling means expiry moves out whenever the session is used and at least a day has passed since the last renewal, so a Junior who is online at least once a week stays signed in. The checkbox is for shared devices, where leaving a session behind matters more. The values live in `apps/api/src/auth/session-policy.ts`.
+
+**Renewal has to reach the browser.** Better Auth renews inside `getSession` and re-issues the cookie with a fresh `Max-Age` in that call's response headers. The web app never calls `/api/auth/get-session` itself; every renewal happens in `RasiAuthGuard`'s server-side call, so the guard copies those `Set-Cookie` headers onto the Rasi response. The library's own `AuthGuard` discards them. Using it, the database session renews but the cookie still dies 7 days after sign-in, however often the staff member works.
+
+**Absolute limit: 30 days from sign-in, however recently renewed.** NIST SP 800-63B requires an overall timeout for password-only sign-in and puts it at no more than 30 days; OWASP calls it the absolute timeout. Rolling renewal alone never ends an active session, so a stolen cookie would work for as long as it kept being used. Better Auth has no setting for this: an `after` hook on `/get-session` (`sign-in-policy.ts` → `enforceAbsoluteLimit`) deletes a session older than the limit, expires its cookies and answers as signed out. It runs for the browser's calls and for the guard's, so one check covers both. A Junior meets a sign-in screen once a month, while online, since an offline device makes no request that could be refused.
+
+**Session tokens are not rotated during a session.** OWASP lists periodic ID renewal as an optional hardening. Better Auth keeps the token when it renews, and hand-rolling rotation would race with the offline outbox: a queued or parallel request still carrying the old token would get `401`, stranding collections in the outbox. A fresh token is issued at every sign-in (no session fixation), and the 30-day limit bounds a stolen token's life, which is the risk rotation addresses.
 
 > A Junior signs in once and works for weeks. Session expiry is not an inconvenience for them — it is a hard stop, because re-authentication needs connectivity and they may have none. A session expiring overnight strands a collector with a full route and no way to record anything.
 >

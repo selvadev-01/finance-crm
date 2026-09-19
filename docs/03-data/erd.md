@@ -328,6 +328,22 @@ erDiagram
         string ipAddress
         datetime createdAt
     }
+    security_event {
+        string id PK
+        string organizationId FK
+        string actorUserId
+        enum actorRole "SUPER_ADMIN|ADMIN|SENIOR|JUNIOR"
+        enum kind "PERMISSION_DENIED|RANK_GUARD|SELF_GUARD|SETTING_LOCKED|OUT_OF_SCOPE"
+        string code
+        int status "always 4xx"
+        string method
+        string path "route pattern"
+        string targetTable
+        string targetId
+        json detail "curated facts, never a request body"
+        string ipAddress
+        datetime createdAt
+    }
     idempotency_key {
         string key PK
         string userId FK
@@ -351,6 +367,8 @@ erDiagram
 **`idempotency_key` stores the full original response**, so a replay returns the identical body (BR-13) rather than merely being rejected as a duplicate.
 
 **`audit_log` uses `json` before/after snapshots** rather than per-field rows. Write volume is high and reads are investigative and rare, so a compact append is the right trade-off.
+
+**`security_event` is separate from `audit_log`, and is not append-only** ([ADR-0014](../02-architecture/adr/0014-security-event-log.md)). It records attempts that were **refused**, so there is no before, no after and no entity whose history they belong to; and because the RBAC matrix suite refuses every route for every role on every run, an undeletable table would fill the only database with test noise for ever.
 
 ---
 

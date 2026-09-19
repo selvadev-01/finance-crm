@@ -202,6 +202,8 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /api/accounts/:accountId': 'account.view',
   'GET /api/accounts/:accountId/history': 'audit.view',
   'GET /api/audit-log': 'audit.view',
+  // M13: the refused attempts, read by whoever reads the audit log.
+  'GET /api/security-events': 'audit.view',
   'GET /api/accounts/:accountId/schedule': 'account.viewSchedule',
   'POST /api/collections': 'collection.record',
   'GET /api/route': 'collection.record',
@@ -247,6 +249,8 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'GET /api/dashboards/sectors': 'money.sectorTotals',
   // M11 (US-083): line totals are Admins, and a Senior for their own line.
   'GET /api/dashboards/line': 'money.lineTotals',
+  // M11: the dashboards' trend is line totals summed over the caller's scope.
+  'GET /api/dashboards/trend': 'money.lineTotals',
   // M12 Reports (US-084): Admins, and a Senior for their own line.
   'GET /api/reports/line-wise': 'report.view',
   // M12 Reports (US-085): §22's invested and profit, Admins and a Senior's own line.

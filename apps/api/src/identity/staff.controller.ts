@@ -50,6 +50,8 @@ export class StaffController {
       }),
       // M15: what the account form starts N at (US-094). Carried here rather
       // than read from /api/settings, which is the Super Admin's alone.
+      // Deliberately sent to every role: a non-sensitive integer, so the
+      // account form has its default whoever is signed in.
       this.settings.number(context.organizationId, 'account.defaultTermDays'),
     ]);
     return {

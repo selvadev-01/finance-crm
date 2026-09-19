@@ -10,6 +10,10 @@ import { passwordChange } from '../src/auth/password-change.js';
 import { type AuditRow, AuditWriter } from '../src/audit/audit.writer.js';
 import { type SignInAttempt, signInAudit } from '../src/auth/sign-in-audit.js';
 import {
+  SecurityEventRecorder,
+  type SecurityEventRow,
+} from '../src/security/security-event.recorder.js';
+import {
   APP_CONFIG,
   type AppConfig,
   loadConfig,
@@ -47,12 +51,37 @@ export const recordedAudit: AuditRow[] = [];
 export const recordedPasswordChanges: string[] = [];
 
 /**
+ * Refused attempts recorded by HTTP tests, in order (M13, ADR-0014).
+ *
+ * `security_event` rows *can* be deleted, unlike `audit_log` — but
+ * `rbac-matrix.e2e-spec.ts` refuses every protected route for every role
+ * without the permission, so a run would insert several hundred rows into the
+ * shared development schema and depend on cleanup to take them out again. The
+ * real insert is proven in Tier 1 inside a rolled-back transaction
+ * (`test/security/security-event.recorder.spec.ts`); this tier proves that the
+ * refusal reaches the recorder, with the right actor, target and code.
+ */
+export const recordedSecurityEvents: SecurityEventRow[] = [];
+
+/**
  * The real `AuditWriter` — including its refusal to write outside a
  * transaction — with only the final insert redirected to `recordedAudit`.
  */
 class RecordingAuditWriter extends AuditWriter {
   protected override write(row: AuditRow): Promise<void> {
     recordedAudit.push(row);
+    return Promise.resolve();
+  }
+}
+
+/**
+ * The real `SecurityEventRecorder` — its classification, its route lookup and
+ * its refusal to break the request it observes — with only the final insert
+ * redirected to `recordedSecurityEvents`.
+ */
+class RecordingSecurityEventRecorder extends SecurityEventRecorder {
+  protected override write(row: SecurityEventRow): Promise<void> {
+    recordedSecurityEvents.push(row);
     return Promise.resolve();
   }
 }
@@ -84,7 +113,9 @@ export async function createTestApp(
     providers: options.providers ?? [],
   })
     .overrideProvider(AuditWriter)
-    .useClass(RecordingAuditWriter);
+    .useClass(RecordingAuditWriter)
+    .overrideProvider(SecurityEventRecorder)
+    .useClass(RecordingSecurityEventRecorder);
   if (options.logDestination) {
     builder = builder
       .overrideProvider(LOG_DESTINATION)

@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import {
-  addCalendarDays,
-  type CalendarDate,
-  toUtcMidnight,
-} from '@repo/domain';
+import { type CalendarDate, toUtcMidnight } from '@repo/domain';
 
 import type { SystemContext } from '../platform/context/system-context.js';
 import { Database } from '../platform/database/database.js';
 import { SettingReader } from '../settings/setting-reader.js';
+import { overdueCutoff } from './overdue-cutoff.js';
 
 /**
  * BR-05 — `isOverdue` is a flag on an `ACTIVE` account, set the day after its
@@ -19,6 +16,10 @@ import { SettingReader } from '../settings/setting-reader.js';
  * which is open question 3's answer. Changing it restates nothing — the flag
  * is derived from the dates and recomputed on the next run — so the setting is
  * freely editable, unlike the values a schedule was generated from.
+ *
+ * The cutoff itself is `overdue-cutoff.ts`, shared with the overdue report
+ * (M12) and the line dashboard (M11): all three read the same setting, so the
+ * flag and the two live computations always answer the same question.
  *
  * Idempotent: it sets the flag to what the dates say, so a second run changes
  * nothing. Not audited per account — it is a derived flag, recomputed nightly.
@@ -39,9 +40,7 @@ export class OverdueService {
       'account.overdueGraceDays',
     );
     // An account is behind only once its target is more than `grace` days past.
-    const day = toUtcMidnight(
-      grace === 0 ? today : addCalendarDays(today, -grace),
-    );
+    const day = toUtcMidnight(overdueCutoff(today, grace));
     return this.database.transaction(async (tx) => {
       const flagged = await tx.accountLoan.updateMany({
         where: {

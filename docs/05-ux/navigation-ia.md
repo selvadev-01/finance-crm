@@ -33,11 +33,11 @@ One Next.js deployment, routed by role at sign-in. A Junior signing in never see
 
 **As built, the console sidebar is grouped** by what a person is doing (ADR-0013). Only the areas whose screens exist are listed; Settings joins when it is built.
 
-| Group   | Items                                                |
-| ------- | ---------------------------------------------------- |
-| Operate | Dashboard, Collections, Cash, Reports                |
-| Records | Customers, Lines, Sectors (Admin and above), Team    |
-| System  | Notifications, Holidays, Audit log (Admin and above) |
+| Group   | Items                                                                     |
+| ------- | ------------------------------------------------------------------------- |
+| Operate | Dashboard, Collections, Cash, Reports                                     |
+| Records | Customers, Lines, Sectors (Admin and above), Team                         |
+| System  | Notifications, Holidays, Audit log and Refused attempts (Admin and above) |
 
 **Reports** (US-084) is one sidebar item for every console role — Super Admin, Admin and Senior — and it opens `/reports`, an index of the reports that exist, rather than a particular report. There are five reports specified and each is a different question, so a sidebar entry per report would grow the navigation faster than the product; the index is the one page each report story adds itself to. A Senior's "Limited" is enforced in the API, not by hiding the item: their report covers their own line (M12).
 
@@ -104,7 +104,8 @@ Reports
 Settings                     Super Admin only
 ├─ Business settings
 ├─ Holidays
-└─ Audit log
+├─ Audit log
+└─ Refused attempts
 ```
 
 **Maximum three levels deep.** Anything deeper becomes a filter or a tab, not another level.
@@ -150,7 +151,7 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /collections          /collections/:id      /collections/pending-approval
 /team                 /team/:id
 /reports              /reports/line-wise    /reports/investment    /reports/collection    /reports/overdue    /reports/discrepancy    (the rest join as they are built)
-/settings             /settings/holidays    /settings/audit
+/settings             /settings/holidays    /settings/audit    /settings/security
 
 /route                            Junior home (S-01)
 /route#collect/:customerId        entry (S-02), every account of that customer
@@ -185,6 +186,7 @@ The page's server component reads them (`readListParams`), and the list keeps th
 | `/reports/discrepancy` | The four shared, plus `junior` and `show` (`all`; blank is not yet tallied) |
 | `/cash`                | `line`, `date` (the day close to open)                                      |
 | `/settings/audit`      | `action`, `entityTable`, `entityId`, `actorUserId`, `from`, `to`            |
+| `/settings/security`   | `kind`, `code`, `actorUserId`, `from`, `to` — refused attempts (ADR-0014)   |
 | `/settings`            | None. One list of settings — no filter, no tab (US-094)                     |
 
 Paging is not in the URL. "Show more" follows the API's cursor, and a reload starts again from the first page.
@@ -197,11 +199,22 @@ Paging is not in the URL. "Show more" follows the API's cursor, and a reload sta
 
 ## Responsive behaviour
 
-| Width      | Console                                                |
-| ---------- | ------------------------------------------------------ |
-| ≥1280px    | Sidebar expanded, dense tables                         |
-| 768–1279px | Sidebar collapsed to icons, tables scroll horizontally |
-| <768px     | Sidebar becomes a drawer; tables become cards          |
+| Width      | Console                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| ≥1280px    | Sidebar expanded, dense tables; the top bar's toggle pins it to the icon rail, remembered per browser |
+| 768–1279px | Sidebar collapsed to icons, tables scroll horizontally                                                |
+| <768px     | Sidebar becomes a drawer; tables become cards                                                         |
+
+**The sidebar as built (2026-09-19, [ADR-0015](../02-architecture/adr/0015-console-layout-and-in-house-charts.md)).**
+
+- **The current item.** It is a tab joined to the page. Its row takes the page's colour, with inverted corners above and below. It is the most specific matching link, so `/settings/audit` marks Audit log alone.
+- **The rail.** It opens over the page, never pushing it, while the pointer is over it or keyboard focus is inside it. It shows no tooltips; the link names stay in the accessibility tree.
+- **The top bar.** It is glass over the scrolling page. It holds:
+  - the drawer button below 768px;
+  - the rail toggle from 1280px (`aria-expanded`, `aria-controls`);
+  - the area;
+  - the bell as a round action with its unread count;
+  - the account menu.
 
 The Junior's app is **phone-only by design** — 360px is the design target, and it is not adapted upward for desktop because it is never used there.
 

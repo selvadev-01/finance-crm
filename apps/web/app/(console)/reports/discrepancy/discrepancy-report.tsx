@@ -52,14 +52,6 @@ import {
 
 /** The four shared filters, plus the two only this report takes. */
 export const DISCREPANCY_FILTERS = { ...REPORT_FILTERS, junior: "", show: "" };
-export const DISCREPANCY_FILTER_KEYS = [
-  "from",
-  "to",
-  "sector",
-  "line",
-  "junior",
-  "show",
-] as const;
 
 const VIEWS: { value: DiscrepancyShow; label: string }[] = [
   { value: "unresolved", label: "Not yet tallied" },

@@ -34,7 +34,7 @@ The split is deliberate: keeping Rasi data out of the generated tables means `be
 
 ### Session duration is a field-driven decision
 
-Sessions last **30 days with rolling renewal**, far longer than a typical web application.
+With **Keep me signed in** ticked (the default), sessions last **7 days with rolling renewal** — every day of use pushes expiry out again. Unticked, the session ends when the browser closes, or after 1 day at most. Either way a session ends **30 days after sign-in**, however recently it was renewed. Details in [authentication.md](../../02-architecture/authentication.md#session-duration).
 
 > A Junior signs in once and works for weeks without thinking about it. An expiring session is not an inconvenience for them — it is a hard stop, because re-authentication needs connectivity and they may have none. A session that expires overnight strands a collector with a full route and no way to record anything.
 >
@@ -128,12 +128,14 @@ Nothing else is created: no sector, line or setting. Ledger accounts appear on f
 
 While `mustChangePassword` is set, the temporary password signs in but **every Rasi route answers `403 PASSWORD_CHANGE_REQUIRED`**; Better Auth's `POST /api/auth/change-password` is the one thing it allows. A successful change clears the flag and audits it in one transaction.
 
-| Refusal                     | Status | When                                        |
-| --------------------------- | ------ | ------------------------------------------- |
-| `STAFF_NOT_FOUND`           | `404`  | Another organization, soft-deleted, missing |
-| `CANNOT_RESET_SUPER_ADMIN`  | `403`  | An Admin targeting a Super Admin            |
-| `CANNOT_RESET_OWN_PASSWORD` | `422`  | Use change-password instead                 |
-| `NO_PASSWORD_CREDENTIAL`    | `422`  | The user has no password to replace         |
+| Refusal                     | Status | When                                        | Recorded (ADR-0014) |
+| --------------------------- | ------ | ------------------------------------------- | ------------------- |
+| `STAFF_NOT_FOUND`           | `404`  | Another organization, soft-deleted, missing | Yes                 |
+| `CANNOT_RESET_SUPER_ADMIN`  | `403`  | An Admin targeting a Super Admin            | Yes                 |
+| `CANNOT_RESET_OWN_PASSWORD` | `422`  | Use change-password instead                 | No — wrong endpoint |
+| `NO_PASSWORD_CREDENTIAL`    | `422`  | The user has no password to replace         | No                  |
+
+Forcing a reset on the owner is how an Admin would take the owner's account, so that refusal is a `security_event`, not only a `403` — added 2026-09-19 after a security review found this route recording neither of its first two refusals.
 
 **Who am I — `GET /api/me`** (`profile.viewOwn`, every role) returns `userId`, `staffProfileId`, `name`, `email`, `role`, `currentLineId` and `organization` (`name`, `slug`). The web client calls it on every signed-in page. `401` sends the user to `/sign-in`, and `403 PASSWORD_CHANGE_REQUIRED` sends them to `/change-password`. Otherwise the client forwards to the role's landing: `/dashboard` in the console for Super Admin, Admin and Senior, and `/route` for Junior. The client only follows the API's answer and decides nothing itself.
 

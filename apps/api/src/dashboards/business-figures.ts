@@ -7,6 +7,7 @@ import type {
 } from '@repo/contracts';
 import type { Prisma } from '@repo/db';
 import {
+  addCalendarDays,
   type CalendarDate,
   dayOfWeek,
   fromUtcMidnight,
@@ -254,6 +255,61 @@ export function dayKind(
   return holiday
     ? { kind: 'HOLIDAY', name: holiday.name }
     : { kind: 'WORKING' };
+}
+
+/**
+ * The last `count` working days ending on `to`, oldest first (M06): a date is
+ * skipped when it is a Sunday, a business-wide holiday, or a holiday for
+ * **every** sector in `sectorIds` — a sector holiday leaves the other sectors
+ * collecting, as {@link dayKind} reads it per line. With no sectors, only
+ * Sundays and business-wide holidays are skipped.
+ *
+ * Holidays are read once for the whole window, through the caller's scope.
+ */
+export async function workingDates(
+  tx: Tx,
+  context: RequestContext,
+  sectorIds: readonly string[],
+  to: CalendarDate,
+  count: number,
+): Promise<CalendarDate[]> {
+  // Six working days a week, so twice the count plus a month of holidays is ample.
+  const from = addCalendarDays(to, -(count * 2 + 31));
+  const holidays = await tx.holiday.findMany({
+    where: inScope(holidayScope(context), {
+      date: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+    }),
+    select: { date: true, sectorId: true },
+  });
+  const businessWide = new Set<CalendarDate>();
+  const bySector = new Map<CalendarDate, Set<string>>();
+  for (const holiday of holidays) {
+    const date = fromUtcMidnight(holiday.date);
+    if (holiday.sectorId === null) {
+      businessWide.add(date);
+      continue;
+    }
+    const sectors = bySector.get(date) ?? new Set<string>();
+    sectors.add(holiday.sectorId);
+    bySector.set(date, sectors);
+  }
+  const everySectorOff = (date: CalendarDate) => {
+    if (sectorIds.length === 0) return false;
+    const off = bySector.get(date);
+    return off !== undefined && sectorIds.every((id) => off.has(id));
+  };
+
+  const dates: CalendarDate[] = [];
+  for (
+    let date = to;
+    dates.length < count && date >= from;
+    date = addCalendarDays(date, -1)
+  ) {
+    if (dayOfWeek(date) === 0) continue;
+    if (businessWide.has(date) || everySectorOff(date)) continue;
+    dates.push(date);
+  }
+  return dates.reverse();
 }
 
 /** The business-wide day when the holidays could not be read: Sunday is still known. */

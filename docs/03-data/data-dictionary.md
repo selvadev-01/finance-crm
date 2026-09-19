@@ -455,6 +455,28 @@ Append-only, no `updatedAt`. A trigger rejects UPDATE and DELETE.
 
 Constraint (`constraints_audit_log_organization`, `NOT VALID` so it applies to new rows only): `organizationId` is set unless `action = LOGIN`. Indexed on `(organizationId, createdAt)` for the log's newest-first reads.
 
+### `security_event`
+
+The attempts the API **refused** ([ADR-0014](../02-architecture/adr/0014-security-event-log.md)). Deliberately **not** append-only — nothing changed, so there is nothing to keep immutable, and the RBAC matrix suite refuses every route for every role on every run against the one development database.
+
+| Column           | Type                | Null | Notes                                                                                                                                     |
+| ---------------- | ------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `organizationId` | `String`            | No   | FK → `organization.id` (**cascade**, unlike `audit_log`: telemetry does not outlive the business)                                         |
+| `actorUserId`    | `String`            | No   | No FK, like `audit_log.actorUserId` — the record outlives the user row. A refusal always has a resolved caller                            |
+| `actorRole`      | `StaffRole`         | No   | Their role at the moment of the attempt, which a later demotion must not rewrite                                                          |
+| `kind`           | `SecurityEventKind` | No   | `PERMISSION_DENIED` \| `RANK_GUARD` \| `SELF_GUARD` \| `SETTING_LOCKED` \| `OUT_OF_SCOPE`                                                 |
+| `code`           | `String`            | No   | The stable `AppError` code the caller was answered with                                                                                   |
+| `status`         | `Int`               | No   | Always a 4xx                                                                                                                              |
+| `method`         | `String`            | No   | `GET` \| `POST` \| `PATCH` \| `PUT` \| `DELETE`                                                                                           |
+| `path`           | `String`            | No   | The route **pattern**, `/api/staff/:staffProfileId/role`                                                                                  |
+| `targetTable`    | `String`            | Yes  | Only with a `targetId`                                                                                                                    |
+| `targetId`       | `String`            | Yes  | May stand alone: the guard knows the id the route carried, not what kind of row it is                                                     |
+| `detail`         | `Json`              | Yes  | Curated facts only — `attemptedRole`, `attemptedStatus`, `permission`. **Never a request body**, and nothing `SAFE_LOG_KEYS` would redact |
+| `ipAddress`      | `String`            | Yes  |                                                                                                                                           |
+| `userAgent`      | `String`            | Yes  |                                                                                                                                           |
+
+Constraints (migration `constraints_security_event`, 2026-09-19): `security_event_status_refusal_check` (`status BETWEEN 400 AND 499`); `security_event_method_check`; `security_event_path_check` (starts with `/`); `security_event_code_not_blank_check`; `security_event_target_table_not_blank_check`; `security_event_target_id_not_blank_check`; `security_event_target_table_needs_id_check`. Indexed on `(organizationId, createdAt)`, `actorUserId` and `code`.
+
 ### `idempotency_key`
 
 | Column           | Type         | Null | Notes                                        |

@@ -1,8 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
-import type { PrismaClient } from '@repo/db';
+import type { Prisma, PrismaClient } from '@repo/db';
 import type { Server } from 'node:http';
-import request from 'supertest';
+import request, { type Response } from 'supertest';
 
+import {
+  SESSION_ABSOLUTE_LIMIT_SECONDS,
+  SESSION_EXPIRES_IN_SECONDS,
+} from '../src/auth/session-policy.js';
 import {
   signInAudit,
   signInAuditRow,
@@ -21,6 +25,26 @@ import {
   signIn,
   TEST_PASSWORD,
 } from './staff.js';
+
+const SESSION_COOKIE = 'better-auth.session_token=';
+
+function setCookies(response: Response): string[] {
+  const header = response.headers['set-cookie'] as unknown;
+  if (Array.isArray(header)) return header.map(String);
+  return typeof header === 'string' ? [header] : [];
+}
+
+/** The `Set-Cookie` line for the session token, if the response sent one. */
+function sessionCookie(response: Response): string | undefined {
+  return setCookies(response).find((line) => line.startsWith(SESSION_COOKIE));
+}
+
+/** Every cookie the response set, as a request `Cookie` header. */
+function cookieHeader(response: Response): string {
+  return setCookies(response)
+    .map((line) => line.split(';')[0])
+    .join('; ');
+}
 
 /**
  * Authentication over HTTP: the smoke test for the settings that fail
@@ -59,19 +83,16 @@ describe('authentication (e2e)', () => {
   });
 
   describe('smoke', () => {
-    it('signs an ACTIVE staff member in with a 30-day HttpOnly session cookie', async () => {
+    it('signs an ACTIVE staff member in with an HttpOnly session cookie', async () => {
       const staff = await createTestStaff(prisma, {
         organizationId,
         role: 'JUNIOR',
       });
       const response = await attempt(staff.email, staff.password).expect(200);
 
-      const cookies = String(response.headers['set-cookie']);
-      expect(cookies).toContain('better-auth.session_token');
-      // 30-day rolling session, deliberately long because a Junior may be
-      // offline for weeks (M01, authentication.md).
-      expect(cookies).toContain('Max-Age=2592000');
-      expect(cookies).toContain('HttpOnly');
+      const cookie = sessionCookie(response);
+      expect(cookie).toBeDefined();
+      expect(cookie).toContain('HttpOnly');
     });
 
     it('the session cookie resolves the signed-in user', async () => {
@@ -262,6 +283,141 @@ describe('authentication (e2e)', () => {
 
       await http().get('/api/sectors').set('Cookie', phone).expect(401);
       await http().get('/api/sectors').set('Cookie', office).expect(200);
+    });
+  });
+
+  describe('session lifetime (authentication.md#session-duration)', () => {
+    const SEVEN_DAYS_MS = SESSION_EXPIRES_IN_SECONDS * 1000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const MINUTE_MS = 60 * 1000;
+
+    const signInWith = async (rememberMe?: boolean) => {
+      const staff = await createTestStaff(prisma, {
+        organizationId,
+        role: 'ADMIN',
+      });
+      const response = await http()
+        .post('/api/auth/sign-in/email')
+        .send({ email: staff.email, password: staff.password, rememberMe })
+        .expect(200);
+      return { staff, response, cookie: cookieHeader(response) };
+    };
+    const sessionOf = (userId: string) =>
+      prisma.session.findFirstOrThrow({ where: { userId } });
+    const setSession = (userId: string, data: Prisma.SessionUpdateInput) =>
+      prisma.session.updateMany({ where: { userId }, data });
+    const msFromNow = (date: Date) => date.getTime() - Date.now();
+
+    it('"Keep me signed in" (the default) gives a 7-day cookie and session', async () => {
+      const { staff, response } = await signInWith();
+
+      expect(sessionCookie(response)).toContain(
+        `Max-Age=${SESSION_EXPIRES_IN_SECONDS}`,
+      );
+      const { expiresAt } = await sessionOf(staff.userId);
+      expect(msFromNow(expiresAt)).toBeGreaterThan(SEVEN_DAYS_MS - MINUTE_MS);
+      expect(msFromNow(expiresAt)).toBeLessThanOrEqual(SEVEN_DAYS_MS);
+    });
+
+    it('without it, the cookie ends with the browser and the session after 1 day', async () => {
+      const { staff, response } = await signInWith(false);
+
+      const cookie = sessionCookie(response);
+      expect(cookie).toBeDefined();
+      expect(cookie).not.toContain('Max-Age');
+      expect(cookie).not.toContain('Expires');
+      const { expiresAt } = await sessionOf(staff.userId);
+      expect(msFromNow(expiresAt)).toBeGreaterThan(DAY_MS - MINUTE_MS);
+      expect(msFromNow(expiresAt)).toBeLessThanOrEqual(DAY_MS);
+    });
+
+    it('renews a day-old session on a Rasi request and sends the browser a fresh 7-day cookie', async () => {
+      const { staff, cookie } = await signInWith();
+      // As if signed in two days ago: past `updateAge`, so due for renewal.
+      await setSession(staff.userId, {
+        expiresAt: new Date(Date.now() + 5 * DAY_MS),
+      });
+
+      const response = await http()
+        .get('/api/sectors')
+        .set('Cookie', cookie)
+        .expect(200);
+
+      expect(sessionCookie(response)).toContain(
+        `Max-Age=${SESSION_EXPIRES_IN_SECONDS}`,
+      );
+      const { expiresAt } = await sessionOf(staff.userId);
+      expect(msFromNow(expiresAt)).toBeGreaterThan(SEVEN_DAYS_MS - MINUTE_MS);
+    });
+
+    it('does not reissue the cookie on a request when the session was renewed within a day', async () => {
+      const { cookie } = await signInWith();
+
+      const response = await http()
+        .get('/api/sectors')
+        .set('Cookie', cookie)
+        .expect(200);
+
+      expect(sessionCookie(response)).toBeUndefined();
+    });
+
+    it('never renews a session signed in without "Keep me signed in"', async () => {
+      const { staff, cookie } = await signInWith(false);
+      const soon = new Date(Date.now() + 60 * MINUTE_MS);
+      await setSession(staff.userId, { expiresAt: soon });
+
+      await http().get('/api/sectors').set('Cookie', cookie).expect(200);
+
+      const { expiresAt } = await sessionOf(staff.userId);
+      expect(expiresAt.getTime()).toBe(soon.getTime());
+    });
+
+    it('keeps a session in use 29 days after sign-in', async () => {
+      const { staff, cookie } = await signInWith();
+      await setSession(staff.userId, {
+        createdAt: new Date(Date.now() - 29 * DAY_MS),
+      });
+
+      await http().get('/api/sectors').set('Cookie', cookie).expect(200);
+    });
+
+    it('ends a session 30 days after sign-in however recently it was renewed, and expires the cookie', async () => {
+      const { staff, cookie } = await signInWith();
+      await setSession(staff.userId, {
+        createdAt: new Date(
+          Date.now() - SESSION_ABSOLUTE_LIMIT_SECONDS * 1000 - MINUTE_MS,
+        ),
+      });
+
+      const refused = await http()
+        .get('/api/sectors')
+        .set('Cookie', cookie)
+        .expect(401);
+
+      expect(refused.body.code).toBe('UNAUTHENTICATED');
+      expect(sessionCookie(refused)).toContain('Max-Age=0');
+      expect(
+        await prisma.session.count({ where: { userId: staff.userId } }),
+      ).toBe(0);
+    });
+
+    it('get-session answers a session past the absolute limit as signed out', async () => {
+      const { staff, cookie } = await signInWith();
+      await setSession(staff.userId, {
+        createdAt: new Date(
+          Date.now() - SESSION_ABSOLUTE_LIMIT_SECONDS * 1000 - MINUTE_MS,
+        ),
+      });
+
+      const response = await http()
+        .get('/api/auth/get-session')
+        .set('Cookie', cookie)
+        .expect(200);
+
+      expect(response.body).toBeNull();
+      expect(
+        await prisma.session.count({ where: { userId: staff.userId } }),
+      ).toBe(0);
     });
   });
 

@@ -289,6 +289,20 @@ enum AuditAction {
   REOPEN_DAY
 }
 
+/// Why a security-relevant attempt was refused (M13, `security_event`).
+enum SecurityEventKind {
+  /// The caller's role does not hold the route's permission (`PolicyGuard`).
+  PERMISSION_DENIED
+  /// A role tried to create or act on one senior to its own (M01 rule 1).
+  RANK_GUARD
+  /// Someone tried to change their own role or their own status (M01 rule 2).
+  SELF_GUARD
+  /// A setting that is immutable, or locked once the business has accounts (M15).
+  SETTING_LOCKED
+  /// An administration id that is missing, or belongs to another organization (M02).
+  OUT_OF_SCOPE
+}
+
 // ---------------------------------------------------------------------------
 // Identity and organisation
 // ---------------------------------------------------------------------------
@@ -315,6 +329,7 @@ model Organization {
   settings       Setting[]
   ledgerAccounts LedgerAccount[]
   auditLogs      AuditLog[]
+  securityEvents SecurityEvent[]
   emails         EmailOutbox[]
 
   @@map("organization")
@@ -1036,6 +1051,55 @@ model AuditLog {
   @@index([createdAt])
   @@index([organizationId, createdAt])
   @@map("audit_log")
+}
+
+/// A security-relevant attempt the API **refused** (M13, ADR-0014).
+///
+/// Deliberately not `audit_log`: nothing changed, so there is no before/after
+/// to snapshot and nothing that has to be immutable. The rows are telemetry
+/// about people, not a record of money, and they are deletable — which is what
+/// lets the RBAC matrix suite, which refuses every route for every role on
+/// every run, exist at all.
+model SecurityEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  /// The signed-in staff member who made the attempt. No foreign key, like
+  /// `audit_log.actorUserId`: the record must outlive the user row.
+  actorUserId    String
+  /// Their role at the moment of the attempt, which a later demotion must not rewrite.
+  actorRole      StaffRole
+  kind           SecurityEventKind
+  /// The stable `AppError` code the caller was answered with.
+  code           String
+  /// The HTTP status the caller saw. Always a 4xx.
+  /// CHECK security_event_status_refusal_check.
+  status         Int
+  /// CHECK security_event_method_check.
+  method         String
+  /// The route pattern, e.g. `/api/staff/:staffProfileId/role`.
+  /// CHECK security_event_path_check.
+  path           String
+  /// What the attempt was aimed at, where it named something. A bare id with
+  /// no table is allowed — the guard knows the id the route carried, not what
+  /// kind of row it is. CHECK security_event_target_table_needs_id_check.
+  targetTable    String?
+  targetId       String?
+  /// Curated facts only — never a request body, and never anything
+  /// `SAFE_LOG_KEYS` would redact (M13).
+  detail         Json?
+  ipAddress      String?
+  userAgent      String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  /// Cascade, unlike `audit_log`: this is operational telemetry and does not
+  /// outlive the business it belongs to.
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId])
+  @@index([code])
+  @@map("security_event")
 }
 
 /// The primary key is the client-supplied UUID itself, not a cuid.

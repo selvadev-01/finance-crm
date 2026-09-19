@@ -4,6 +4,7 @@ import type { BetterAuthOptions } from 'better-auth';
 import { APIError, createAuthMiddleware, isAPIError } from 'better-auth/api';
 
 import { passwordChange } from './password-change.js';
+import { enforceAbsoluteLimit, GET_SESSION_PATH } from './session-policy.js';
 import { type SignInAttempt, signInAudit } from './sign-in-audit.js';
 
 export const CHANGE_PASSWORD_PATH = '/change-password';
@@ -85,6 +86,11 @@ export function createSignInHooks(client: Client) {
     }),
 
     after: createAuthMiddleware(async (ctx) => {
+      // A session past its 30-day absolute limit ends, however recently it
+      // was renewed (session-policy.ts).
+      if (ctx.path === GET_SESSION_PATH) {
+        return enforceAbsoluteLimit(ctx, ctx.context.returned);
+      }
       // US-003: a successful password change ends a forced change.
       if (ctx.path === CHANGE_PASSWORD_PATH) {
         const userId = ctx.context.session?.user.id;

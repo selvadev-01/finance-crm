@@ -13,6 +13,7 @@ import {
   ContractRoute,
 } from '../platform/contract/contract-route.js';
 import { BusinessOverviewService } from './business-overview.service.js';
+import { DashboardTrendService } from './dashboard-trend.service.js';
 import { LineDashboardService } from './line-dashboard.service.js';
 import { OperationsDashboardService } from './operations-dashboard.service.js';
 import { SectorComparisonService } from './sector-comparison.service.js';
@@ -25,6 +26,7 @@ export class DashboardController {
     private readonly operations: OperationsDashboardService,
     private readonly lines: LineDashboardService,
     private readonly sectors: SectorComparisonService,
+    private readonly trend: DashboardTrendService,
   ) {}
 
   /**
@@ -90,6 +92,26 @@ export class DashboardController {
     return this.lines.view(context, {
       date:
         query.date === undefined ? undefined : parseCalendarDate(query.date),
+      lineId: query.lineId,
+    });
+  }
+
+  /**
+   * The dashboards' trend (S-07, S-19, S-20). Line totals summed over the
+   * caller's scoped lines, so `money.lineTotals`: Admins every line — the
+   * business — and a Senior their own; another line is `404`
+   * (rbac-matrix.md#money-visibility-m09-m11-m12).
+   */
+  @RequirePermission('money.lineTotals')
+  @ContractRoute(api.getTrend)
+  getTrend(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { query }: RouteInput<typeof api.getTrend>,
+  ): Promise<RouteSuccess<typeof api.getTrend>> {
+    return this.trend.view(context, {
+      date:
+        query.date === undefined ? undefined : parseCalendarDate(query.date),
+      days: query.days,
       lineId: query.lineId,
     });
   }

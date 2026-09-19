@@ -1,7 +1,15 @@
 "use client";
 
 import { staffContract } from "@repo/contracts";
-import { Button, Form, FormField, FormRootError, Input } from "@repo/ui";
+import {
+  Button,
+  Checkbox,
+  Choice,
+  Form,
+  FormField,
+  FormRootError,
+  Input,
+} from "@repo/ui";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -13,6 +21,10 @@ interface SignInValues {
   email: string;
   password: string;
 }
+
+// US-001: on by default — a Junior's phone is their own, and a session that
+// ends when the browser closes strands them offline (authentication.md).
+const DEFAULT_REMEMBER_ME = true;
 
 /**
  * US-001 sign-in, and a business's own sign-in link (US-006).
@@ -40,6 +52,7 @@ export function SignInForm({
   // Stays set once sign-in succeeded, so the button cannot submit again while
   // the next screen loads.
   const [leaving, setLeaving] = useState(false);
+  const [rememberMe, setRememberMe] = useState(DEFAULT_REMEMBER_ME);
   const form = useForm<SignInValues>({
     mode: "onTouched",
     shouldFocusError: true,
@@ -56,7 +69,11 @@ export function SignInForm({
 
   async function submit({ email, password }: SignInValues) {
     try {
-      const { error } = await authClient.signIn.email({ email, password });
+      const { error } = await authClient.signIn.email({
+        email,
+        password,
+        rememberMe,
+      });
       if (!error) {
         if (organizationSlug && !(await belongsTo(organizationSlug))) {
           await authClient.signOut();
@@ -94,6 +111,15 @@ export function SignInForm({
       <FormField<SignInValues> name="password" label="Password">
         <Input type="password" autoComplete="current-password" />
       </FormField>
+      <Choice
+        label="Keep me signed in"
+        description="For 7 days on this device. Leave it off on a shared phone or computer."
+      >
+        <Checkbox
+          checked={rememberMe}
+          onCheckedChange={(checked) => setRememberMe(checked === true)}
+        />
+      </Choice>
       <Button
         tone="primary"
         type="submit"

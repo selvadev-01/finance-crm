@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 
 import { readListParams } from "../../../../lib/list-params";
-import {
-  DISCREPANCY_FILTER_KEYS,
-  DiscrepancyReport,
-} from "./discrepancy-report";
+import { DISCREPANCY_FILTER_KEYS } from "../report-filter-keys";
+import { DiscrepancyReport } from "./discrepancy-report";
 
 export const metadata: Metadata = { title: "Discrepancy report · Rasi" };
 

@@ -10,6 +10,7 @@ import type { RequestContext } from '../../src/platform/context/request-context.
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
+import { testRecorder } from '../security/recorder.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -48,6 +49,12 @@ describe('StaffPasswordService (US-003)', () => {
       database,
       new AuditWriter(database),
       hasher,
+      testRecorder(tx, {
+        route: {
+          method: 'POST',
+          path: '/api/staff/:staffProfileId/password-reset',
+        },
+      }),
     );
 
     /** A staff member with a real password credential and two signed-in devices. */
@@ -148,6 +155,41 @@ describe('StaffPasswordService (US-003)', () => {
       ).resolves.toMatchObject({
         sessionsRevoked: 2,
       });
+    });
+  });
+
+  it('records the attempt on the owner, and the guess at a staff id (ADR-0014)', async () => {
+    await withRollback(prisma, async (tx) => {
+      const { context, service, target } = await world(tx, 'ADMIN');
+      const owner = await target('SUPER_ADMIN');
+      // Reaching for the owner's account by forcing a reset is the takeover
+      // the rank guard exists to stop, so the owner must be able to see it.
+      await expect(service.resetPassword(context, owner.id)).rejects.toThrow();
+      await expect(
+        service.resetPassword(context, randomUUID()),
+      ).rejects.toThrow();
+
+      const events = await tx.securityEvent.findMany({
+        where: { organizationId: context.organizationId },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(events).toMatchObject([
+        {
+          kind: 'RANK_GUARD',
+          code: 'CANNOT_RESET_SUPER_ADMIN',
+          status: 403,
+          actorUserId: context.userId,
+          actorRole: 'ADMIN',
+          targetTable: 'staff_profile',
+          targetId: owner.id,
+          path: '/api/staff/:staffProfileId/password-reset',
+          method: 'POST',
+        },
+        { kind: 'OUT_OF_SCOPE', code: 'STAFF_NOT_FOUND', status: 404 },
+      ]);
+      // The temporary password is never generated on a refusal, but prove the
+      // row carries nothing from the attempt beyond who, what and against whom.
+      expect(Object.keys(events[0]!.detail ?? {})).toEqual([]);
     });
   });
 

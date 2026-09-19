@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "@phosphor-icons/react/dist/ssr";
+import { SidebarSimple, X } from "@phosphor-icons/react/dist/ssr";
 import { cva, type VariantProps } from "class-variance-authority";
 import {
   cloneElement,
@@ -11,38 +11,118 @@ import {
   use,
   useEffect,
   useRef,
+  useSyncExternalStore,
 } from "react";
 
 import { Button } from "./button";
 import { cn } from "./cn";
 import { useBackdropPress } from "./dialog";
-import { Tooltip } from "./tooltip";
 
 /**
- * The console frame (navigation-ia.md#responsive-behaviour): a sidebar with
- * labels from 1280px, icons only from 768px, a drawer below. The pieces are
- * generic — the app supplies the links, so `@repo/ui` never imports Next.
+ * The console frame (navigation-ia.md#responsive-behaviour, ADR-0015): a
+ * sidebar on its own tinted layer, whose current item is a tab joined to the
+ * page. From 1280px it shows labels, or — pinned to a rail with the toggle —
+ * icons only; from 768px it is always the rail. The rail opens over the page
+ * while the pointer or keyboard focus is in it. Below 768px it is a drawer.
+ * The pieces are generic — the app supplies the links, so `@repo/ui` never
+ * imports Next.
  *
  *   <AppShell.Root>
  *     <AppShell.Sidebar brand={…} footer={…}>
  *       <AppShell.NavSection title="Operate">
- *         <AppShell.NavItem icon={<Receipt />} label="Collections" current>
+ *         <AppShell.NavItem icon={<Receipt />} label="Collections" state="current">
  *           <Link href="/collections" />
  *         </AppShell.NavItem>
  *       </AppShell.NavSection>
  *     </AppShell.Sidebar>
  *     <AppShell.Body>
- *       <AppShell.Topbar>…</AppShell.Topbar>
+ *       <AppShell.Topbar>…<AppShell.SidebarToggle />…</AppShell.Topbar>
  *       <AppShell.Main>…</AppShell.Main>
  *     </AppShell.Body>
  *   </AppShell.Root>
  */
+
+/* -------------------------------------------------------------------------
+ * The sidebar's mode, remembered per browser. Storage can be missing or throw
+ * (a private window, blocked site data); the mode then lives in memory.
+ * ---------------------------------------------------------------------- */
+
+export type SidebarMode = "expanded" | "rail";
+
+const MODE_KEY = "rasi.console.sidebar";
+let remembered: SidebarMode | null = null;
+const listeners = new Set<() => void>();
+
+function readMode(): SidebarMode {
+  if (remembered) return remembered;
+  try {
+    return window.localStorage.getItem(MODE_KEY) === "rail"
+      ? "rail"
+      : "expanded";
+  } catch {
+    return "expanded";
+  }
+}
+
+function writeMode(mode: SidebarMode) {
+  remembered = mode;
+  try {
+    window.localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Kept in memory for this page's life.
+  }
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  const fromOtherTab = (event: StorageEvent) => {
+    if (event.key !== MODE_KEY) return;
+    remembered = null;
+    listener();
+  };
+  window.addEventListener("storage", fromOtherTab);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", fromOtherTab);
+  };
+}
+
+/** The sidebar's mode from 1280px, and a setter that remembers it. */
+export function useSidebarMode() {
+  const mode = useSyncExternalStore(
+    subscribe,
+    readMode,
+    (): SidebarMode => "expanded",
+  );
+  return [mode, writeMode] as const;
+}
+
+/* ---------------------------------------------------------------------- */
 
 type NavPlacement = "rail" | "drawer";
 const NavPlacementContext = createContext<NavPlacement>("drawer");
 
 function Root({ children }: { children: ReactNode }) {
   return <div className="min-h-dvh bg-surface md:flex">{children}</div>;
+}
+
+/**
+ * Text that shows only while the sidebar is wide — labelled, or a rail being
+ * peeked at. It stays in the accessibility tree either way, so a rail link
+ * keeps its name.
+ */
+const revealed =
+  "opacity-0 transition-opacity duration-200 motion-reduce:transition-none group-hover/sidebar:opacity-100 group-has-[:focus-visible]/sidebar:opacity-100 xl:group-data-[mode=expanded]/sidebar:opacity-100";
+
+/** A piece of the brand that only shows with labels: the product's name. */
+function RailLabel({ children }: { children: ReactNode }) {
+  const placement = use(NavPlacementContext);
+  return (
+    <span className={cn("whitespace-nowrap", placement === "rail" && revealed)}>
+      {children}
+    </span>
+  );
 }
 
 interface SidebarProps {
@@ -54,24 +134,37 @@ interface SidebarProps {
 }
 
 function Sidebar({ brand, children, footer }: SidebarProps) {
+  const [mode] = useSidebarMode();
   return (
     <NavPlacementContext value="rail">
-      <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 flex-col border-r border-border bg-surface-raised md:flex xl:w-60">
-        <div className="flex h-[var(--header-height)] shrink-0 items-center justify-center border-b border-border px-3 xl:justify-start xl:px-4">
-          {brand}
-        </div>
-        <nav
-          aria-label="Console"
-          className="flex flex-1 flex-col gap-4 overflow-y-auto px-2 py-3 xl:px-3"
+      {/* The column the page keeps for the sidebar; the aside can open past it. */}
+      <div
+        data-mode={mode}
+        className="group/sidebar relative z-30 hidden w-[4.375rem] shrink-0 md:block xl:data-[mode=expanded]:w-[15.625rem]"
+      >
+        <aside
+          id="console-sidebar"
+          className={cn(
+            "sticky top-0 flex h-dvh w-[4.375rem] flex-col overflow-hidden bg-surface-nav",
+            "transition-[width,box-shadow] duration-300 ease-out motion-reduce:transition-none",
+            "group-hover/sidebar:w-[15.625rem] group-hover/sidebar:shadow-overlay",
+            "group-has-[:focus-visible]/sidebar:w-[15.625rem] group-has-[:focus-visible]/sidebar:shadow-overlay",
+            "xl:group-data-[mode=expanded]/sidebar:w-[15.625rem] xl:group-data-[mode=expanded]/sidebar:shadow-none",
+          )}
         >
-          {children}
-        </nav>
-        {footer ? (
-          <div className="shrink-0 border-t border-border p-2 xl:p-3">
-            {footer}
+          <div className="flex h-[var(--header-height)] shrink-0 items-center px-[1.0625rem]">
+            {brand}
           </div>
-        ) : null}
-      </aside>
+          {/* Top padding leaves room for the first tab's upper corner. */}
+          <nav
+            aria-label="Console"
+            className="flex flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto pt-7 pb-6 pl-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {children}
+          </nav>
+          {footer ? <div className="shrink-0 p-2.5">{footer}</div> : null}
+        </aside>
+      </div>
     </NavPlacementContext>
   );
 }
@@ -103,10 +196,10 @@ function Drawer({ open, onClose, brand, children, footer }: DrawerProps) {
           onClose();
         }}
         {...backdropPress}
-        className="m-0 h-dvh max-h-dvh w-72 max-w-[calc(100vw-3rem)] border-r border-border bg-surface-raised p-0 text-ink backdrop:bg-ink/35 open:animate-in"
+        className="m-0 h-dvh max-h-dvh w-72 max-w-[calc(100vw-3rem)] bg-surface-nav p-0 text-ink backdrop:bg-ink/35 open:animate-in"
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between border-b border-border px-4">
+          <div className="flex h-[var(--header-height)] shrink-0 items-center justify-between px-4">
             {brand}
             <Button
               tone="ghost"
@@ -119,14 +212,12 @@ function Drawer({ open, onClose, brand, children, footer }: DrawerProps) {
           </div>
           <nav
             aria-label="Console"
-            className="flex flex-1 flex-col gap-4 overflow-y-auto p-3"
+            className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-3 [scrollbar-width:thin]"
             onClick={onClose}
           >
             {children}
           </nav>
-          {footer ? (
-            <div className="shrink-0 border-t border-border p-3">{footer}</div>
-          ) : null}
+          {footer ? <div className="shrink-0 p-3">{footer}</div> : null}
         </div>
       </dialog>
     </NavPlacementContext>
@@ -142,38 +233,66 @@ function NavSection({
 }) {
   const placement = use(NavPlacementContext);
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <p
         className={cn(
-          "px-2.5 pb-1 text-2xs font-medium tracking-wider text-ink-subtle uppercase",
-          placement === "rail" && "sr-only xl:not-sr-only",
+          "px-3 pb-1 text-2xs font-medium tracking-wider whitespace-nowrap text-ink-muted uppercase",
+          placement === "rail" && revealed,
         )}
       >
         {title}
       </p>
-      {placement === "rail" ? (
-        <hr aria-hidden className="mx-2 mb-1 border-border xl:hidden" />
-      ) : null}
-      <ul className="flex flex-col gap-0.5">{children}</ul>
+      <ul className="flex flex-col gap-1">{children}</ul>
     </div>
   );
 }
 
+/**
+ * The current item is a tab cut out of the sidebar and joined to the page:
+ * its row takes the page's colour, and two circles in the sidebar's colour,
+ * shadowed with the page's, draw the inverted corners above and below it.
+ */
 const navItem = cva(
-  [
-    "relative flex h-9 items-center gap-3 rounded-control px-2.5 text-label transition-colors",
-    "[&_svg]:shrink-0",
-  ],
+  "group/nav relative flex items-center gap-3 text-label transition-colors motion-reduce:transition-none",
   {
     variants: {
       state: {
-        current:
-          "bg-accent-subtle text-accent before:absolute before:inset-y-1.5 before:-left-2 before:w-0.5 before:rounded-pill before:bg-accent xl:before:-left-3",
-        idle: "text-ink-muted hover:bg-surface-sunken hover:text-ink",
+        current: "text-ink",
+        idle: "text-ink-muted hover:text-ink",
       },
       placement: {
-        rail: "justify-center xl:justify-start",
-        drawer: "",
+        rail: "h-12.5 pr-3 pl-[0.4375rem]",
+        drawer: "h-11 rounded-control px-2",
+      },
+    },
+    compoundVariants: [
+      {
+        state: "current",
+        placement: "rail",
+        className: [
+          "rounded-l-nav bg-surface",
+          "before:pointer-events-none before:absolute before:-top-12.5 before:right-0 before:size-12.5 before:rounded-pill before:bg-surface-nav before:shadow-[35px_35px_0_10px_var(--color-surface)] before:content-['']",
+          "after:pointer-events-none after:absolute after:top-12.5 after:right-0 after:size-12.5 after:rounded-pill after:bg-surface-nav after:shadow-[35px_-35px_0_10px_var(--color-surface)] after:content-['']",
+        ],
+      },
+      {
+        state: "idle",
+        placement: "rail",
+        className: "rounded-r-pill hover:bg-ink/5",
+      },
+      { state: "current", placement: "drawer", className: "bg-surface" },
+      { state: "idle", placement: "drawer", className: "hover:bg-ink/5" },
+    ],
+  },
+);
+
+const navTile = cva(
+  "relative z-[1] grid size-9 shrink-0 place-items-center rounded-tile transition-colors motion-reduce:transition-none [&_svg]:size-[18px]",
+  {
+    variants: {
+      state: {
+        current: "bg-accent text-accent-ink",
+        idle: "bg-surface text-ink-muted group-hover/nav:text-ink",
       },
     },
   },
@@ -200,12 +319,13 @@ function NavItem({ icon, label, state, count, children }: NavItemProps) {
     count && count > 0 ? (count > 99 ? "99+" : String(count)) : null;
   const content = (
     <>
-      <span className="relative">
+      <span className={navTile({ state })}>
         {icon}
         {shown && placement === "rail" ? (
+          // On the tile while the rail is narrow; beside the label once it is wide.
           <span
             aria-hidden
-            className="absolute -top-1.5 -right-2 min-w-4 rounded-pill bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse xl:hidden"
+            className="absolute -top-1.5 -right-1.5 min-w-4 rounded-pill bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse transition-opacity group-hover/sidebar:opacity-0 group-has-[:focus-visible]/sidebar:opacity-0 xl:group-data-[mode=expanded]/sidebar:opacity-0"
           >
             {shown}
           </span>
@@ -213,8 +333,8 @@ function NavItem({ icon, label, state, count, children }: NavItemProps) {
       </span>
       <span
         className={cn(
-          "truncate",
-          placement === "rail" && "sr-only xl:not-sr-only",
+          "relative z-[1] truncate",
+          placement === "rail" && revealed,
         )}
       >
         {label}
@@ -223,8 +343,8 @@ function NavItem({ icon, label, state, count, children }: NavItemProps) {
         <span
           data-numeric
           className={cn(
-            "ml-auto rounded-pill bg-critical px-1.5 text-2xs leading-4 font-semibold text-ink-inverse",
-            placement === "rail" && "hidden xl:inline",
+            "relative z-[1] ml-auto rounded-pill bg-critical px-1.5 text-2xs leading-4 font-semibold text-ink-inverse",
+            placement === "rail" && revealed,
           )}
         >
           {shown}
@@ -241,30 +361,80 @@ function NavItem({ icon, label, state, count, children }: NavItemProps) {
       })
     : children;
 
-  return (
-    <li>
-      {placement === "rail" ? (
-        <Tooltip content={label} side="right" className="xl:hidden">
-          {link}
-        </Tooltip>
-      ) : (
-        link
-      )}
-    </li>
-  );
+  return <li>{link}</li>;
 }
 
 function Body({ children }: { children: ReactNode }) {
   return <div className="flex min-w-0 flex-1 flex-col">{children}</div>;
 }
 
-/** The bar above the page: the drawer button on a phone, then the app's tools. */
+/**
+ * The bar above the page: glass over the scrolling content, solid where the
+ * browser cannot blur. The drawer button on a phone, then the app's tools.
+ */
 function Topbar({ children }: { children: ReactNode }) {
   return (
-    <header className="sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-[var(--page-padding)]">
+    <header className="sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center gap-2 bg-surface px-[var(--page-padding)] supports-[backdrop-filter:blur(1px)]:bg-surface/75 supports-[backdrop-filter:blur(1px)]:backdrop-blur-md">
       {children}
     </header>
   );
+}
+
+/** From 1280px: labels, or icons only. Remembered per browser. */
+function SidebarToggle() {
+  const [mode, setMode] = useSidebarMode();
+  const expanded = mode === "expanded";
+  return (
+    <button
+      type="button"
+      aria-label="Navigation labels"
+      aria-controls="console-sidebar"
+      aria-expanded={expanded}
+      onClick={() => setMode(expanded ? "rail" : "expanded")}
+      className="hidden size-9 place-items-center rounded-tile text-ink-muted transition-colors hover:bg-ink/5 hover:text-ink xl:inline-grid"
+    >
+      <SidebarSimple aria-hidden size={20} />
+    </button>
+  );
+}
+
+interface TopbarActionProps {
+  /** Names the action for a screen reader: the icon alone says nothing. */
+  label: string;
+  icon: ReactNode;
+  /** A count on the button's corner — unread notifications. */
+  count?: number;
+  /** The link or button, with no children: `<Link href="/notifications" />`. */
+  children: ReactElement<{
+    className?: string;
+    children?: ReactNode;
+    "aria-label"?: string;
+  }>;
+}
+
+/** A round icon action in the top bar, with an optional count. */
+function TopbarAction({ label, icon, count, children }: TopbarActionProps) {
+  const shown =
+    count && count > 0 ? (count > 99 ? "99+" : String(count)) : null;
+  return cloneElement(children, {
+    "aria-label": shown ? `${label}, ${shown} unread` : label,
+    className:
+      "relative grid size-10 shrink-0 place-items-center rounded-pill bg-surface-raised text-ink-muted shadow-raised transition-colors hover:text-ink [&_svg]:size-5",
+    children: (
+      <>
+        {icon}
+        {shown ? (
+          <span
+            aria-hidden
+            data-numeric
+            className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-pill bg-critical px-1 text-2xs leading-none font-semibold text-ink-inverse"
+          >
+            {shown}
+          </span>
+        ) : null}
+      </>
+    ),
+  });
 }
 
 const main = cva(
@@ -297,9 +467,12 @@ export const AppShell = {
   Root,
   Sidebar,
   Drawer,
+  RailLabel,
   NavSection,
   NavItem,
   Body,
   Topbar,
+  SidebarToggle,
+  TopbarAction,
   Main,
 };

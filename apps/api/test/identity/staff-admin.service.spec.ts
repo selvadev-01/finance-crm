@@ -10,6 +10,7 @@ import type { RequestContext } from '../../src/platform/context/request-context.
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
+import { testRecorder } from '../security/recorder.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -60,6 +61,7 @@ describe('StaffAdminService (US-092)', () => {
       new AuditWriter(database),
       hasher,
       new StaffDirectoryService(database),
+      testRecorder(tx),
     );
 
     /** Someone to act on, with two signed-in devices. */
@@ -553,6 +555,155 @@ describe('StaffAdminService (US-092)', () => {
           code: 'CANNOT_MANAGE_HIGHER_ROLE',
           status: 403,
         });
+      });
+    });
+  });
+
+  /**
+   * The security log (ADR-0014) — the four guards above leave a durable record of the attempt, not
+   * only a log line. Each assertion is the one an investigator needs: who,
+   * against whom, and which rule said no.
+   */
+  describe('the refused attempt is recorded (M13, ADR-0014)', () => {
+    const events = (tx: PrismaClient, organizationId: string) =>
+      tx.securityEvent.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+    it('records an Admin reaching for the Super Admin role, and stores none of the person they invented', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, organization } = await world(tx, 'ADMIN');
+        const body = input({ role: 'SUPER_ADMIN' });
+
+        await expect(
+          service.create(context, body, today),
+        ).rejects.toMatchObject({ code: 'ROLE_ABOVE_OWN' });
+
+        const [row, ...rest] = await events(tx, organization.id);
+        expect(rest).toEqual([]);
+        expect(row).toMatchObject({
+          actorUserId: context.userId,
+          actorRole: 'ADMIN',
+          kind: 'RANK_GUARD',
+          code: 'ROLE_ABOVE_OWN',
+          status: 403,
+          detail: { attemptedRole: 'SUPER_ADMIN' },
+        });
+        // The role is the whole fact. The name, email and mobile number the
+        // attempt carried are not stored anywhere (M13, SAFE_LOG_KEYS).
+        const written = JSON.stringify(row);
+        expect(written).not.toContain(body.email);
+        expect(written).not.toContain(body.phone);
+        expect(written).not.toContain(body.name);
+      });
+    });
+
+    it('records an Admin trying to suspend the owner, naming the person and their role', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, target, organization } = await world(
+          tx,
+          'ADMIN',
+        );
+        const owner = await target('SUPER_ADMIN');
+
+        await expect(
+          service.changeStatus(
+            context,
+            owner.id,
+            { status: 'SUSPENDED', acknowledgeOnDuty: true },
+            today,
+          ),
+        ).rejects.toMatchObject({ code: 'CANNOT_MANAGE_HIGHER_ROLE' });
+
+        expect(await events(tx, organization.id)).toMatchObject([
+          {
+            kind: 'RANK_GUARD',
+            code: 'CANNOT_MANAGE_HIGHER_ROLE',
+            targetTable: 'staff_profile',
+            targetId: owner.id,
+            detail: { targetRole: 'SUPER_ADMIN' },
+          },
+        ]);
+      });
+    });
+
+    it('records the two self guards with what was being attempted', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, organization } = await world(
+          tx,
+          'SUPER_ADMIN',
+        );
+
+        await expect(
+          service.changeRole(context, context.staffProfileId, 'JUNIOR', today),
+        ).rejects.toMatchObject({ code: 'CANNOT_CHANGE_OWN_ROLE' });
+        await expect(
+          service.changeStatus(
+            context,
+            context.staffProfileId,
+            { status: 'SUSPENDED', acknowledgeOnDuty: true },
+            today,
+          ),
+        ).rejects.toMatchObject({ code: 'CANNOT_CHANGE_OWN_STATUS' });
+
+        expect(await events(tx, organization.id)).toMatchObject([
+          {
+            kind: 'SELF_GUARD',
+            code: 'CANNOT_CHANGE_OWN_ROLE',
+            targetId: context.staffProfileId,
+            detail: { attemptedRole: 'JUNIOR' },
+          },
+          {
+            kind: 'SELF_GUARD',
+            code: 'CANNOT_CHANGE_OWN_STATUS',
+            detail: { attemptedStatus: 'SUSPENDED' },
+          },
+        ]);
+      });
+    });
+
+    it('records an id from another organization, which is how someone finds out who else exists', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, organization } = await world(tx);
+        const elsewhere = await createLine(tx);
+        const theirs = await createStaff(
+          tx,
+          elsewhere.organization.id,
+          'JUNIOR',
+        );
+
+        await expect(
+          service.update(
+            context,
+            theirs.id,
+            { name: 'Renamed', phone: '+919000000001' },
+            today,
+          ),
+        ).rejects.toMatchObject({ code: 'STAFF_NOT_FOUND', status: 404 });
+
+        expect(await events(tx, organization.id)).toMatchObject([
+          {
+            kind: 'OUT_OF_SCOPE',
+            code: 'STAFF_NOT_FOUND',
+            status: 404,
+            targetTable: 'staff_profile',
+            targetId: theirs.id,
+          },
+        ]);
+      });
+    });
+
+    it('records nothing for an ordinary mistake — a taken email is not an attempt', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, organization } = await world(tx);
+        const first = await service.create(context, input(), today);
+
+        await expect(
+          service.create(context, input({ email: first.staff.email }), today),
+        ).rejects.toMatchObject({ code: 'EMAIL_TAKEN' });
+
+        expect(await events(tx, organization.id)).toEqual([]);
       });
     });
   });

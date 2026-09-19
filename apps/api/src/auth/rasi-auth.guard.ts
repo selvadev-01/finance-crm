@@ -1,28 +1,53 @@
 import { type ExecutionContext, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { AuthGuard } from '@thallesp/nestjs-better-auth';
+import { fromNodeHeaders } from 'better-auth/node';
+import type { Request, Response } from 'express';
 
 import { auth } from './auth.config.js';
 
+type SessionRequest = Request & {
+  session?: unknown;
+  user?: { id?: string } | null;
+};
+
 /**
- * The session check: a valid Better Auth session, or `401`. Not a global guard
- * itself — M02's `PolicyGuard` calls it after handling public routes.
+ * The session check. Not a global guard itself — M02's `PolicyGuard` calls it
+ * after handling public routes, and refuses with `401` when it attaches no
+ * user.
  *
- * It wraps the library's `AuthGuard` rather than letting it run globally
- * because that guard resolves the session — a database query — *before*
- * checking whether a route is public, so `/health/live` would fail whenever
- * the database is down. `PolicyGuard` returns early for public routes, and
- * only then does this run. It attaches `request.session` and `request.user`.
+ * It resolves the session itself rather than through the library's
+ * `AuthGuard`, for two reasons:
+ *
+ * - That guard resolves the session — a database query — *before* checking
+ *   whether a route is public, so `/health/live` would fail whenever the
+ *   database is down.
+ * - It discards the response headers of `getSession`. Rolling renewal happens
+ *   in that call: Better Auth moves the session's expiry out and re-issues the
+ *   cookie with a fresh `Max-Age`. Dropped, the database session renews but
+ *   the browser's cookie still expires 7 days after sign-in, and a staff
+ *   member working every day is signed out anyway. The web app never calls
+ *   `/api/auth/get-session` itself, so this is the only place renewal can
+ *   reach the browser. The same headers carry the expired cookies when the
+ *   session is past its absolute limit (session-policy.ts).
+ *
+ * It attaches `request.session` and `request.user`, as the library does.
  */
 @Injectable()
 export class RasiAuthGuard {
-  private readonly sessionGuard: AuthGuard;
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const http = context.switchToHttp();
+    const request = http.getRequest<SessionRequest>();
+    const response = http.getResponse<Response>();
 
-  constructor(reflector: Reflector) {
-    this.sessionGuard = new AuthGuard(reflector, { auth });
-  }
+    const { headers, response: session } = await auth.api.getSession({
+      headers: fromNodeHeaders(request.headers),
+      returnHeaders: true,
+    });
+    for (const cookie of headers.getSetCookie()) {
+      response.append('Set-Cookie', cookie);
+    }
 
-  canActivate(context: ExecutionContext): Promise<boolean> {
-    return this.sessionGuard.canActivate(context);
+    request.session = session;
+    request.user = session?.user ?? null;
+    return true;
   }
 }

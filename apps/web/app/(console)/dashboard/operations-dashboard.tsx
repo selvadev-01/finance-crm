@@ -1,11 +1,18 @@
 "use client";
 
 import {
+  AddressBook,
   ArrowRight,
   ArrowsLeftRight,
+  Bank,
   CalendarX,
   CaretRight,
   HandCoins,
+  HourglassMedium,
+  LockOpen,
+  SealCheck,
+  Target,
+  TrendUp,
   UserMinus,
   UserPlus,
   Wallet,
@@ -20,17 +27,21 @@ import {
 } from "@repo/contracts";
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
+  ActivityList,
   Badge,
   buttonClass,
   Card,
+  cn,
   CodeChip,
   DataView,
   DetailSkeleton,
   EmptyFrame,
   FilterField,
+  flatSurfaceClass,
   formatBusinessDate,
   formatCurrency,
   FormMessage,
+  HealthCard,
   Input,
   NothingYet,
   NotPermitted,
@@ -52,18 +63,21 @@ import {
 import { Discrepancy, Money } from "../../../components/money";
 import { LoadFailed } from "../../../components/query-state";
 import { StatusBadge } from "../../../components/status-badge";
-import { formatTimestamp } from "../../../lib/format";
 import { formatPerMille, isZeroMoney, perMille } from "../../../lib/money";
 import { canOnboard } from "../../../lib/roles";
 import { useApiQuery } from "../../../lib/use-api-query";
 import { useSignedIn } from "../../../lib/use-me";
 import {
   CompareSectorsLink,
+  countShare,
+  LiveStamp,
   Meter,
+  ShareRing,
   UNAVAILABLE,
   Unknown,
   WEEKDAYS,
 } from "./dashboard-parts";
+import { collectedDelta, TrendCard, useTrend } from "./trend-card";
 
 /**
  * S-20 · Admin operational dashboard (US-082, PDF §21): today's money across
@@ -79,9 +93,11 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
     dashboardContract.getOperations,
     future ? null : { query: date ? { date } : {} },
   );
+  const trend = useTrend(future ? null : shown);
 
-  const header = (updatedAt: string | null, day: Dashboard["day"] | null) => (
+  const header = (view: Dashboard | null) => (
     <PageHeader
+      frame="hero"
       title={shown === today ? "Today" : formatBusinessDate(shown)}
       meta={
         <>
@@ -89,13 +105,31 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
             {WEEKDAYS[dayOfWeek(parseCalendarDate(shown))]} ·{" "}
             {formatBusinessDate(shown)}
           </span>
-          {day && day.kind !== "WORKING" ? (
-            <StatusBadge kind="dayKind" value={day.kind} />
+          {view && view.day.kind !== "WORKING" ? (
+            <StatusBadge kind="dayKind" value={view.day.kind} />
           ) : null}
-          {updatedAt ? (
-            <span>updated {formatTimestamp(updatedAt, "clock")}</span>
-          ) : null}
+          {view ? <LiveStamp at={view.generatedAt} /> : null}
         </>
+      }
+      summary={
+        view?.today ? (
+          <>
+            <ShareRing
+              share={perMille(view.today.collected, view.today.expected)}
+              label="Collected of expected"
+              caption="Collected"
+            />
+            <ShareRing
+              share={countShare(
+                view.today.linesToClose - view.today.linesNotClosed,
+                view.today.linesToClose,
+              )}
+              label="Lines closed"
+              caption="Lines closed"
+              tone="positive"
+            />
+          </>
+        ) : null
       }
       actions={
         <FilterField label="Date" width="sm">
@@ -119,7 +153,7 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
   if (future) {
     return (
       <>
-        {header(null, null)}
+        {header(null)}
         <FormMessage tone="info">
           The dashboard shows today or an earlier day. Pick another date.
         </FormMessage>
@@ -140,7 +174,7 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
     case "error":
       return (
         <>
-          {header(null, null)}
+          {header(null)}
           <LoadFailed message={query.message} onRetry={query.reload} />
         </>
       );
@@ -150,7 +184,7 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
   if (view.lines !== null && view.lines.length === 0) {
     return (
       <>
-        {header(view.generatedAt, view.day)}
+        {header(view)}
         <EmptyFrame>
           <NothingYet
             title="Set up the business first"
@@ -168,7 +202,7 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
 
   return (
     <>
-      {header(view.generatedAt, view.day)}
+      {header(view)}
       {view.day.kind !== "WORKING" ? (
         <FormMessage tone="info">
           {view.day.kind === "SUNDAY"
@@ -177,7 +211,12 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
         </FormMessage>
       ) : null}
 
-      <TodayFigures view={view} />
+      <TodayFigures view={view} delta={collectedDelta(trend, shown)} />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <TrendCard trend={trend} scope="every line" />
+        <AgainstExpected view={view} />
+      </div>
 
       <div className="grid gap-[var(--section-gap)] lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <NeedsAttention view={view} onRetry={query.reload} />
@@ -191,15 +230,16 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
   );
 }
 
-function TodayFigures({ view }: { view: Dashboard }) {
+function TodayFigures({ view, delta }: { view: Dashboard; delta: ReactNode }) {
   const today = view.today;
   const approvals = view.pendingApprovals;
   const share = today ? perMille(today.collected, today.expected) : null;
   return (
     <>
-      <StatGrid columns={4} aria-label="Today’s collections">
+      <StatGrid columns={4} frame="tiles" aria-label="Today’s collections">
         <Stat
           label="Expected"
+          icon={<Target />}
           hint={
             today
               ? `across ${today.linesToClose} ${today.linesToClose === 1 ? "line" : "lines"} collecting`
@@ -210,6 +250,9 @@ function TodayFigures({ view }: { view: Dashboard }) {
         </Stat>
         <Stat
           label="Collected"
+          icon={<HandCoins />}
+          iconTone="positive"
+          delta={today ? delta : null}
           hint={
             today ? (
               share === null ? (
@@ -229,6 +272,8 @@ function TodayFigures({ view }: { view: Dashboard }) {
         </Stat>
         <Stat
           label="Pending approvals"
+          icon={<ArrowsLeftRight />}
+          iconTone="warning"
           tone={approvals && approvals.total > 0 ? "warning" : "neutral"}
           hint={
             approvals
@@ -242,6 +287,8 @@ function TodayFigures({ view }: { view: Dashboard }) {
         </Stat>
         <Stat
           label="Lines not closed"
+          icon={<LockOpen />}
+          iconTone="info"
           hint={
             today
               ? `${today.linesToClose - today.linesNotClosed} of ${today.linesToClose} closed`
@@ -251,47 +298,85 @@ function TodayFigures({ view }: { view: Dashboard }) {
           {today ? today.linesNotClosed : <Unknown />}
         </Stat>
       </StatGrid>
-
-      <StatGrid columns={4} aria-label="Against expected">
-        <Stat
-          label="Pending"
-          tone={today && !isZeroMoney(today.pending) ? "warning" : "neutral"}
-          hint={today ? "short of expected, line by line" : UNAVAILABLE}
-        >
-          {today ? formatCurrency(today.pending) : <Unknown />}
-        </Stat>
-        <Stat
-          label="Extra"
-          hint={today ? "over expected, line by line" : UNAVAILABLE}
-        >
-          {today ? formatCurrency(today.extra) : <Unknown />}
-        </Stat>
-        <Stat
-          label="Low collections"
-          hint={today ? "paid less than expected" : UNAVAILABLE}
-        >
-          {today ? today.lowCount : <Unknown />}
-        </Stat>
-        <Stat
-          label="Extra collections"
-          hint={today ? "paid more than expected" : UNAVAILABLE}
-        >
-          {today ? today.extraCount : <Unknown />}
-        </Stat>
-      </StatGrid>
     </>
+  );
+}
+
+/** Beside the trend: how far the day is from expected, and how many entries were off. */
+function AgainstExpected({ view }: { view: Dashboard }) {
+  const today = view.today;
+  if (!today) {
+    return (
+      <HealthCard.Root aria-label="Against expected">
+        <HealthCard.Header title="Against expected" />
+        <HealthCard.Detail>{UNAVAILABLE}</HealthCard.Detail>
+      </HealthCard.Root>
+    );
+  }
+  const pendingShare = perMille(today.pending, today.expected);
+  const extraShare = perMille(today.extra, today.expected);
+  return (
+    <div
+      role="group"
+      aria-label="Against expected"
+      className="grid content-start gap-4 sm:grid-cols-2 lg:grid-cols-1"
+    >
+      <HealthCard.Root>
+        <HealthCard.Header
+          icon={<HourglassMedium />}
+          tone="warning"
+          title="Pending"
+          subtitle="short of expected, line by line"
+          value={
+            <Badge
+              shape="pill"
+              tone={isZeroMoney(today.pending) ? "neutral" : "warning"}
+              mark="none"
+            >
+              {formatCurrency(today.pending)}
+            </Badge>
+          }
+        />
+        {pendingShare === null ? null : (
+          <Meter
+            share={pendingShare}
+            label="Pending of expected"
+            tone="warning"
+          />
+        )}
+        <HealthCard.Detail>
+          {today.lowCount} {today.lowCount === 1 ? "customer" : "customers"}{" "}
+          paid less than expected
+        </HealthCard.Detail>
+      </HealthCard.Root>
+      <HealthCard.Root>
+        <HealthCard.Header
+          icon={<TrendUp />}
+          tone="info"
+          title="Extra"
+          subtitle="over expected, line by line"
+          value={
+            <Badge shape="pill" tone="info" mark="none">
+              {formatCurrency(today.extra)}
+            </Badge>
+          }
+        />
+        {extraShare === null ? null : (
+          <Meter share={extraShare} label="Extra of expected" tone="positive" />
+        )}
+        <HealthCard.Detail>
+          {today.extraCount} {today.extraCount === 1 ? "customer" : "customers"}{" "}
+          paid more than expected
+        </HealthCard.Detail>
+      </HealthCard.Root>
+    </div>
   );
 }
 
 // ------------------------------------------------------------ needs attention
 
-const ICON_TONE = {
-  critical: "bg-critical-subtle text-critical",
-  warning: "bg-warning-subtle text-warning",
-} as const;
-
 interface AttentionRowProps {
-  tone: keyof typeof ICON_TONE;
+  tone: "critical" | "warning";
   icon: ReactNode;
   code?: string;
   title: string;
@@ -400,7 +485,7 @@ function NeedsAttention({
           onRetry={onRetry}
         />
       ) : items.length === 0 ? (
-        <Card.Root>
+        <Card.Root surface="flat">
           <Card.Body>
             <p className="text-body text-ink-muted">
               Nothing needs attention: no disputes, missed customers, waiting
@@ -409,38 +494,41 @@ function NeedsAttention({
           </Card.Body>
         </Card.Root>
       ) : (
-        <Card.Root>
-          <ul className="divide-y divide-border">
-            {items.map((item) => {
-              const row = attentionRow(item, view.businessDate);
-              return (
-                <li
-                  key={`${item.kind}-${"lineId" in item ? item.lineId : ""}-${"handoverId" in item ? item.handoverId : ""}`}
-                  className="flex flex-wrap items-start gap-3 px-4 py-3"
-                >
-                  <span
-                    className={`grid size-8 shrink-0 place-items-center rounded-control ${ICON_TONE[row.tone]}`}
+        <Card.Root surface="flat">
+          <Card.Body>
+            <ActivityList.Root aria-label="Needs attention">
+              {items.map((item) => {
+                const row = attentionRow(item, view.businessDate);
+                return (
+                  <ActivityList.Item
+                    key={`${item.kind}-${"lineId" in item ? item.lineId : ""}-${"handoverId" in item ? item.handoverId : ""}`}
                   >
-                    {row.icon}
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <p className="flex flex-wrap items-center gap-2 text-body font-medium text-ink">
-                      {row.code ? <CodeChip>{row.code}</CodeChip> : null}
-                      <span>{row.title}</span>
-                    </p>
-                    <p className="text-caption text-ink-muted">{row.detail}</p>
-                  </div>
-                  <Link
-                    href={row.href}
-                    className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-                  >
-                    {row.action}
-                    <ArrowRight aria-hidden size={14} />
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    <ActivityList.Icon tone={row.tone}>
+                      {row.icon}
+                    </ActivityList.Icon>
+                    <ActivityList.Body
+                      title={
+                        <span className="flex flex-wrap items-center gap-2">
+                          {row.code ? <CodeChip>{row.code}</CodeChip> : null}
+                          <span>{row.title}</span>
+                        </span>
+                      }
+                      meta={row.detail}
+                    />
+                    <ActivityList.Aside>
+                      <Link
+                        href={row.href}
+                        className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+                      >
+                        {row.action}
+                        <ArrowRight aria-hidden size={14} />
+                      </Link>
+                    </ActivityList.Aside>
+                  </ActivityList.Item>
+                );
+              })}
+            </ActivityList.Root>
+          </Card.Body>
         </Card.Root>
       )}
     </Section>
@@ -452,18 +540,25 @@ function QuickActions({ pending }: { pending: number | null }) {
   const action = (href: string, icon: ReactNode, label: ReactNode) => (
     <Link
       href={href}
-      className={buttonClass("secondary", "w-full justify-between")}
+      className="group flex items-center gap-3 rounded-control p-2 text-label text-ink transition-colors hover:bg-ink/5"
     >
-      <span className="flex items-center gap-2">
+      <span className="grid size-10 shrink-0 place-items-center rounded-pill bg-accent-subtle text-accent">
         {icon}
-        {label}
       </span>
-      <CaretRight aria-hidden size={14} />
+      <span className="flex-1">{label}</span>
+      <CaretRight
+        aria-hidden
+        size={14}
+        className="text-ink-subtle transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+      />
     </Link>
   );
   return (
     <Section title="Quick actions">
-      <nav aria-label="Quick actions" className="flex flex-col gap-2">
+      <nav
+        aria-label="Quick actions"
+        className={cn(flatSurfaceClass, "flex flex-col gap-1 p-2")}
+      >
         {canOnboard(me.role) ? (
           <>
             {action(
@@ -505,6 +600,7 @@ function LinesToday({ view }: { view: Dashboard }) {
         </FormMessage>
       ) : (
         <DataView
+          frame="flat"
           caption="Lines today"
           rows={lines}
           getRowId={(line) => line.lineId}
@@ -610,6 +706,7 @@ function SectorsToday({
         </FormMessage>
       ) : (
         <DataView
+          frame="flat"
           caption="Sectors today"
           rows={sectors}
           getRowId={(sector) => sector.sectorId}
@@ -661,27 +758,35 @@ function RunningTotals({ view }: { view: Dashboard }) {
   return (
     <>
       <Section title="Customers and accounts">
-        <StatGrid columns={4}>
+        <StatGrid columns={4} frame="tiles">
           <Stat
             label="New customers"
+            icon={<UserPlus />}
+            iconTone="neutral"
             hint={customers ? "onboarded this day" : UNAVAILABLE}
           >
             {customers ? customers.new : <Unknown />}
           </Stat>
           <Stat
             label="Active customers"
+            icon={<AddressBook />}
+            iconTone="neutral"
             hint={customers ? "with an active account" : UNAVAILABLE}
           >
             {customers ? customers.active : <Unknown />}
           </Stat>
           <Stat
             label="Active accounts"
+            icon={<Wallet />}
+            iconTone="neutral"
             hint={accounts ? `of ${accounts.total} accounts` : UNAVAILABLE}
           >
             {accounts ? accounts.active : <Unknown />}
           </Stat>
           <Stat
             label="Completed accounts"
+            icon={<SealCheck />}
+            iconTone="neutral"
             hint={accounts ? "fully collected" : UNAVAILABLE}
           >
             {accounts ? accounts.completed : <Unknown />}
@@ -692,11 +797,21 @@ function RunningTotals({ view }: { view: Dashboard }) {
         title="Investment"
         description="Every account disbursed, from the ledger."
       >
-        <StatGrid columns={2}>
-          <Stat label="Invested" hint={investment ? undefined : UNAVAILABLE}>
+        <StatGrid columns={2} frame="tiles">
+          <Stat
+            label="Invested"
+            icon={<Bank />}
+            iconTone="neutral"
+            hint={investment ? undefined : UNAVAILABLE}
+          >
             {investment ? formatCurrency(investment.invested) : <Unknown />}
           </Stat>
-          <Stat label="Profit" hint={investment ? undefined : UNAVAILABLE}>
+          <Stat
+            label="Profit"
+            icon={<TrendUp />}
+            iconTone="neutral"
+            hint={investment ? undefined : UNAVAILABLE}
+          >
             {investment ? formatCurrency(investment.profit) : <Unknown />}
           </Stat>
         </StatGrid>

@@ -23,6 +23,13 @@ export interface PageHeaderProps {
   description?: ReactNode;
   /** Buttons for this page. They wrap under the title on a narrow screen. */
   actions?: ReactNode;
+  /**
+   * A dashboard's headline figures beside the title — `RadialMeter`s. Hidden
+   * below 768px, where the page's own figures come straight after the title.
+   */
+  summary?: ReactNode;
+  /** `ruled` closes the header with a rule; `hero` opens a dashboard, unruled (ADR-0015). */
+  frame?: "ruled" | "hero";
   className?: string;
 }
 
@@ -33,13 +40,16 @@ export function PageHeader({
   meta,
   description,
   actions,
+  summary,
+  frame = "ruled",
   className,
 }: PageHeaderProps) {
   const above = trail ?? eyebrow;
   return (
     <header
       className={cn(
-        "flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-border pb-5",
+        "flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
+        frame === "ruled" && "border-b border-border pb-5",
         className,
       )}
     >
@@ -59,8 +69,15 @@ export function PageHeader({
           </div>
         ) : null}
       </div>
-      {actions ? (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      {actions || summary ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          {summary ? (
+            <div className="hidden items-center gap-5 md:flex">{summary}</div>
+          ) : null}
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-2">{actions}</div>
+          ) : null}
+        </div>
       ) : null}
     </header>
   );

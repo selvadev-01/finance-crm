@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import { readListParams } from "../../../../lib/list-params";
-import { OVERDUE_FILTER_KEYS, OverdueReport } from "./overdue-report";
+import { OVERDUE_FILTER_KEYS } from "../report-filter-keys";
+import { OverdueReport } from "./overdue-report";
 
 export const metadata: Metadata = { title: "Overdue report · Rasi" };
 

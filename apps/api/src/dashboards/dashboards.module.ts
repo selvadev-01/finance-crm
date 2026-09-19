@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 
 import { CashModule } from '../cash/cash.module.js';
+import { SettingsModule } from '../settings/settings.module.js';
 import { BusinessOverviewService } from './business-overview.service.js';
 import { DashboardController } from './dashboard.controller.js';
+import { DashboardTrendService } from './dashboard-trend.service.js';
 import { LineDashboardService } from './line-dashboard.service.js';
 import { OperationsDashboardService } from './operations-dashboard.service.js';
 import { SectorComparisonService } from './sector-comparison.service.js';
@@ -15,10 +17,12 @@ import { SectorComparisonService } from './sector-comparison.service.js';
  * which reads the day close's own view.
  */
 @Module({
-  imports: [CashModule],
+  // M15: the line dashboard reads `account.overdueGraceDays` (BR-05, US-094).
+  imports: [CashModule, SettingsModule],
   controllers: [DashboardController],
   providers: [
     BusinessOverviewService,
+    DashboardTrendService,
     LineDashboardService,
     OperationsDashboardService,
     SectorComparisonService,

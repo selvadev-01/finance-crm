@@ -1,4 +1,10 @@
-export { AppShell } from "./app-shell";
+export { ActivityList } from "./activity-list";
+export { AppShell, type SidebarMode, useSidebarMode } from "./app-shell";
+export {
+  AreaChart,
+  type AreaChartPoint,
+  type AreaChartSeries,
+} from "./area-chart";
 export { Badge, type BadgeProps } from "./badge";
 export {
   Button,
@@ -9,6 +15,9 @@ export {
 export { Checkbox, Choice, type ChoiceProps, Switch } from "./choice";
 export { cn } from "./cn";
 export { Combobox, type ComboboxOption, type ComboboxProps } from "./combobox";
+export { DeltaChip } from "./delta-chip";
+export { HealthCard } from "./health-card";
+export { Meter, RadialMeter } from "./meter";
 export {
   DataView,
   type DataViewColumn,
@@ -32,8 +41,11 @@ export {
   Description,
   DescriptionList,
   DetailSkeleton,
+  flatSurfaceClass,
+  type IconTone,
   RecordIdentity,
   recordLinkClass,
+  rowLinkClass,
   Section,
   Skeleton,
   Stat,

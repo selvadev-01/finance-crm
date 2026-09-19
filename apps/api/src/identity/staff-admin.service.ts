@@ -22,11 +22,14 @@ import { isUniqueViolation } from '../organisation/prisma-errors.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import {
+  type AppError,
   AuthorizationError,
   ConflictError,
   DomainError,
   NotFoundError,
 } from '../platform/errors/errors.js';
+import type { RefusalTarget } from '../security/security-event.recorder.js';
+import { SecurityEventRecorder } from '../security/security-event.recorder.js';
 import { PasswordHasher } from './password-hasher.js';
 import { StaffDirectoryService } from './staff-directory.service.js';
 import { generateTemporaryPassword } from './temporary-password.js';
@@ -110,7 +113,27 @@ export class StaffAdminService {
     private readonly audit: AuditWriter,
     private readonly hasher: PasswordHasher,
     private readonly directory: StaffDirectoryService,
+    private readonly security: SecurityEventRecorder,
   ) {}
+
+  /**
+   * Record the attempt and hand back the very same error, for the caller to
+   * `throw` (M13, ADR-0014).
+   *
+   * Every refusal routed through here is raised **before** the method opens its
+   * transaction, so the record is written on the base client with nothing to
+   * roll it back. The error object is the one the caller made: nothing here
+   * wraps it, replaces it or swallows it, and a recorder that cannot write logs
+   * and returns, so the client still sees the same refusal.
+   */
+  private async refusal<Error extends AppError>(
+    context: RequestContext,
+    error: Error,
+    target: RefusalTarget,
+  ): Promise<Error> {
+    await this.security.refused(context, error, target);
+    return error;
+  }
 
   /** US-092: a `user`, its credential and a `staff_profile`, in one transaction. */
   async create(
@@ -118,7 +141,14 @@ export class StaffAdminService {
     input: CreateStaffRequest,
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<StaffCreated> {
-    assertNotAboveOwn(context, input.role);
+    // The attempt an Admin makes to become a Super Admin (rule 1). Recorded:
+    // the role reached for is the whole fact, and nothing else of the body is.
+    const above = roleAboveOwn(context, input.role);
+    if (above) {
+      throw await this.refusal(context, above, {
+        detail: { attemptedRole: input.role },
+      });
+    }
     const joinedAt = input.joinedAt ? parseCalendarDate(input.joinedAt) : today;
     if (joinedAt > today) {
       throw new DomainError(
@@ -200,7 +230,7 @@ export class StaffAdminService {
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<StaffDetail> {
     const target = await this.findTarget(context, staffProfileId);
-    assertMayActOn(context, target);
+    await this.assertMayActOn(context, target);
     if (input.phone !== target.phone) {
       await this.assertPhoneFree(input.phone);
     }
@@ -248,13 +278,23 @@ export class StaffAdminService {
   ): Promise<StaffDetail> {
     const target = await this.findTarget(context, staffProfileId);
     if (target.id === context.staffProfileId) {
-      throw new DomainError(
-        'CANNOT_CHANGE_OWN_ROLE',
-        'You cannot change your own role. Another Super Admin must do it.',
+      throw await this.refusal(
+        context,
+        new DomainError(
+          'CANNOT_CHANGE_OWN_ROLE',
+          'You cannot change your own role. Another Super Admin must do it.',
+        ),
+        { id: target.id, detail: { attemptedRole: role } },
       );
     }
-    assertMayActOn(context, target);
-    assertNotAboveOwn(context, role);
+    await this.assertMayActOn(context, target);
+    const above = roleAboveOwn(context, role);
+    if (above) {
+      throw await this.refusal(context, above, {
+        id: target.id,
+        detail: { attemptedRole: role },
+      });
+    }
     if (role === target.role) {
       throw new DomainError(
         'ROLE_UNCHANGED',
@@ -311,12 +351,16 @@ export class StaffAdminService {
   ): Promise<StaffStatusChange> {
     const target = await this.findTarget(context, staffProfileId);
     if (target.id === context.staffProfileId) {
-      throw new DomainError(
-        'CANNOT_CHANGE_OWN_STATUS',
-        'You cannot suspend or deactivate yourself. Another administrator must do it.',
+      throw await this.refusal(
+        context,
+        new DomainError(
+          'CANNOT_CHANGE_OWN_STATUS',
+          'You cannot suspend or deactivate yourself. Another administrator must do it.',
+        ),
+        { id: target.id, detail: { attemptedStatus: input.status } },
       );
     }
-    assertMayActOn(context, target);
+    await this.assertMayActOn(context, target);
     if (input.status === target.status) {
       throw new DomainError(
         'STATUS_UNCHANGED',
@@ -424,7 +468,27 @@ export class StaffAdminService {
     };
   }
 
-  /** Out of scope, soft-deleted or missing are one answer (M02). */
+  /** Rule 1, on the person being changed — recorded before it leaves (M13). */
+  private async assertMayActOn(
+    context: RequestContext,
+    target: Target,
+  ): Promise<void> {
+    const senior = mayNotActOn(context, target);
+    if (senior) {
+      throw await this.refusal(context, senior, {
+        id: target.id,
+        detail: { targetRole: target.role },
+      });
+    }
+  }
+
+  /**
+   * Out of scope, soft-deleted or missing are one answer (M02).
+   *
+   * Recorded, unlike the routine 404s elsewhere: these ids are never handed
+   * around in ordinary work, so a miss here is someone finding out who else
+   * exists (security-refusals.ts).
+   */
   private async findTarget(
     context: RequestContext,
     staffProfileId: string,
@@ -438,7 +502,11 @@ export class StaffAdminService {
       select: targetFields,
     });
     if (!row) {
-      throw new NotFoundError('STAFF_NOT_FOUND', 'Staff not found');
+      throw await this.refusal(
+        context,
+        new NotFoundError('STAFF_NOT_FOUND', 'Staff not found'),
+        { id: staffProfileId },
+      );
     }
     return { ...row, name: row.user.name };
   }
@@ -476,10 +544,16 @@ export class StaffAdminService {
   }
 }
 
-/** Rule 1, on the role being written. */
-function assertNotAboveOwn(context: RequestContext, role: StaffRole): void {
-  if (RANK[role] >= RANK[context.role]) return;
-  throw new AuthorizationError(
+/**
+ * Rule 1, on the role being written. Returns the refusal rather than throwing
+ * it, so the caller can record the attempt before it leaves (M13).
+ */
+function roleAboveOwn(
+  context: RequestContext,
+  role: StaffRole,
+): AuthorizationError | null {
+  if (RANK[role] >= RANK[context.role]) return null;
+  return new AuthorizationError(
     'ROLE_ABOVE_OWN',
     `A ${ROLE_LABEL[context.role]} cannot give someone the ${ROLE_LABEL[role]} role.`,
     [{ field: 'role', issue: 'is senior to your own role' }],
@@ -487,12 +561,12 @@ function assertNotAboveOwn(context: RequestContext, role: StaffRole): void {
 }
 
 /** Rule 1, on the person being changed. */
-function assertMayActOn(
+function mayNotActOn(
   context: RequestContext,
   target: { role: StaffRole },
-): void {
-  if (RANK[target.role] >= RANK[context.role]) return;
-  throw new AuthorizationError(
+): AuthorizationError | null {
+  if (RANK[target.role] >= RANK[context.role]) return null;
+  return new AuthorizationError(
     'CANNOT_MANAGE_HIGHER_ROLE',
     `Only a ${ROLE_LABEL[target.role]} can change another ${ROLE_LABEL[target.role]}.`,
   );

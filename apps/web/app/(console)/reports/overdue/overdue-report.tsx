@@ -50,12 +50,6 @@ import {
  * the overdue report is the position now, not a period (M12).
  */
 export const OVERDUE_FILTERS = { sector: "", line: "", overdue: "", sort: "" };
-export const OVERDUE_FILTER_KEYS = [
-  "sector",
-  "line",
-  "overdue",
-  "sort",
-] as const;
 
 /** "Overdue by" — the buckets a collections office actually asks for. */
 const DAY_BUCKETS = ["7", "30", "60"] as const;

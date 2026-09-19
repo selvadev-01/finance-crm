@@ -5,7 +5,11 @@ import { accountTermsSchema } from "./account.contract.js";
 import { buildPath, createApiClient } from "./client.js";
 import { collectionContract } from "./collection.contract.js";
 import { customerContract, mobileSchema } from "./customer.contract.js";
-import { dashboardContract } from "./dashboard.contract.js";
+import {
+  dashboardContract,
+  MAX_TREND_DAYS,
+  TREND_DAYS,
+} from "./dashboard.contract.js";
 import { holidayContract } from "./holiday.contract.js";
 import { organisationContract } from "./organisation.contract.js";
 import { MAX_REPORT_DAYS, reportContract } from "./report.contract.js";
@@ -591,6 +595,52 @@ describe("operations dashboard contract (US-082)", () => {
     expect(query.parse({})).toEqual({});
     expect(query.parse({ date: "2026-01-05" }).date).toBe("2026-01-05");
     expect(query.safeParse({ date: "2026-02-30" }).success).toBe(false);
+  });
+});
+
+describe("dashboard trend contract", () => {
+  const response = dashboardContract.getTrend.responses[200];
+  const unavailable = {
+    businessDate: "2026-01-06",
+    generatedAt: "2026-01-06T14:30:00.000Z",
+    days: 30,
+    lineCount: 3,
+    points: null,
+  };
+
+  it("covers thirty working days unless asked for another count between 2 and 60", () => {
+    const query = dashboardContract.getTrend.query;
+    expect(query.parse({}).days).toBe(TREND_DAYS);
+    expect(query.parse({ days: "14" }).days).toBe(14);
+    expect(query.safeParse({ days: String(MAX_TREND_DAYS + 1) }).success).toBe(
+      false,
+    );
+    expect(query.safeParse({ days: "1" }).success).toBe(false);
+    expect(query.safeParse({ date: "2026-02-30" }).success).toBe(false);
+  });
+
+  it("reports points it could not read as null, and money only as decimal strings", () => {
+    expect(response.parse(unavailable).points).toBeNull();
+    const point = {
+      businessDate: "2026-01-05",
+      expected: "1400.00",
+      collected: "-50.00",
+    };
+    expect(response.parse({ ...unavailable, points: [point] }).points).toEqual([
+      point,
+    ]);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        points: [{ ...point, expected: 1400 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      response.safeParse({
+        ...unavailable,
+        points: [{ ...point, expected: "-1.00" }],
+      }).success,
+    ).toBe(false);
   });
 });
 

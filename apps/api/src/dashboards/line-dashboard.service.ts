@@ -10,6 +10,7 @@ import {
 } from '@repo/domain';
 import { PinoLogger } from 'nestjs-pino';
 
+import { overdueCutoff } from '../accounts/overdue-cutoff.js';
 import {
   accountScope,
   collectionScope,
@@ -21,6 +22,7 @@ import { DayCloseService } from '../cash/day-close.service.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { DomainError } from '../platform/errors/errors.js';
+import { SettingReader } from '../settings/setting-reader.js';
 
 type Tx = Prisma.TransactionClient;
 type LineView = Extract<LineDashboard, { state: 'LINE' }>;
@@ -57,8 +59,11 @@ const DAY_MS = 86_400_000;
  * - **Nearing completion**: ACTIVE, not overdue, with outstanding at most
  *   five daily amounts.
  * - **Overdue**: BR-05's predicate — ACTIVE, outstanding above zero, target
- *   date before today — computed live, so it does not wait for the nightly
- *   `flag-overdue-accounts` job. Both lists describe the accounts **now**,
+ *   date before the cutoff in `accounts/overdue-cutoff.ts` — computed live, so
+ *   it does not wait for the nightly `flag-overdue-accounts` job. The cutoff
+ *   reads `account.overdueGraceDays` (M15, US-094) exactly as that job and the
+ *   overdue report (M12) do, so a grace period cannot put this list and the
+ *   `isOverdue` flag at odds. Both lists describe the accounts **now**,
  *   whatever date is shown: a target date moves with every collection, so an
  *   earlier day's list cannot be reconstructed.
  *
@@ -71,6 +76,7 @@ export class LineDashboardService {
     private readonly database: Database,
     private readonly dayCloses: DayCloseService,
     private readonly logger: PinoLogger,
+    private readonly settings: SettingReader,
   ) {}
 
   async view(
@@ -243,6 +249,15 @@ export class LineDashboardService {
       },
       orderBy: { accountCode: 'asc' },
     });
+    // BR-05's cutoff, with the grace days the nightly flag and the overdue
+    // report read (M15, US-094) — one definition of overdue for all three.
+    const cutoff = overdueCutoff(
+      today,
+      await this.settings.number(
+        context.organizationId,
+        'account.overdueGraceDays',
+      ),
+    );
     const todayMidnight = toUtcMidnight(today).getTime();
     const overdue: Watched[] = [];
     const nearing: Watched[] = [];
@@ -267,8 +282,8 @@ export class LineDashboardService {
           ),
         },
       };
-      // BR-05: overdue from the day after the target, with no grace period.
-      if (target < today) overdue.push(watched);
+      // BR-05: overdue from the day after the target, plus the grace days.
+      if (target < cutoff) overdue.push(watched);
       else if (outstanding.lessThanOrEqualTo(daily.times(NEARING_SLOTS))) {
         nearing.push(watched);
       }

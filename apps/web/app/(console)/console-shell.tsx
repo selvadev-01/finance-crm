@@ -12,6 +12,7 @@ import {
   Money,
   Path,
   Receipt,
+  ShieldWarning,
   SignOut,
   SlidersHorizontal,
   SquaresFour,
@@ -23,6 +24,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { authClient } from "../../lib/auth-client";
+import { currentHref } from "../../lib/nav";
 import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 import {
   canManageOrganisation,
@@ -120,6 +122,13 @@ const NAV: NavGroup[] = [
         icon: ClipboardText,
         shownTo: canManageOrganisation,
       },
+      // M13: the other half — what was tried and turned away (ADR-0014).
+      {
+        href: "/settings/security",
+        label: "Refused attempts",
+        icon: ShieldWarning,
+        shownTo: canManageOrganisation,
+      },
       // M15: the business's own settings, the Super Admin's alone (US-094).
       {
         href: "/settings",
@@ -156,15 +165,17 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const isCurrent = (href: string) =>
-    pathname === href || pathname.startsWith(`${href}/`);
   const groups = NAV.map((group) => ({
     ...group,
     items: group.items.filter((item) => item.shownTo(me.role)),
   })).filter((group) => group.items.length > 0);
-  const section = groups
-    .flatMap((group) => group.items)
-    .find((item) => isCurrent(item.href));
+  const items = groups.flatMap((group) => group.items);
+  const current = currentHref(
+    pathname,
+    items.map((item) => item.href),
+  );
+  const isCurrent = (href: string) => href === current;
+  const section = items.find((item) => isCurrent(item.href));
 
   async function signOut() {
     await authClient.signOut();
@@ -196,16 +207,16 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     <Link
       href="/dashboard"
       aria-label="Rasi — dashboard"
-      className="flex items-center gap-2.5"
+      className="flex items-center gap-3"
     >
       <span
         aria-hidden
-        className="grid size-7 place-items-center rounded-control bg-accent text-label font-semibold text-accent-ink"
+        className="grid size-9 shrink-0 place-items-center rounded-tile bg-accent text-heading font-semibold text-accent-ink"
       >
         R
       </span>
-      <span aria-hidden className="text-heading text-ink md:max-xl:hidden">
-        Rasi
+      <span aria-hidden className="text-title text-ink">
+        <AppShell.RailLabel>Rasi</AppShell.RailLabel>
       </span>
     </Link>
   );
@@ -249,40 +260,30 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             >
               <List aria-hidden size={20} />
             </Button>
+            <AppShell.SidebarToggle />
             <span className="truncate text-label text-ink-muted">
               {section?.label ?? "Rasi"}
             </span>
 
-            <div className="ml-auto flex items-center gap-1">
-              <Link
-                href="/notifications"
-                aria-label={
-                  unread ? `Notifications, ${unread} unread` : "Notifications"
-                }
-                className="relative grid size-8 place-items-center rounded-control text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+            <div className="ml-auto flex items-center gap-2.5">
+              <AppShell.TopbarAction
+                label="Notifications"
+                icon={<Bell aria-hidden />}
+                count={unread ?? undefined}
               >
-                <Bell aria-hidden size={18} />
-                {unread ? (
-                  <span
-                    aria-hidden
-                    data-numeric
-                    className="absolute -top-0.5 -right-0.5 min-w-4 rounded-pill bg-critical px-1 text-center text-2xs leading-4 font-semibold text-ink-inverse"
-                  >
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                ) : null}
-              </Link>
+                <Link href="/notifications" />
+              </AppShell.TopbarAction>
 
               <Menu.Root>
                 <Menu.Trigger asChild>
                   <button
                     type="button"
                     aria-label={`${me.name}, ${ROLE_LABEL[me.role]} — account menu`}
-                    className="flex h-8 items-center gap-2 rounded-control pr-1.5 pl-1 text-left transition-colors hover:bg-surface-sunken"
+                    className="flex items-center gap-2.5 rounded-pill p-0.5 pr-2 text-left transition-colors hover:bg-ink/5"
                   >
                     <span
                       aria-hidden
-                      className="grid size-6 place-items-center rounded-pill bg-accent-subtle text-2xs font-semibold text-accent"
+                      className="grid size-9 place-items-center rounded-pill bg-accent-subtle text-label font-semibold text-accent"
                     >
                       {initials}
                     </span>

@@ -1,6 +1,15 @@
 "use client";
 
-import { ArrowRight, LockKey } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowRight,
+  ArrowsLeftRight,
+  HandCoins,
+  HourglassMedium,
+  LockKey,
+  Money,
+  Target,
+  TrendUp,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   dashboardContract,
   type LineDashboard as Dashboard,
@@ -17,6 +26,7 @@ import {
   formatBusinessDate,
   formatCurrency,
   FormMessage,
+  HealthCard,
   Input,
   NothingYet,
   NotPermitted,
@@ -27,6 +37,7 @@ import {
 } from "@repo/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 
 import {
   displayColumn,
@@ -40,12 +51,22 @@ import { StatusBadge } from "../../../components/status-badge";
 import { formatTimestamp } from "../../../lib/format";
 import {
   formatPerMille,
+  isNegativeMoney,
   isZeroMoney,
   perMille,
   subtractMoney,
 } from "../../../lib/money";
 import { useApiQuery } from "../../../lib/use-api-query";
-import { Meter, UNAVAILABLE, Unknown, WEEKDAYS } from "./dashboard-parts";
+import {
+  countShare,
+  LiveStamp,
+  Meter,
+  ShareRing,
+  UNAVAILABLE,
+  Unknown,
+  WEEKDAYS,
+} from "./dashboard-parts";
+import { collectedDelta, TrendCard, useTrend } from "./trend-card";
 
 type LineView = Extract<Dashboard, { state: "LINE" }>;
 type Day = NonNullable<LineView["day"]>;
@@ -67,10 +88,18 @@ export function LineDashboard({ date }: { date: string | undefined }) {
     dashboardContract.getLine,
     future ? null : { query: date ? { date } : {} },
   );
+  // The line's own trend, once the line is known: never a line the page isn't showing.
+  const line =
+    query.status === "ready" && query.data.state === "LINE"
+      ? query.data.line
+      : null;
+  const trend = useTrend(line ? shown : null, line?.lineId);
 
   const header = (view: LineView | null, generatedAt: string | null) => (
     <PageHeader
+      frame="hero"
       title={view ? view.line.name : "Your line"}
+      summary={view?.day ? <DayRings day={view.day} /> : null}
       meta={
         <>
           {view ? <span>{view.line.code}</span> : null}
@@ -86,9 +115,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
               <StatusBadge kind="dayKind" value={view.day.day.kind} />
             )
           ) : null}
-          {generatedAt ? (
-            <span>updated {formatTimestamp(generatedAt, "clock")}</span>
-          ) : null}
+          {generatedAt ? <LiveStamp at={generatedAt} /> : null}
         </>
       }
       actions={
@@ -178,7 +205,11 @@ export function LineDashboard({ date }: { date: string | undefined }) {
         </FormMessage>
       ) : null}
 
-      <DayFigures day={day} />
+      <DayFigures day={day} delta={collectedDelta(trend, shown)} />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <TrendCard trend={trend} scope={data.line.name} />
+        <LineHealth view={data} day={day} />
+      </div>
       {day === null ? (
         <LoadFailed
           message="The day’s Juniors and entries couldn’t be read just now, so they are not shown."
@@ -195,16 +226,130 @@ export function LineDashboard({ date }: { date: string | undefined }) {
   );
 }
 
-function DayFigures({ day }: { day: Day | null }) {
+/** The hero's rings: collected, cash in hand once any was handed over, Juniors synced. */
+function DayRings({ day }: { day: Day }) {
+  const sent = day.juniors.filter((junior) => junior.sync === "SENT").length;
+  return (
+    <>
+      <ShareRing
+        share={perMille(day.collected, day.expected)}
+        label="Collected of expected"
+        caption="Collected"
+      />
+      {day.cashHandedOver ? (
+        <ShareRing
+          share={perMille(day.cashReceived, day.collected)}
+          label="Cash received of collected"
+          caption="Cash in hand"
+          tone={isNegativeMoney(day.discrepancy) ? "warning" : "positive"}
+        />
+      ) : null}
+      <ShareRing
+        share={countShare(sent, day.juniors.length)}
+        label="Juniors whose phones sent everything"
+        caption="Phones synced"
+        tone="positive"
+      />
+    </>
+  );
+}
+
+/** Beside the trend: the cash handed over, and corrections waiting. */
+function LineHealth({ view, day }: { view: LineView; day: Day | null }) {
+  const approvals = view.pendingApprovals;
+  return (
+    <div className="grid content-start gap-4 sm:grid-cols-2 lg:grid-cols-1">
+      <HealthCard.Root>
+        <HealthCard.Header
+          icon={<HandCoins />}
+          tone={day && day.handovers.disputed > 0 ? "critical" : "accent"}
+          title="Handovers"
+          subtitle="Junior to Senior, this day"
+          value={
+            day === null ? null : day.handovers.disputed > 0 ? (
+              <Badge shape="pill" tone="critical">
+                {day.handovers.disputed} disputed
+              </Badge>
+            ) : day.handovers.waiting > 0 ? (
+              <Badge shape="pill" tone="warning">
+                {day.handovers.waiting} waiting
+              </Badge>
+            ) : (
+              <Badge
+                shape="pill"
+                tone={day.cashHandedOver ? "positive" : "neutral"}
+              >
+                {day.cashHandedOver ? "Received" : "None yet"}
+              </Badge>
+            )
+          }
+        />
+        <HealthCard.Detail>
+          {day === null ? (
+            UNAVAILABLE
+          ) : day.cashHandedOver ? (
+            <>
+              {formatCurrency(day.cashReceived)} received ·{" "}
+              <Discrepancy amount={day.discrepancy} />
+            </>
+          ) : (
+            "Nothing handed over yet."
+          )}
+        </HealthCard.Detail>
+      </HealthCard.Root>
+      <HealthCard.Root>
+        <HealthCard.Header
+          icon={<ArrowsLeftRight />}
+          tone="warning"
+          title="Corrections"
+          subtitle="waiting for approval on this line"
+          value={
+            approvals === null ? null : (
+              <Badge
+                shape="pill"
+                tone={approvals.total > 0 ? "warning" : "neutral"}
+                mark="none"
+              >
+                {approvals.total}
+              </Badge>
+            )
+          }
+        />
+        <HealthCard.Detail>
+          <Link
+            href="/collections/pending-approval"
+            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+          >
+            {approvals === null
+              ? "Pending approvals"
+              : approvals.awaitingYou > 0
+                ? `${approvals.awaitingYou} waiting for you`
+                : "Pending approvals"}
+            <ArrowRight aria-hidden size={14} />
+          </Link>
+        </HealthCard.Detail>
+      </HealthCard.Root>
+    </div>
+  );
+}
+
+function DayFigures({ day, delta }: { day: Day | null; delta: ReactNode }) {
   const share = day ? perMille(day.collected, day.expected) : null;
   const surplus = day !== null && !isZeroMoney(day.surplus);
   return (
-    <StatGrid columns={4} aria-label="The line’s day">
-      <Stat label="Expected" hint={day ? "due on this line" : UNAVAILABLE}>
+    <StatGrid columns={4} frame="tiles" aria-label="The line’s day">
+      <Stat
+        label="Expected"
+        icon={<Target />}
+        hint={day ? "due on this line" : UNAVAILABLE}
+      >
         {day ? formatCurrency(day.expected) : <Unknown />}
       </Stat>
       <Stat
         label="Collected"
+        icon={<HandCoins />}
+        iconTone="positive"
+        delta={day ? delta : null}
         hint={
           day ? (
             share === null ? (
@@ -224,6 +369,8 @@ function DayFigures({ day }: { day: Day | null }) {
       </Stat>
       <Stat
         label={surplus ? "Surplus" : "Shortfall"}
+        icon={surplus ? <TrendUp /> : <HourglassMedium />}
+        iconTone={surplus ? "info" : "warning"}
         tone={day && !isZeroMoney(day.shortfall) ? "warning" : "neutral"}
         hint={
           day
@@ -241,6 +388,8 @@ function DayFigures({ day }: { day: Day | null }) {
       </Stat>
       <Stat
         label="Cash received"
+        icon={<Money />}
+        iconTone="neutral"
         hint={
           day === null ? (
             UNAVAILABLE
@@ -282,6 +431,7 @@ function JuniorsToday({ juniors }: { juniors: Junior[] }) {
         </p>
       ) : (
         <DataView
+          frame="flat"
           caption="Juniors today"
           rows={juniors}
           getRowId={(junior) => junior.userId}
@@ -375,6 +525,7 @@ function NeedsALook({ view, day }: { view: LineView; day: Day }) {
         </p>
       ) : (
         <DataView
+          frame="flat"
           caption="Entries that need a look"
           rows={entries}
           getRowId={(entry) =>
@@ -495,6 +646,7 @@ function WatchList({
       ) : (
         <>
           <DataView
+            frame="flat"
             caption={title}
             rows={list.items}
             getRowId={(account) => account.accountLoanId}

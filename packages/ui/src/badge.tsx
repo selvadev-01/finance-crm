@@ -21,8 +21,8 @@ import { cn } from "./cn";
  */
 const badge = cva(
   [
-    "inline-flex w-fit items-center gap-1.5 rounded-control border",
-    "px-1.5 py-px text-2xs font-medium whitespace-nowrap",
+    "inline-flex w-fit items-center gap-1.5 border",
+    "text-2xs font-medium whitespace-nowrap",
   ],
   {
     variants: {
@@ -33,8 +33,14 @@ const badge = cva(
         critical: "border-critical-border bg-critical-subtle text-critical",
         info: "border-info-border bg-info-subtle text-info",
       },
+      shape: {
+        /** A status in a table cell or a header. */
+        tag: "rounded-control px-1.5 py-px",
+        /** A soft pill on a dashboard card (ADR-0015): no outline. */
+        pill: "rounded-pill border-transparent px-2.5 py-0.5",
+      },
     },
-    defaultVariants: { tone: "neutral" },
+    defaultVariants: { tone: "neutral", shape: "tag" },
   },
 );
 
@@ -57,6 +63,7 @@ export type BadgeProps = ComponentProps<"span"> &
 
 export function Badge({
   tone,
+  shape,
   mark = "dot",
   className,
   children,
@@ -64,7 +71,7 @@ export function Badge({
 }: BadgeProps) {
   const dotClass = mark === "dot" ? dot[tone ?? "neutral"] : null;
   return (
-    <span className={cn(badge({ tone }), className)} {...props}>
+    <span className={cn(badge({ tone, shape }), className)} {...props}>
       {dotClass ? (
         <span
           aria-hidden

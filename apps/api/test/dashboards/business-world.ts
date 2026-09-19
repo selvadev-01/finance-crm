@@ -9,6 +9,7 @@ import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { AccountSettlement } from '../../src/collections/account-settlement.js';
 import { CollectionService } from '../../src/collections/collection.service.js';
 import { BusinessOverviewService } from '../../src/dashboards/business-overview.service.js';
+import { DashboardTrendService } from '../../src/dashboards/dashboard-trend.service.js';
 import { OperationsDashboardService } from '../../src/dashboards/operations-dashboard.service.js';
 import { SectorComparisonService } from '../../src/dashboards/sector-comparison.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
@@ -19,6 +20,7 @@ import { DiscrepancyReportService } from '../../src/reports/discrepancy-report.s
 import { InvestmentReportService } from '../../src/reports/investment-report.service.js';
 import { LineWiseReportService } from '../../src/reports/line-wise-report.service.js';
 import { OverdueReportService } from '../../src/reports/overdue-report.service.js';
+import { SettingReader } from '../../src/settings/setting-reader.js';
 import { at, cashWorld, SATURDAY } from '../cash/world.js';
 import { createStaff } from '../db-constraints/fixtures.js';
 import { testNotifications } from '../notifications/notices.js';
@@ -152,10 +154,15 @@ export async function businessWorld(tx: PrismaClient) {
     overview: new BusinessOverviewService(database, asLogger),
     operations: new OperationsDashboardService(database, asLogger),
     sectors: new SectorComparisonService(database, asLogger),
+    trend: new DashboardTrendService(database, asLogger),
     lineWise: new LineWiseReportService(database, asLogger),
     investment: new InvestmentReportService(database, asLogger),
     collectionReport: new CollectionReportService(database, asLogger),
-    overdue: new OverdueReportService(database, asLogger),
+    overdue: new OverdueReportService(
+      database,
+      asLogger,
+      new SettingReader(database),
+    ),
     discrepancies: new DiscrepancyReportService(database, asLogger),
     logger,
   };

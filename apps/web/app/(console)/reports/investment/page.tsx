@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { readListParams } from "../../../../lib/list-params";
-import { REPORT_FILTER_KEYS } from "../report-parts";
+import { REPORT_FILTER_KEYS } from "../report-filter-keys";
 import { InvestmentReport } from "./investment-report";
 
 export const metadata: Metadata = { title: "Investment overview · Rasi" };

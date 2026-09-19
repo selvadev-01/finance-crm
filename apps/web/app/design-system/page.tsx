@@ -16,6 +16,7 @@ import {
 } from "@repo/ui";
 import type { ReactNode } from "react";
 
+import { DashboardPreview } from "./dashboard-preview";
 import { InteractivePreview, RecordsPreview } from "./interactive-preview";
 
 export const metadata = { title: "Design system · Rasi" };
@@ -51,6 +52,7 @@ export default function DesignPreview() {
               ["surface", "bg-surface"],
               ["surface-raised", "bg-surface-raised"],
               ["surface-sunken", "bg-surface-sunken"],
+              ["surface-nav", "bg-surface-nav"],
               ["border", "bg-border"],
               ["border-strong", "bg-border-strong"],
               ["ink", "bg-ink"],
@@ -242,6 +244,10 @@ export default function DesignPreview() {
 
       <Block title="Records">
         <RecordsPreview />
+      </Block>
+
+      <Block title="Dashboards — flat surfaces (ADR-0015)">
+        <DashboardPreview />
       </Block>
 
       <Block title="Empty states — three different things">

@@ -118,6 +118,89 @@ export interface LineRangeFigures {
   missed: number;
 }
 
+/** The key of one line's day in {@link lineDailyFigures}: `lineId|YYYY-MM-DD`. */
+export const lineDayKey = (lineId: string, businessDate: CalendarDate) =>
+  `${lineId}|${businessDate}`;
+
+export interface LineDailyFigures {
+  /** Σ expected of the line's slots due that date, cancelled ones excepted (BR-16). */
+  expected: Decimal;
+  /** Σ confirmed collections attributed to the line that date (BR-15), adjustments included. */
+  collected: Decimal;
+  /** Slots due that date on active or completed accounts, marked MISSED at close. */
+  missed: number;
+}
+
+/**
+ * {@link lineDayFigures}' expected, collected and missed for every day from
+ * `from` to `to` inclusive, keyed by {@link lineDayKey} — two grouped reads
+ * for the whole range with the **same predicates**, not one per day. Only
+ * (line, day) pairs with something due or collected are present.
+ *
+ * The caller has already scoped `lineIds` (M02).
+ */
+export async function lineDailyFigures(
+  tx: Tx,
+  lineIds: readonly string[],
+  from: CalendarDate,
+  to: CalendarDate,
+): Promise<Map<string, LineDailyFigures>> {
+  const days = new Map<string, LineDailyFigures>();
+  if (lineIds.length === 0) return days;
+  const first = toUtcMidnight(from);
+  const last = toUtcMidnight(to);
+  const ids = [...lineIds];
+
+  const day = (lineId: string, date: Date) => {
+    const key = lineDayKey(lineId, fromUtcMidnight(date));
+    const found = days.get(key) ?? {
+      expected: toMoney('0'),
+      collected: toMoney('0'),
+      missed: 0,
+    };
+    days.set(key, found);
+    return found;
+  };
+
+  const slots = await tx.$queryRaw<
+    { lineId: string; dueDate: Date; expected: string; missed: number }[]
+  >`
+    SELECT c."lineId" AS "lineId",
+           s."dueDate" AS "dueDate",
+           COALESCE(SUM(s."expectedAmount"), 0)::text AS expected,
+           (COUNT(*) FILTER (
+             WHERE s.status = 'MISSED' AND a.status IN ('ACTIVE', 'COMPLETED')
+           ))::int AS missed
+    FROM account_schedule s
+    JOIN account_loan a ON a.id = s."accountLoanId"
+    JOIN customer c ON c.id = a."customerId"
+    WHERE s."dueDate" BETWEEN ${first} AND ${last}
+      AND s.status <> 'CANCELLED'
+      AND c."lineId" = ANY(${ids})
+    GROUP BY c."lineId", s."dueDate"`;
+  for (const row of slots) {
+    const found = day(row.lineId, row.dueDate);
+    found.expected = toMoney(row.expected);
+    found.missed = row.missed;
+  }
+
+  const collected = await tx.collection.groupBy({
+    by: ['lineId', 'businessDate'],
+    where: {
+      lineId: { in: ids },
+      businessDate: { gte: first, lte: last },
+      status: 'CONFIRMED',
+    },
+    _sum: { amount: true },
+  });
+  for (const row of collected) {
+    day(row.lineId, row.businessDate).collected = toMoney(
+      (row._sum.amount ?? 0).toString(),
+    );
+  }
+  return days;
+}
+
 /**
  * {@link lineDayFigures}' expected and collected for every day from `from` to
  * `to` inclusive, read in one pass with the **same predicates**, and BR-16
@@ -146,63 +229,11 @@ export async function lineRangeFigures(
       },
     ]),
   );
-  if (lineIds.length === 0) return figures;
-  const first = toUtcMidnight(from);
-  const last = toUtcMidnight(to);
-  const ids = [...lineIds];
-
-  // Each (line, day) pair's expected and collected, keyed "lineId|YYYY-MM-DD".
-  const days = new Map<string, { expected: Decimal; collected: Decimal }>();
-  const day = (lineId: string, date: Date) => {
-    const key = `${lineId}|${fromUtcMidnight(date)}`;
-    const found = days.get(key) ?? {
-      expected: toMoney('0'),
-      collected: toMoney('0'),
-    };
-    days.set(key, found);
-    return found;
-  };
-
-  const slots = await tx.$queryRaw<
-    { lineId: string; dueDate: Date; expected: string; missed: number }[]
-  >`
-    SELECT c."lineId" AS "lineId",
-           s."dueDate" AS "dueDate",
-           COALESCE(SUM(s."expectedAmount"), 0)::text AS expected,
-           (COUNT(*) FILTER (
-             WHERE s.status = 'MISSED' AND a.status IN ('ACTIVE', 'COMPLETED')
-           ))::int AS missed
-    FROM account_schedule s
-    JOIN account_loan a ON a.id = s."accountLoanId"
-    JOIN customer c ON c.id = a."customerId"
-    WHERE s."dueDate" BETWEEN ${first} AND ${last}
-      AND s.status <> 'CANCELLED'
-      AND c."lineId" = ANY(${ids})
-    GROUP BY c."lineId", s."dueDate"`;
-  for (const row of slots) {
-    day(row.lineId, row.dueDate).expected = toMoney(row.expected);
-    const line = figures.get(row.lineId);
-    if (line) line.missed += row.missed;
-  }
-
-  const collected = await tx.collection.groupBy({
-    by: ['lineId', 'businessDate'],
-    where: {
-      lineId: { in: ids },
-      businessDate: { gte: first, lte: last },
-      status: 'CONFIRMED',
-    },
-    _sum: { amount: true },
-  });
-  for (const row of collected) {
-    day(row.lineId, row.businessDate).collected = toMoney(
-      (row._sum.amount ?? 0).toString(),
-    );
-  }
-
+  const days = await lineDailyFigures(tx, lineIds, from, to);
   for (const [key, money] of days) {
     const line = figures.get(key.slice(0, key.indexOf('|')));
     if (!line) continue;
+    line.missed += money.missed;
     line.expected = line.expected.plus(money.expected);
     line.collected = line.collected.plus(money.collected);
     // BR-16, per day: a shortfall when expected exceeds collected, a surplus when collected exceeds it.

@@ -12,6 +12,7 @@ import { LineDashboardService } from '../../src/dashboards/line-dashboard.servic
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
+import { SettingReader } from '../../src/settings/setting-reader.js';
 import { at, cashWorld, counts, MONDAY } from '../cash/world.js';
 import { createTestPrismaClient } from '../database.js';
 import { createStaff } from '../db-constraints/fixtures.js';
@@ -106,6 +107,7 @@ describe('LineDashboardService (US-083)', () => {
       database,
       w.dayCloses,
       logger as unknown as PinoLogger,
+      new SettingReader(database),
     );
     return {
       w,
@@ -433,10 +435,12 @@ describe('LineDashboardService (US-083)', () => {
         },
       });
       const logger = { error: vi.fn() };
+      const failingDatabase = new Database(failing);
       const partial = new LineDashboardService(
-        new Database(failing),
+        failingDatabase,
         w.dayCloses,
         logger as unknown as PinoLogger,
+        new SettingReader(failingDatabase),
       );
       const view = await partial.view(w.senior, {}, MONDAY_EVENING);
       expect(view).toMatchObject({

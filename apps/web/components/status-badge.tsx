@@ -11,6 +11,7 @@ import type {
   JuniorSync,
   ScheduleSlotView,
   SectorTally,
+  SecurityEventKind,
   StaffSummary,
 } from "@repo/contracts";
 import { Badge, type BadgeProps } from "@repo/ui";
@@ -148,6 +149,20 @@ export const STATUS = {
     LOGIN: { label: "Sign-in", tone: "neutral" },
     REOPEN_DAY: { label: "Day reopened", tone: "warning" },
   } satisfies Table<AuditAction>,
+
+  /**
+   * Why an attempt was refused (M13, ADR-0014). `critical` is someone reaching
+   * past their role; `warning` is a rule that stopped them changing something
+   * settled; `info` is an id that was not theirs, which is worth noticing
+   * without being an accusation.
+   */
+  securityEvent: {
+    PERMISSION_DENIED: { label: "Permission denied", tone: "critical" },
+    RANK_GUARD: { label: "Role above their own", tone: "critical" },
+    SELF_GUARD: { label: "Acting on themselves", tone: "warning" },
+    SETTING_LOCKED: { label: "Locked setting", tone: "warning" },
+    OUT_OF_SCOPE: { label: "Not theirs to open", tone: "info" },
+  } satisfies Table<SecurityEventKind>,
 } as const;
 
 export type StatusKind = keyof typeof STATUS;
@@ -169,15 +184,18 @@ export function StatusBadge<Kind extends StatusKind>({
   kind,
   value,
   suffix,
+  shape,
 }: {
   kind: Kind;
   value: StatusValue<Kind>;
   suffix?: string;
+  /** `pill` on a dashboard card (ADR-0015). */
+  shape?: BadgeProps["shape"];
 }) {
   const entry = (STATUS[kind] as Table<string>)[value];
-  if (!entry) return <Badge>{value}</Badge>;
+  if (!entry) return <Badge shape={shape}>{value}</Badge>;
   return (
-    <Badge tone={entry.tone}>
+    <Badge tone={entry.tone} shape={shape}>
       {entry.label}
       {suffix ? ` ${suffix}` : ""}
     </Badge>

@@ -457,4 +457,81 @@ describe('platform constraints (M10, M13, M15)', () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  /**
+   * `security_event` (migration `constraints_security_event`, ADR-0014). The
+   * shape of a refusal, and the one thing this table deliberately does *not*
+   * have: the append-only trigger its neighbour above carries.
+   */
+  describe('security_event (M13, ADR-0014)', () => {
+    async function event(tx: PrismaClient, data: Record<string, unknown> = {}) {
+      const { organization } = await createLine(tx);
+      const user = await createUser(tx);
+      return tx.securityEvent.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: user.id,
+          actorRole: 'ADMIN',
+          kind: 'RANK_GUARD',
+          code: 'ROLE_ABOVE_OWN',
+          status: 403,
+          method: 'POST',
+          path: '/api/staff',
+          ...data,
+        },
+      });
+    }
+
+    it('accepts a refusal with no target — an attempt can name a role rather than a row', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          await event(tx, { detail: { attemptedRole: 'SUPER_ADMIN' } });
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('accepts a bare target id, because the guard knows the id and not the table', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          await event(tx, { targetId: randomUUID() });
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it.each([
+      [{ status: 200 }, 'security_event_status_refusal_check'],
+      [{ status: 500 }, 'security_event_status_refusal_check'],
+      [{ method: 'TRACE' }, 'security_event_method_check'],
+      [{ path: 'api/staff' }, 'security_event_path_check'],
+      [{ code: '  ' }, 'security_event_code_not_blank_check'],
+      [
+        { targetTable: ' ', targetId: 'x' },
+        'security_event_target_table_not_blank_check',
+      ],
+      [
+        { targetTable: 'staff_profile', targetId: '' },
+        'security_event_target_id_not_blank_check',
+      ],
+      [
+        { targetTable: 'staff_profile' },
+        'security_event_target_table_needs_id_check',
+      ],
+    ])('rejects %o', async (data, constraint) => {
+      await expect(
+        withRollback(prisma, (tx) => event(tx, data)),
+      ).rejects.toThrow(constraint);
+    });
+
+    it('accepts DELETE, unlike audit_log — which is what lets the RBAC matrix suite exist', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const row = await event(tx);
+          await tx.securityEvent.delete({ where: { id: row.id } });
+          expect(await tx.securityEvent.count({ where: { id: row.id } })).toBe(
+            0,
+          );
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
 });

@@ -61,13 +61,33 @@ export function Section({
 /* -------------------------------------------------------------------------
  * Card — a bordered surface. Use it where a boundary means something (a
  * panel of settings, a list of references); otherwise group with space.
+ *
+ * `surface="flat"` is the dashboard card (ADR-0015): white on the tinted
+ * page, no border or shadow, a hairline ring only so it holds its edge.
  * ---------------------------------------------------------------------- */
 
-function CardRoot({ className, ...props }: ComponentProps<"div">) {
+/** The dashboard's flat surface, shared by `Card`, `StatGrid` tiles and `DataView`. */
+export const flatSurfaceClass =
+  "rounded-surface bg-surface-raised ring-1 ring-border/60";
+
+/*
+ * The frame reaches the header and footer through a `data-surface` group, not
+ * React context: this module is imported by Server Components, where context
+ * is not available.
+ */
+function CardRoot({
+  surface = "outlined",
+  className,
+  ...props
+}: ComponentProps<"div"> & { surface?: "outlined" | "flat" }) {
   return (
     <div
+      data-surface={surface}
       className={cn(
-        "flex flex-col rounded-surface border border-border bg-surface-raised shadow-raised",
+        "group/card flex flex-col",
+        surface === "flat"
+          ? flatSurfaceClass
+          : "rounded-surface border border-border bg-surface-raised shadow-raised",
         className,
       )}
       {...props}
@@ -88,10 +108,13 @@ function CardHeader({
     <div
       className={cn(
         "flex min-h-11 items-center justify-between gap-3 border-b border-border px-4 py-2",
+        "group-data-[surface=flat]/card:border-b-0 group-data-[surface=flat]/card:pt-4",
         className,
       )}
     >
-      <h3 className="text-label text-ink">{title}</h3>
+      <h3 className="text-label text-ink group-data-[surface=flat]/card:text-heading">
+        {title}
+      </h3>
       {actions ? (
         <div className="flex items-center gap-2">{actions}</div>
       ) : null}
@@ -113,6 +136,7 @@ function CardFooter({ className, ...props }: ComponentProps<"div">) {
     <div
       className={cn(
         "flex flex-wrap items-center justify-end gap-2 border-t border-border bg-surface-sunken px-4 py-2.5",
+        "group-data-[surface=flat]/card:bg-transparent",
         className,
       )}
       {...props}
@@ -132,49 +156,91 @@ export const Card = {
  * formatted by the caller (formatCurrency); this only lays it out.
  * ---------------------------------------------------------------------- */
 
-const statGrid = cva(
-  "grid gap-px overflow-hidden rounded-surface border border-border bg-border shadow-raised",
-  {
-    variants: {
-      columns: {
-        2: "grid-cols-1 sm:grid-cols-2",
-        3: "grid-cols-1 sm:grid-cols-3",
-        4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
-      },
+const statGrid = cva("grid", {
+  variants: {
+    columns: {
+      2: "grid-cols-1 sm:grid-cols-2",
+      3: "grid-cols-1 sm:grid-cols-3",
+      4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
     },
-    defaultVariants: { columns: 4 },
+    frame: {
+      /** One frame, hairline dividers: a ledger's totals row. */
+      ruled:
+        "gap-px overflow-hidden rounded-surface border border-border bg-border shadow-raised",
+      /** A flat tile per figure, on the page: the dashboards' KPI row (ADR-0015). */
+      tiles: "gap-4",
+    },
   },
-);
+  defaultVariants: { columns: 4, frame: "ruled" },
+});
 
 /**
  * Figures side by side, ruled like a ledger's totals row: one frame, hairline
- * dividers, no card per figure.
+ * dividers, no card per figure. `frame="tiles"` is the dashboards' KPI row.
+ * Each `Stat` reads the frame from the `data-frame` group, which works in a
+ * Server Component where context would not.
  */
 export function StatGrid({
   columns,
+  frame = "ruled",
   className,
   ...props
 }: ComponentProps<"dl"> & VariantProps<typeof statGrid>) {
-  return <dl className={cn(statGrid({ columns }), className)} {...props} />;
+  return (
+    <dl
+      data-frame={frame ?? "ruled"}
+      className={cn("group/stats", statGrid({ columns, frame }), className)}
+      {...props}
+    />
+  );
 }
 
-const statValue = cva("text-title tabular-nums", {
-  variants: {
-    tone: {
-      neutral: "text-ink",
-      positive: "text-positive",
-      warning: "text-warning",
-      critical: "text-critical",
+const statValue = cva(
+  "text-title tabular-nums group-data-[frame=tiles]/stats:text-display",
+  {
+    variants: {
+      tone: {
+        neutral: "text-ink",
+        positive: "text-positive",
+        warning: "text-warning",
+        critical: "text-critical",
+      },
     },
+    defaultVariants: { tone: "neutral" },
   },
-  defaultVariants: { tone: "neutral" },
-});
+);
+
+/** A tile in a `frame="tiles"` grid: its own flat surface. */
+const TILE = [
+  "group-data-[frame=tiles]/stats:gap-2 group-data-[frame=tiles]/stats:p-4 sm:group-data-[frame=tiles]/stats:p-5",
+  "group-data-[frame=tiles]/stats:rounded-surface group-data-[frame=tiles]/stats:ring-1 group-data-[frame=tiles]/stats:ring-border/60",
+];
+
+/** The label in a tile: sentence case beside its icon, not a column header. */
+const TILE_LABEL =
+  "group-data-[frame=tiles]/stats:text-label group-data-[frame=tiles]/stats:tracking-normal group-data-[frame=tiles]/stats:text-ink-muted group-data-[frame=tiles]/stats:normal-case";
+
+/** A tinted ground for an icon — the figure's kind, never its status. */
+export const iconTone = {
+  accent: "bg-accent-subtle text-accent",
+  positive: "bg-positive-subtle text-positive",
+  warning: "bg-warning-subtle text-warning",
+  critical: "bg-critical-subtle text-critical",
+  info: "bg-info-subtle text-info",
+  neutral: "bg-surface-sunken text-ink-muted",
+} as const;
+export type IconTone = keyof typeof iconTone;
 
 export interface StatProps extends VariantProps<typeof statValue> {
   label: ReactNode;
   children: ReactNode;
   /** A muted line under the figure: "of ₹30,000.00 expected". */
   hint?: ReactNode;
+  /** A glyph in a tinted circle beside the label; shown in tiles only. */
+  icon?: ReactNode;
+  iconTone?: IconTone;
+  /** A `DeltaChip` at the figure's right: the change since the day before. */
+  delta?: ReactNode;
   className?: string;
 }
 
@@ -182,20 +248,55 @@ export interface StatProps extends VariantProps<typeof statValue> {
  * `tone` colours the figure only when it is itself a status — a shortfall,
  * a surplus. A total is `neutral`, however large.
  */
-export function Stat({ label, children, hint, tone, className }: StatProps) {
+export function Stat({
+  label,
+  children,
+  hint,
+  tone,
+  icon,
+  iconTone: ground = "accent",
+  delta,
+  className,
+}: StatProps) {
   return (
     <div
       className={cn(
         "flex flex-col gap-1 bg-surface-raised px-4 py-3",
+        TILE,
         className,
       )}
     >
-      <dt className="text-2xs font-medium tracking-wider text-ink-subtle uppercase">
+      <dt
+        className={cn(
+          "flex items-center gap-2.5 text-2xs font-medium tracking-wider text-ink-subtle uppercase",
+          TILE_LABEL,
+        )}
+      >
+        {icon ? (
+          <span
+            aria-hidden
+            className={cn(
+              "hidden size-8 shrink-0 place-items-center rounded-pill group-data-[frame=tiles]/stats:grid [&_svg]:size-4",
+              iconTone[ground],
+            )}
+          >
+            {icon}
+          </span>
+        ) : null}
         {label}
       </dt>
-      <dd className={statValue({ tone })} data-numeric>
-        {children}
-      </dd>
+      {delta ? (
+        <dd className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span className={statValue({ tone })} data-numeric>
+            {children}
+          </span>
+          {delta}
+        </dd>
+      ) : (
+        <dd className={statValue({ tone })} data-numeric>
+          {children}
+        </dd>
+      )}
       {hint ? <dd className="text-caption text-ink-muted">{hint}</dd> : null}
     </div>
   );
@@ -269,6 +370,17 @@ export function Description({
 /** The class for a record's name when it is a link. */
 export const recordLinkClass =
   "font-medium text-ink underline-offset-4 hover:text-accent hover:underline";
+
+/**
+ * A record's name as the link for its whole `DataView` row: an overlay
+ * stretches it over the row, so a click anywhere opens the record while the
+ * row stays one link to a keyboard or screen reader. Give it `data-row-link`;
+ * `DataView` lifts every other control in the row above the overlay.
+ */
+export const rowLinkClass = cn(
+  recordLinkClass,
+  "after:absolute after:inset-0 after:content-['']",
+);
 
 export function RecordIdentity({
   children,

@@ -7,6 +7,7 @@ import {
   createTestApp,
   recordedAudit,
   recordedPasswordChanges,
+  recordedSecurityEvents,
 } from './app.js';
 import { createTestPrismaClient, deleteTestRunData } from './database.js';
 import {
@@ -155,13 +156,27 @@ describe('admin password reset (US-003, e2e)', () => {
     expect(blocked.body.code).toBe('PASSWORD_CHANGE_REQUIRED');
   });
 
-  it('an Admin cannot reset a Super Admin', async () => {
+  it('an Admin cannot reset a Super Admin, and the attempt is recorded', async () => {
     const owner = await createTestStaff(prisma, {
       organizationId,
       role: 'SUPER_ADMIN',
     });
+    const mark = recordedSecurityEvents.length;
     const response = await reset(owner.staffProfileId).expect(403);
     expect(response.body.code).toBe('CANNOT_RESET_SUPER_ADMIN');
+    // ADR-0014: the owner has to be able to find out someone reached for
+    // their account, so the refusal is a security event, not only a 403.
+    expect(recordedSecurityEvents.slice(mark)).toMatchObject([
+      {
+        kind: 'RANK_GUARD',
+        code: 'CANNOT_RESET_SUPER_ADMIN',
+        actorRole: 'ADMIN',
+        targetTable: 'staff_profile',
+        targetId: owner.staffProfileId,
+        method: 'POST',
+        path: '/api/staff/:staffProfileId/password-reset',
+      },
+    ]);
   });
 
   it('staff in another organization are 404', async () => {

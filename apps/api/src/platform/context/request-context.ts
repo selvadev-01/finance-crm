@@ -33,11 +33,19 @@ export interface RequestClient {
   readonly userAgent: string | null;
 }
 
+/** The route a request matched, for the security log (M13). */
+export interface RequestRoute {
+  readonly method: string;
+  /** The pattern, `/api/staff/:staffProfileId/role` — never the filled-in path. */
+  readonly path: string;
+}
+
 /** What is known about a request before and after authorization. */
 interface RequestState {
   readonly requestId: string;
   readonly client: RequestClient;
   context?: RequestContext;
+  route?: RequestRoute;
 }
 
 const storage = new AsyncLocalStorage<RequestState>();
@@ -69,6 +77,19 @@ export function setRequestContext(context: RequestContext): void {
 /** The caller's IP address and user agent, or `undefined` outside a request. */
 export function getRequestClient(): RequestClient | undefined {
   return storage.getStore()?.client;
+}
+
+/**
+ * Called by `PolicyGuard` once routing has matched, so a service that refuses
+ * deep inside a call can still say which route was attempted (M13).
+ */
+export function setRequestRoute(route: RequestRoute): void {
+  const state = storage.getStore();
+  if (state) state.route = route;
+}
+
+export function getRequestRoute(): RequestRoute | undefined {
+  return storage.getStore()?.route;
 }
 
 export function runWithRequestState<T>(

@@ -17,6 +17,7 @@ import {
 } from '@repo/domain';
 import { PinoLogger } from 'nestjs-pino';
 
+import { overdueCutoff } from '../accounts/overdue-cutoff.js';
 import { accountScope, inScope } from '../access/scope.js';
 import {
   type AccountArrears,
@@ -34,6 +35,7 @@ import {
   type PageRequest,
   toPageBy,
 } from '../platform/pagination.js';
+import { SettingReader } from '../settings/setting-reader.js';
 import {
   refuseOutOfScopeFilters,
   type ReportFilters,
@@ -75,9 +77,11 @@ type AccountRow = Prisma.AccountLoanGetPayload<{
  * **Overdue is read from the dates, not from the flag.** BR-05's `isOverdue`
  * is set nightly by `accounts/overdue.service.ts`; this report applies the
  * same three conditions itself — active, outstanding above zero, target
- * completion date before today — so an account that fell overdue this morning
- * is on the report before the job next runs, and the two can never disagree
- * about what "overdue" means.
+ * completion date before the cutoff — so an account that fell overdue this
+ * morning is on the report before the job next runs. The cutoff is
+ * `accounts/overdue-cutoff.ts` and the grace days behind it are
+ * `account.overdueGraceDays` (M15, US-094), read here as the job reads them,
+ * so the two cannot disagree about what "overdue" means at any grace value.
  *
  * **No date range.** The other three reports are period questions; this one is
  * the position now. BR-06 regenerates a schedule's tail after every
@@ -95,6 +99,7 @@ export class OverdueReportService {
   constructor(
     private readonly database: Database,
     private readonly logger: PinoLogger,
+    private readonly settings: SettingReader,
   ) {}
 
   async view(
@@ -117,10 +122,15 @@ export class OverdueReportService {
     const lineById = new Map<string, LineRow>(
       lines.map((line) => [line.id, line]),
     );
+    const grace = await this.settings.number(
+      context.organizationId,
+      'account.overdueGraceDays',
+    );
     const where = this.overdueWhere(
       context,
       [...lineById.keys()],
       today,
+      grace,
       query,
     );
 
@@ -177,17 +187,25 @@ export class OverdueReportService {
    * BR-05's three conditions, inside the caller's scope and the report's
    * filters. `minDaysOverdue` is the same condition read backwards: overdue by
    * at least `n` days is a target completion date `n` days or more ago.
+   *
+   * Two cutoffs meet here, and the **stricter — the earlier date — wins**: the
+   * grace days settle who is overdue at all, and `minDaysOverdue` only narrows
+   * that set further. A filter of "overdue by at least 1 day" can therefore
+   * never drag back an account the grace period is still covering.
    */
   private overdueWhere(
     context: RequestContext,
     lineIds: string[],
     today: CalendarDate,
+    graceDays: number,
     query: OverdueReportQuery,
   ): Prisma.AccountLoanWhereInput {
-    const latest =
+    const graced = overdueCutoff(today, graceDays);
+    const asked =
       query.minDaysOverdue === undefined
         ? today
         : addCalendarDays(today, -(query.minDaysOverdue - 1));
+    const latest = asked < graced ? asked : graced;
     return inScope(accountScope(context), {
       status: 'ACTIVE',
       outstandingAmount: { gt: 0 },

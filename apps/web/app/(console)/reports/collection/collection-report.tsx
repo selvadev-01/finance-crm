@@ -55,14 +55,6 @@ export const COLLECTION_FILTERS = {
   junior: "",
   classification: "",
 };
-export const COLLECTION_FILTER_KEYS = [
-  "from",
-  "to",
-  "sector",
-  "line",
-  "junior",
-  "classification",
-] as const;
 
 type Classification = CollectionListItem["classification"];
 const CLASSES: Classification[] = ["CORRECT", "LOW", "EXTRA", "NO_PAYMENT"];

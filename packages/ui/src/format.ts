@@ -89,7 +89,11 @@ const MONTHS = [
  * moved in Asia/Kolkata, decided once by `toBusinessDate` in @repo/domain
  * (BR-12). A business date never shows a time.
  */
-export function formatBusinessDate(businessDate: string): string {
+export function formatBusinessDate(
+  businessDate: string,
+  /** `day-month` — `13 Sep` — for a chart's axis, where the year is the reader's. */
+  style: "full" | "day-month" = "full",
+): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(businessDate.trim());
 
   if (!match) {
@@ -105,5 +109,7 @@ export function formatBusinessDate(businessDate: string): string {
     throw new Error(`formatBusinessDate received an invalid month: ${month}.`);
   }
 
-  return `${day} ${monthName} ${year}`;
+  return style === "day-month"
+    ? `${Number(day)} ${monthName}`
+    : `${day} ${monthName} ${year}`;
 }

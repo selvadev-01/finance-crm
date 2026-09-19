@@ -13,6 +13,7 @@ import { readArrearsByAccount } from '../../src/dashboards/business-figures.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import { Database } from '../../src/platform/database/database.js';
 import { OverdueReportService } from '../../src/reports/overdue-report.service.js';
+import { SettingReader } from '../../src/settings/setting-reader.js';
 import { at, SATURDAY } from '../cash/world.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine } from '../db-constraints/fixtures.js';
@@ -557,11 +558,14 @@ describe('OverdueReportService (US-087)', () => {
         slots: 6,
       });
       const logger = { error: vi.fn() };
-      const view = (client: PrismaClient) =>
-        new OverdueReportService(
-          new Database(client),
+      const view = (client: PrismaClient) => {
+        const database = new Database(client);
+        return new OverdueReportService(
+          database,
           logger as unknown as PinoLogger,
+          new SettingReader(database),
         ).view(w.admin, page, NOW);
+      };
 
       // The schedule read fails: the rows stand, their arrears do not.
       const noArrears = await view(withoutRawQueries(tx));

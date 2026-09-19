@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { OrganisationModule } from './organisation/organisation.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { SecurityModule } from './security/security.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 
 /**
@@ -29,6 +30,7 @@ import { SettingsModule } from './settings/settings.module.js';
   imports: [
     PlatformModule,
     AuditModule,
+    SecurityModule,
     EmailModule,
     NotificationsModule,
     RasiAuthModule,

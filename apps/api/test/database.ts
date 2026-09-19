@@ -102,6 +102,14 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.setting.deleteMany({
     where: { organization: { name: taggedCode } },
   });
+  // Refusals a test caused directly (M13, ADR-0014). Unlike `audit_log`,
+  // `security_event` accepts DELETE — the design decision that lets refusals be
+  // recorded at all, since the RBAC matrix suite refuses every route on every
+  // run. HTTP tests route theirs to memory (test/app.ts); this removes rows a
+  // test inserted itself to prove the read side.
+  await prisma.securityEvent.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
   await prisma.line.deleteMany({ where: { code: taggedCode } });
   await prisma.sector.deleteMany({ where: { code: taggedCode } });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });

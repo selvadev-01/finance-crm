@@ -245,6 +245,38 @@ Both account lists are **as of now**, whatever date is shown: a target date move
 
 ---
 
+## As built — dashboard trend (2026-09-19)
+
+`GET /api/dashboards/trend?date=&days=&lineId=` feeds the "Collections trend" chart on S-07, S-20 and S-19 ([ADR-0015](../../02-architecture/adr/0015-console-layout-and-in-house-charts.md)). The service is `src/dashboards/dashboard-trend.service.ts`.
+
+- **Figures.**
+  - Each point is one working day's expected (BR-16) and collected (BR-15, adjustments included), summed over the caller's lines.
+  - They are read through `lineDailyFigures` in `cash/line-day-figures.ts`: the per-(line, day) grain `lineRangeFigures` now folds from, with the day close's own predicates. It makes two grouped queries for the whole window, not one per day.
+  - A point therefore equals S-20's `today` and Σ `lineDayFigures` for its date to the paisa, and a Tier 1 test holds both.
+- **Whose lines.** Scope decides, not role checks:
+  - `lineScope(context)` gives Admins and Super Admins every line in the organisation, and a Senior their current line.
+  - A Senior with no line gets `lineCount: 0` and no points.
+  - A `lineId` outside scope is `404 LINE_NOT_FOUND`, identical to a missing one.
+  - The permission is the existing `money.lineTotals`, so no RBAC cell changed.
+- **Working days only** (`workingDates` in `business-figures.ts`, M06). A date is left out when it is:
+  - a Sunday;
+  - a business-wide holiday;
+  - a date on which **every** sector of the active lines in view has a holiday.
+
+  A South-only holiday keeps the date on the business trend and removes it from a South line's trend. Holidays are read once for the window through `holidayScope`.
+
+- **Window.**
+  - `days` is 30 by default and at most 60 (`TREND_DAYS`, `MAX_TREND_DAYS` in the contract).
+  - The series ends on `date`, today by default, or on the working day before it.
+  - A future date is `422 DATE_IN_FUTURE`.
+- **Failure.** `points` is `null` when it could not be read, never a row of zeros (S-07).
+- **Web.**
+  - The chart reads the trend on its own (`trend-card.tsx`), so the page's figures never wait for it.
+  - The Collected tile's change chip compares the last point with the working day before. It is omitted when the trend is unknown or has one point.
+  - S-19 asks for the line it is showing once that line is known.
+
+Tier 1: 7 specs (`test/dashboards/dashboard-trend.service.spec.ts`). HTTP: 2 specs in `dashboards.e2e-spec.ts`, plus the 5 harness cells.
+
 ## Risks
 
 | Risk                                       | Mitigation                                                                        |

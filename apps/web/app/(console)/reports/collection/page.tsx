@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import { readListParams } from "../../../../lib/list-params";
-import { COLLECTION_FILTER_KEYS, CollectionReport } from "./collection-report";
+import { COLLECTION_FILTER_KEYS } from "../report-filter-keys";
+import { CollectionReport } from "./collection-report";
 
 export const metadata: Metadata = { title: "Collection report · Rasi" };
 

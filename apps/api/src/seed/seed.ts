@@ -758,6 +758,9 @@ export async function seedDataset(
       collectedAmount: collected.toString(),
       outstandingAmount: outstanding.toString(),
       status: completedOn ? 'COMPLETED' : 'ACTIVE',
+      // BR-05 at the seeded organisation's `account.overdueGraceDays`, which
+      // is the built-in default of zero: the seed writes no `setting` row, so
+      // the cutoff (`accounts/overdue-cutoff.ts`) is `asOf` itself.
       isOverdue: !completedOn && target < options.asOf,
     });
     post(

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { SettingsModule } from '../settings/settings.module.js';
 import { CollectionReportService } from './collection-report.service.js';
 import { DiscrepancyReportService } from './discrepancy-report.service.js';
 import { InvestmentReportService } from './investment-report.service.js';
@@ -14,6 +15,8 @@ import { ReportController } from './report.controller.js';
  * report and a dashboard cannot disagree about the same day.
  */
 @Module({
+  // M15: the overdue report reads `account.overdueGraceDays` (BR-05, US-094).
+  imports: [SettingsModule],
   controllers: [ReportController],
   providers: [
     LineWiseReportService,

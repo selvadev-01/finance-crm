@@ -426,4 +426,50 @@ describe('operations dashboard (M11, US-082, e2e)', () => {
       ).toBe(0);
     });
   });
+
+  describe('dashboard trend (S-07, S-19, S-20)', () => {
+    it('Admins get every line and a Senior their own, thirty working days of zeros ending today; a Junior is 403; no session is 401', async () => {
+      for (const role of ['SUPER_ADMIN', 'ADMIN'] as const) {
+        const response = await get(role, '/api/dashboards/trend').expect(200);
+        expect(response.body).toMatchObject({
+          businessDate: today,
+          days: 30,
+          lineCount: 2,
+        });
+        expect(response.body.points).toHaveLength(30);
+        expect(response.body.points[0]).toEqual({
+          businessDate: expect.any(String),
+          expected: '0.00',
+          collected: '0.00',
+        });
+      }
+      const senior = await get('SENIOR', '/api/dashboards/trend?days=5').expect(
+        200,
+      );
+      expect(senior.body).toMatchObject({ days: 5, lineCount: 1 });
+      expect(senior.body.points).toHaveLength(5);
+
+      const junior = await get('JUNIOR', '/api/dashboards/trend').expect(403);
+      expect(junior.body.code).toBe('PERMISSION_DENIED');
+      const anonymous = await get(null, '/api/dashboards/trend').expect(401);
+      expect(anonymous.body.code).toBe('UNAUTHENTICATED');
+    });
+
+    it('another line is 404 for a Senior; more than sixty days is 400; a future date is 422', async () => {
+      const other = await get(
+        'SENIOR',
+        `/api/dashboards/trend?lineId=${unstaffed.id}`,
+      ).expect(404);
+      expect(other.body.code).toBe('LINE_NOT_FOUND');
+      await get('ADMIN', `/api/dashboards/trend?lineId=${unstaffed.id}`).expect(
+        200,
+      );
+      await get('ADMIN', '/api/dashboards/trend?days=61').expect(400);
+      const future = await get(
+        'ADMIN',
+        `/api/dashboards/trend?date=${addCalendarDays(today, 1)}`,
+      ).expect(422);
+      expect(future.body.code).toBe('DATE_IN_FUTURE');
+    });
+  });
 });

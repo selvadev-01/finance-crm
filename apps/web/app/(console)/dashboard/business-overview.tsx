@@ -1,6 +1,21 @@
 "use client";
 
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import {
+  AddressBook,
+  ArrowRight,
+  Bank,
+  CheckCircle,
+  Coins,
+  HandCoins,
+  HourglassMedium,
+  MapTrifold,
+  Path,
+  SealCheck,
+  Target,
+  TrendUp,
+  Wallet,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   type BusinessOverview as Overview,
   dashboardContract,
@@ -9,13 +24,14 @@ import {
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
   buttonClass,
-  DataView,
+  CodeChip,
   DetailSkeleton,
   EmptyFrame,
   FilterField,
   formatBusinessDate,
   formatCurrency,
   FormMessage,
+  HealthCard,
   Input,
   NothingYet,
   NotPermitted,
@@ -27,26 +43,22 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import {
-  displayColumn,
-  identityColumn,
-  moneyColumn,
-  valueColumn,
-} from "../../../components/columns";
-import { Money } from "../../../components/money";
 import { LoadFailed } from "../../../components/query-state";
-import { StatusBadge } from "../../../components/status-badge";
-import { formatTimestamp } from "../../../lib/format";
+import { STATUS, StatusBadge } from "../../../components/status-badge";
 import { formatPerMille, isZeroMoney, perMille } from "../../../lib/money";
 import { useApiQuery } from "../../../lib/use-api-query";
 import { useListState } from "../../../lib/use-list-state";
 import {
   CompareSectorsLink,
+  countShare,
+  LiveStamp,
   Meter,
+  ShareRing,
   UNAVAILABLE,
   Unknown,
   WEEKDAYS,
 } from "./dashboard-parts";
+import { collectedDelta, TrendCard, useTrend } from "./trend-card";
 
 /** An empty date is today; it is left out of the URL. */
 const DEFAULTS = { date: "" };
@@ -56,9 +68,9 @@ const SECTORS_ANCHOR = "sectors-today";
 /**
  * S-07 · Business overview (US-080, PDF §17, §19): "how did we do today",
  * before any interaction. §17's thirteen figures, ranked rather than dropped —
- * today's four money figures first, the structural counts second, the
- * cumulative totals third — then each sector's day. Every figure the API
- * could not compute shows "—", never a zero.
+ * today's four money figures first, the trend and the tally beside it, each
+ * sector's day, then the structural counts and the cumulative totals. Every
+ * figure the API could not compute shows "—", never a zero.
  */
 export function BusinessOverview({
   initial,
@@ -73,9 +85,11 @@ export function BusinessOverview({
     dashboardContract.getOverview,
     future ? null : { query: filters.date ? { date: filters.date } : {} },
   );
+  const trend = useTrend(future ? null : shown);
 
-  const header = (updatedAt: string | null, day: Overview["day"] | null) => (
+  const header = (view: Overview | null) => (
     <PageHeader
+      frame="hero"
       title="Business overview"
       meta={
         <>
@@ -83,16 +97,36 @@ export function BusinessOverview({
             {WEEKDAYS[dayOfWeek(parseCalendarDate(shown))]} ·{" "}
             {formatBusinessDate(shown)}
           </span>
-          {day && day.kind !== "WORKING" ? (
-            <StatusBadge kind="dayKind" value={day.kind} />
+          {view && view.day.kind !== "WORKING" ? (
+            <StatusBadge kind="dayKind" value={view.day.kind} />
           ) : null}
-          {updatedAt ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="size-2 rounded-pill bg-positive" />
-              Live · updated {formatTimestamp(updatedAt, "clock")}
-            </span>
-          ) : null}
+          {view ? <LiveStamp at={view.generatedAt} /> : null}
         </>
+      }
+      summary={
+        view ? (
+          <>
+            <ShareRing
+              share={
+                view.today
+                  ? perMille(view.today.collected, view.today.expected)
+                  : null
+              }
+              label="Collected of expected"
+              caption="Collected"
+            />
+            <ShareRing
+              share={
+                view.tally
+                  ? countShare(view.tally.tallied, view.tally.collecting)
+                  : null
+              }
+              label="Sectors tallied"
+              caption="Sectors tallied"
+              tone="positive"
+            />
+          </>
+        ) : null
       }
       actions={
         <FilterField label="Date" width="sm">
@@ -114,7 +148,7 @@ export function BusinessOverview({
   if (future) {
     return (
       <>
-        {header(null, null)}
+        {header(null)}
         <FormMessage tone="info">
           The overview shows today or an earlier day. Pick another date.
         </FormMessage>
@@ -135,7 +169,7 @@ export function BusinessOverview({
     case "error":
       return (
         <>
-          {header(null, null)}
+          {header(null)}
           <LoadFailed message={query.message} onRetry={query.reload} />
         </>
       );
@@ -145,7 +179,7 @@ export function BusinessOverview({
   if (view.setupNeeded === true) {
     return (
       <>
-        {header(view.generatedAt, view.day)}
+        {header(view)}
         <EmptyFrame>
           <NothingYet
             title="Set up the business first"
@@ -163,7 +197,7 @@ export function BusinessOverview({
 
   return (
     <>
-      {header(view.generatedAt, view.day)}
+      {header(view)}
       {view.day.kind !== "WORKING" ? (
         <FormMessage tone="info">
           {view.day.kind === "SUNDAY"
@@ -171,10 +205,14 @@ export function BusinessOverview({
             : `Holiday: ${view.day.name}. No collections are due.`}
         </FormMessage>
       ) : null}
-      <TodayFigures view={view} />
+      <TodayFigures view={view} delta={collectedDelta(trend, shown)} />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <TrendCard trend={trend} scope="every line" />
+        <EntryFigures view={view} />
+      </div>
+      <SectorsToday view={view} />
       <StructureFigures view={view} />
       <CumulativeFigures view={view} />
-      <SectorsToday view={view} />
     </>
   );
 }
@@ -205,91 +243,111 @@ function collectionsHref(date: string): string {
   return `/collections?from=${date}&to=${date}`;
 }
 
-function TodayFigures({ view }: { view: Overview }) {
+function TodayFigures({ view, delta }: { view: Overview; delta: ReactNode }) {
   const today = view.today;
-  const tally = view.tally;
   const share = today ? perMille(today.collected, today.expected) : null;
   return (
-    <>
-      <StatGrid columns={4} aria-label="Today’s collections">
-        <Stat
-          label="Expected"
-          hint={today ? "due across every line" : UNAVAILABLE}
-        >
-          {money(today?.expected)}
-        </Stat>
-        <Stat
-          label="Collected"
-          hint={
-            today ? (
-              share === null ? (
-                "nothing was due"
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Meter share={share} label="Collected of expected" />
-                  <span data-numeric>{formatPerMille(share)}</span>
-                </span>
-              )
+    <StatGrid columns={4} frame="tiles" aria-label="Today’s collections">
+      <Stat
+        label="Expected"
+        icon={<Target />}
+        hint={today ? "due across every line" : UNAVAILABLE}
+      >
+        {money(today?.expected)}
+      </Stat>
+      <Stat
+        label="Collected"
+        icon={<HandCoins />}
+        iconTone="positive"
+        delta={today ? delta : null}
+        hint={
+          today ? (
+            share === null ? (
+              "nothing was due"
             ) : (
-              UNAVAILABLE
+              <span className="flex items-center gap-2">
+                <Meter share={share} label="Collected of expected" />
+                <span data-numeric>{formatPerMille(share)}</span>
+              </span>
             )
-          }
-        >
-          {money(today?.collected)}
-        </Stat>
-        <Stat
-          label="Pending"
-          tone={today && !isZeroMoney(today.pending) ? "warning" : "neutral"}
-          hint={today ? "short of expected, line by line" : UNAVAILABLE}
-        >
-          {money(today?.pending)}
-        </Stat>
-        <Stat
-          label="Extra"
-          hint={today ? "over expected, line by line" : UNAVAILABLE}
-        >
-          {money(today?.extra)}
-        </Stat>
-      </StatGrid>
+          ) : (
+            UNAVAILABLE
+          )
+        }
+      >
+        {money(today?.collected)}
+      </Stat>
+      <Stat
+        label="Pending"
+        icon={<HourglassMedium />}
+        iconTone="warning"
+        tone={today && !isZeroMoney(today.pending) ? "warning" : "neutral"}
+        hint={today ? "short of expected, line by line" : UNAVAILABLE}
+      >
+        {money(today?.pending)}
+      </Stat>
+      <Stat
+        label="Extra"
+        icon={<TrendUp />}
+        iconTone="info"
+        hint={today ? "over expected, line by line" : UNAVAILABLE}
+      >
+        {money(today?.extra)}
+      </Stat>
+    </StatGrid>
+  );
+}
 
-      <StatGrid columns={2} aria-label="Today’s entries and tally">
-        <Stat
-          label="Low collections"
-          hint={
-            today
-              ? `paid less than expected · ${today.extraCount} paid more`
-              : UNAVAILABLE
-          }
-        >
-          {today ? (
-            <FigureLink href={collectionsHref(view.businessDate)}>
-              {today.lowCount}
-            </FigureLink>
-          ) : (
-            <Unknown />
-          )}
-        </Stat>
-        <Stat
-          label="Sectors tallied"
-          hint={
-            tally
-              ? tally.collecting === 0
-                ? "no sector had collections due"
-                : `${tally.withExtra} with extra · ${tally.withLow} with low collection`
-              : UNAVAILABLE
-          }
-        >
-          {tally ? (
-            <FigureLink href={`#${SECTORS_ANCHOR}`}>
-              {tally.tallied}
-              <span className="text-ink-muted"> of {tally.collecting}</span>
-            </FigureLink>
-          ) : (
-            <Unknown />
-          )}
-        </Stat>
-      </StatGrid>
-    </>
+/** Beside the trend: the day's entries and the sectors' tally (§19). */
+function EntryFigures({ view }: { view: Overview }) {
+  const { today, tally } = view;
+  return (
+    <StatGrid
+      columns={2}
+      frame="tiles"
+      className="content-start lg:grid-cols-1"
+      aria-label="Today’s entries and tally"
+    >
+      <Stat
+        label="Low collections"
+        icon={<WarningCircle />}
+        iconTone="warning"
+        hint={
+          today
+            ? `paid less than expected · ${today.extraCount} paid more`
+            : UNAVAILABLE
+        }
+      >
+        {today ? (
+          <FigureLink href={collectionsHref(view.businessDate)}>
+            {today.lowCount}
+          </FigureLink>
+        ) : (
+          <Unknown />
+        )}
+      </Stat>
+      <Stat
+        label="Sectors tallied"
+        icon={<CheckCircle />}
+        iconTone="positive"
+        hint={
+          tally
+            ? tally.collecting === 0
+              ? "no sector had collections due"
+              : `${tally.withExtra} with extra · ${tally.withLow} with low collection`
+            : UNAVAILABLE
+        }
+      >
+        {tally ? (
+          <FigureLink href={`#${SECTORS_ANCHOR}`}>
+            {tally.tallied}
+            <span className="text-ink-muted"> of {tally.collecting}</span>
+          </FigureLink>
+        ) : (
+          <Unknown />
+        )}
+      </Stat>
+    </StatGrid>
   );
 }
 
@@ -305,18 +363,35 @@ function StructureFigures({ view }: { view: Overview }) {
     );
   return (
     <Section title="The business">
-      <StatGrid columns={4}>
-        <Stat label="Sectors" hint={structure ? "active" : UNAVAILABLE}>
+      <StatGrid columns={4} frame="tiles">
+        <Stat
+          label="Sectors"
+          icon={<MapTrifold />}
+          iconTone="neutral"
+          hint={structure ? "active" : UNAVAILABLE}
+        >
           {count(structure?.sectors, "/sectors")}
         </Stat>
-        <Stat label="Lines" hint={structure ? "active" : UNAVAILABLE}>
+        <Stat
+          label="Lines"
+          icon={<Path />}
+          iconTone="neutral"
+          hint={structure ? "active" : UNAVAILABLE}
+        >
           {count(structure?.lines, "/lines")}
         </Stat>
-        <Stat label="Customers" hint={structure ? "on the books" : UNAVAILABLE}>
+        <Stat
+          label="Customers"
+          icon={<AddressBook />}
+          iconTone="neutral"
+          hint={structure ? "on the books" : UNAVAILABLE}
+        >
           {count(structure?.customers, "/customers")}
         </Stat>
         <Stat
           label="Active accounts"
+          icon={<Wallet />}
+          iconTone="neutral"
           hint={accounts ? "collecting now" : UNAVAILABLE}
         >
           {count(accounts?.active, null)}
@@ -336,18 +411,25 @@ function CumulativeFigures({ view }: { view: Overview }) {
       title="All time"
       description="Account amount, invested and profit come from the ledger."
     >
-      <StatGrid columns={4}>
-        <Stat label="Account amount" hint={hint}>
+      <StatGrid columns={4} frame="tiles">
+        <Stat
+          label="Account amount"
+          icon={<Coins />}
+          iconTone="neutral"
+          hint={hint}
+        >
           {amount(totals?.accountAmount)}
         </Stat>
-        <Stat label="Invested" hint={hint}>
+        <Stat label="Invested" icon={<Bank />} iconTone="neutral" hint={hint}>
           {amount(totals?.invested)}
         </Stat>
-        <Stat label="Profit" hint={hint}>
+        <Stat label="Profit" icon={<TrendUp />} iconTone="neutral" hint={hint}>
           {amount(totals?.profit)}
         </Stat>
         <Stat
           label="Completed accounts"
+          icon={<SealCheck />}
+          iconTone="neutral"
           hint={accounts ? "fully collected" : UNAVAILABLE}
         >
           {accounts ? accounts.completed : <Unknown />}
@@ -357,114 +439,134 @@ function CumulativeFigures({ view }: { view: Overview }) {
   );
 }
 
+const TALLY_METER = {
+  TALLIED: "positive",
+  CLOSED: "warning",
+  OPEN: "accent",
+  NO_COLLECTIONS: "accent",
+} as const;
+
 function SectorsToday({ view }: { view: Overview }) {
   const sectors = view.sectors;
   return (
     <Section
       id={SECTORS_ANCHOR}
-      className="scroll-mt-6"
+      className="scroll-mt-20"
       title="Sectors today"
       description="Each sector’s lines added up, and whether its day has tallied. Open a sector for its lines."
+      actions={
+        <span className="flex flex-wrap gap-4">
+          <CompareSectorsLink date={view.businessDate} />
+          <Link
+            href={collectionsHref(view.businessDate)}
+            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+          >
+            Collections this day
+            <ArrowRight aria-hidden size={14} />
+          </Link>
+          <Link
+            href="/lines"
+            className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
+          >
+            All lines
+            <ArrowRight aria-hidden size={14} />
+          </Link>
+        </span>
+      }
     >
       {sectors === null ? (
         <FormMessage tone="critical">
           The sectors couldn’t be worked out just now, so their figures are not
           shown.
         </FormMessage>
+      ) : sectors.length === 0 ? (
+        <p className="text-body text-ink-muted">No sector has lines yet.</p>
       ) : (
-        <DataView
-          caption="Sectors today"
-          rows={sectors}
-          getRowId={(sector) => sector.sectorId}
-          complete
-          footer={
-            <div className="flex flex-wrap items-center justify-between gap-2 text-caption text-ink-muted">
-              <span data-numeric>
-                {sectors.length} {sectors.length === 1 ? "sector" : "sectors"}{" "}
-                with lines
-              </span>
-              <span className="flex flex-wrap gap-4">
-                <CompareSectorsLink date={view.businessDate} />
-                <Link
-                  href={collectionsHref(view.businessDate)}
-                  className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-                >
-                  Collections this day
-                  <ArrowRight aria-hidden size={14} />
-                </Link>
-                <Link
-                  href="/lines"
-                  className="inline-flex items-center gap-1 text-label text-accent underline-offset-4 hover:underline"
-                >
-                  All lines
-                  <ArrowRight aria-hidden size={14} />
-                </Link>
-              </span>
-            </div>
-          }
-          columns={[
-            identityColumn<SectorOverview>({
-              header: "Sector",
-              name: (sector) => sector.name,
-              code: (sector) => sector.code,
-              href: (sector) => `/sectors/${sector.sectorId}`,
-            }),
-            valueColumn<SectorOverview>({
-              id: "lines",
-              header: "Lines",
-              align: "end",
-              value: (sector) => sector.lineCount,
-              cell: (sector) => <span data-numeric>{sector.lineCount}</span>,
-            }),
-            moneyColumn<SectorOverview>({
-              id: "expected",
-              header: "Expected",
-              amount: (sector) => sector.expected,
-            }),
-            moneyColumn<SectorOverview>({
-              id: "collected",
-              header: "Collected",
-              amount: (sector) => sector.collected,
-            }),
-            moneyColumn<SectorOverview>({
-              id: "shortfall",
-              header: "Shortfall",
-              amount: (sector) => sector.shortfall,
-              render: (sector) => (
-                <Money
-                  amount={sector.shortfall}
-                  className={
-                    isZeroMoney(sector.shortfall)
-                      ? undefined
-                      : "font-medium text-critical"
-                  }
-                />
-              ),
-            }),
-            moneyColumn<SectorOverview>({
-              id: "surplus",
-              header: "Extra",
-              amount: (sector) => sector.surplus,
-            }),
-            displayColumn<SectorOverview>({
-              id: "tally",
-              header: "Day",
-              align: "end",
-              cell: (sector) => (
-                <span className="flex flex-col items-end gap-0.5">
-                  <StatusBadge kind="sectorTally" value={sector.tally} />
-                  {sector.linesToClose > 0 ? (
-                    <span className="text-caption text-ink-muted" data-numeric>
-                      {sector.linesTallied} of {sector.linesToClose} lines
-                      tallied
-                    </span>
-                  ) : null}
-                </span>
-              ),
-            }),
-          ]}
-        />
+        <ul
+          aria-label="Sectors today"
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        >
+          {sectors.map((sector) => (
+            <li key={sector.sectorId}>
+              <SectorCard sector={sector} />
+            </li>
+          ))}
+        </ul>
       )}
     </Section>
+  );
+}
+
+function SectorCard({ sector }: { sector: SectorOverview }) {
+  const share = perMille(sector.collected, sector.expected);
+  const tone = STATUS.sectorTally[sector.tally].tone;
+  return (
+    <HealthCard.Root className="h-full">
+      <HealthCard.Header
+        icon={<MapTrifold />}
+        tone={
+          tone === "positive"
+            ? "positive"
+            : tone === "warning"
+              ? "warning"
+              : "accent"
+        }
+        title={
+          <Link
+            href={`/sectors/${sector.sectorId}`}
+            className="underline-offset-4 hover:text-accent hover:underline"
+          >
+            {sector.name}
+          </Link>
+        }
+        subtitle={
+          <span className="flex items-center gap-2">
+            <CodeChip>{sector.code}</CodeChip>
+            <span data-numeric>
+              {sector.lineCount} {sector.lineCount === 1 ? "line" : "lines"}
+            </span>
+          </span>
+        }
+        value={
+          <StatusBadge kind="sectorTally" value={sector.tally} shape="pill" />
+        }
+      />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-heading text-ink" data-numeric>
+            {formatCurrency(sector.collected)}
+          </span>
+          <span className="text-caption text-ink-muted" data-numeric>
+            of {formatCurrency(sector.expected)}
+          </span>
+        </div>
+        {share === null ? null : (
+          <Meter
+            share={share}
+            label={`${sector.name} collected of expected`}
+            tone={TALLY_METER[sector.tally]}
+          />
+        )}
+      </div>
+      <HealthCard.Detail>
+        {isZeroMoney(sector.shortfall) ? null : (
+          <span className="font-medium text-critical">
+            {formatCurrency(sector.shortfall)} short
+          </span>
+        )}
+        {isZeroMoney(sector.shortfall) || isZeroMoney(sector.surplus)
+          ? null
+          : " · "}
+        {isZeroMoney(sector.surplus)
+          ? null
+          : `${formatCurrency(sector.surplus)} extra`}
+        {isZeroMoney(sector.shortfall) && isZeroMoney(sector.surplus)
+          ? "On expected"
+          : null}
+        {sector.linesToClose > 0
+          ? ` · ${sector.linesTallied} of ${sector.linesToClose} lines tallied`
+          : null}
+      </HealthCard.Detail>
+    </HealthCard.Root>
   );
 }

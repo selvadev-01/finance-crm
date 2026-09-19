@@ -35,7 +35,6 @@ import { useApiQuery } from "../../../lib/use-api-query";
  * API's own defaults — so a link without dates follows the calendar.
  */
 export const REPORT_FILTERS = { from: "", to: "", sector: "", line: "" };
-export const REPORT_FILTER_KEYS = ["from", "to", "sector", "line"] as const;
 
 /**
  * `from` on or before `to`, `to` no later than today, and at most

@@ -25,6 +25,7 @@ import {
 
 import { Button } from "./button";
 import { cn } from "./cn";
+import { flatSurfaceClass } from "./layout";
 
 declare module "@tanstack/react-table" {
   // Column options Rasi adds. The type parameters must match TanStack's own.
@@ -52,6 +53,8 @@ export interface DataViewProps<Row> {
   initialSort?: SortingState;
   /** A `ListFooter`, drawn as the bottom band of the table's frame. */
   footer?: ReactNode;
+  /** `flat` on a dashboard, among flat cards (ADR-0015); `outlined` elsewhere. */
+  frame?: "outlined" | "flat";
   className?: string;
 }
 
@@ -61,7 +64,8 @@ export interface DataViewProps<Row> {
  * is the only place its markup is written.
  *
  * The first column is the record's identity — it heads each card, and is where
- * a screen puts the link to the detail page. Columns are TanStack column
+ * a screen puts the link to the detail page; styled with `rowLinkClass` and
+ * marked `data-row-link`, that link covers the whole row. Columns are TanStack column
  * definitions; `meta.align` and `meta.hideOnCard` are Rasi's additions, and
  * `enableSorting: false` turns sorting off for a column that has no order.
  *
@@ -76,8 +80,13 @@ export function DataView<Row>({
   complete,
   initialSort = [],
   footer,
+  frame = "outlined",
   className,
 }: DataViewProps<Row>) {
+  const surface =
+    frame === "flat"
+      ? flatSurfaceClass
+      : "rounded-surface border border-border bg-surface-raised shadow-raised";
   const [sorting, setSorting] = useState<SortingState>(initialSort);
   // TanStack returns a mutable table object, so the React Compiler leaves this
   // component unmemoised. That is the documented trade-off, and fine for a list.
@@ -94,11 +103,15 @@ export function DataView<Row>({
     getSortedRowModel: getSortedRowModel(),
   });
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
+  // A row whose identity is a `rowLinkClass` link opens on a click anywhere;
+  // any other control in it sits above that link's overlay.
+  const linkedRow =
+    "relative has-[[data-row-link]]:cursor-pointer [&_:is(a,button,input,select,textarea,label):not([data-row-link])]:relative [&_:is(a,button,input,select,textarea,label):not([data-row-link])]:z-10";
   const tableRows = table.getRowModel().rows;
 
   return (
     <div className={className}>
-      <div className="hidden overflow-x-auto rounded-surface border border-border bg-surface-raised shadow-raised md:block">
+      <div className={cn("hidden overflow-x-auto md:block", surface)}>
         <table className="w-full border-collapse text-body">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -161,7 +174,10 @@ export function DataView<Row>({
             {tableRows.map((row) => (
               <tr
                 key={row.id}
-                className="border-b border-border transition-colors last:border-b-0 hover:bg-surface-sunken/70"
+                className={cn(
+                  "border-b border-border transition-colors last:border-b-0 hover:bg-surface-sunken/70",
+                  linkedRow,
+                )}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td
@@ -193,7 +209,7 @@ export function DataView<Row>({
           return (
             <li
               key={row.id}
-              className="flex flex-col gap-2 rounded-surface border border-border bg-surface-raised p-4 shadow-raised"
+              className={cn("flex flex-col gap-2 p-4", surface, linkedRow)}
             >
               {identity ? (
                 <div className="text-body">
