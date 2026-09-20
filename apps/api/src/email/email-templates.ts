@@ -102,6 +102,30 @@ export function welcomeEmail(input: {
   });
 }
 
+/**
+ * US-003: the link that lets someone set a new password themselves. The
+ * wording carries the two facts that matter to a Junior standing on a round —
+ * how long the link lasts, and that ignoring it changes nothing.
+ */
+export function passwordResetEmail(input: {
+  name: string;
+  resetUrl: string;
+  validForMinutes: number;
+}): RenderedEmail {
+  return render({
+    subject: 'Set a new Rasi password',
+    heading: 'Set a new password',
+    paragraphs: [
+      `Hello ${input.name},`,
+      `Use the button below to set a new password. The link works once and lasts ${input.validForMinutes} minutes.`,
+      `If you did not ask for this, ignore this email — your password stays as it is.`,
+    ],
+    action: { label: 'Set a new password', url: input.resetUrl },
+    footer:
+      'You are receiving this because someone asked to reset the password for this Rasi account. Tell your Admin if it was not you.',
+  });
+}
+
 /** A copy of an in-app notification (M10). The app remains the record. */
 export function notificationEmail(input: {
   title: string;

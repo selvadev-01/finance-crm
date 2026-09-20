@@ -140,7 +140,7 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
-**Thirty-nine migrations**:
+**Forty migrations**:
 
 - `add_better_auth` and `rasi_core`.
 - Fourteen `constraints_*` migrations holding CHECKs, triggers and partial unique indexes; `constraints_collection_corrections` (US-044) specifies the collection status transitions and allows one pending correction per collection.

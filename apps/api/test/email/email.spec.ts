@@ -11,6 +11,7 @@ import { EmailOutbox } from '../../src/email/email-outbox.js';
 import {
   escapeHtml,
   notificationEmail,
+  passwordResetEmail,
   welcomeEmail,
 } from '../../src/email/email-templates.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
@@ -339,6 +340,20 @@ describe('email (M10, notifications.md#email)', () => {
       expect(email.html).toContain('A &amp; B &quot;quoted&quot;');
       expect(email.html).toContain('href="https://rasi.example/x?a=1&amp;b=2"');
       expect(escapeHtml(`'`)).toBe('&#39;');
+    });
+
+    it('tells a Junior how long the reset link lasts and that ignoring it changes nothing (US-003)', () => {
+      const email = passwordResetEmail({
+        name: 'Meena',
+        resetUrl: 'https://rasi.example/reset-password?token=abc',
+        validForMinutes: 30,
+      });
+      expect(email.subject).toBe('Set a new Rasi password');
+      expect(email.text).toContain('lasts 30 minutes');
+      expect(email.text).toContain('your password stays as it is');
+      expect(email.html).toContain(
+        'href="https://rasi.example/reset-password?token=abc"',
+      );
     });
 
     it('keeps the subject on one header line', () => {

@@ -287,6 +287,9 @@ enum EmailKind {
   NOTIFICATION
   /// Sent to an organization's owner on sign-up (US-006).
   WELCOME
+  /// The link that starts a self-service password reset (US-003). Added
+  /// 2026-09-20 (migration password_reset_email).
+  PASSWORD_RESET
 }
 
 enum AuditAction {
