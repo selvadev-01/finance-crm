@@ -59,8 +59,28 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
 
   const record = account.data;
   const today = toBusinessDate(new Date());
+  const canClose = me.role === "SUPER_ADMIN" && record.status === "ACTIVE";
   const canDisburse =
     canManageOrganisation(me.role) && record.status === "PENDING";
+
+  const actions = [
+    canDisburse && record.disbursementDate > today ? (
+      <p key="waiting" className="text-body text-ink-muted">
+        Can be disbursed from {formatBusinessDate(record.disbursementDate)}
+      </p>
+    ) : canDisburse ? (
+      <Button key="disburse" tone="primary" onClick={() => setConfirming(true)}>
+        Disburse
+      </Button>
+    ) : null,
+    // US-035: Super Admin only, and only while there is still something to
+    // stop collecting.
+    canClose ? (
+      <Button key="close" tone="danger" onClick={() => setClosing(true)}>
+        Close account
+      </Button>
+    ) : null,
+  ].filter(Boolean);
 
   return (
     <>
@@ -92,27 +112,9 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
             </span>
           </>
         }
-        actions={
-          <>
-            {canDisburse && record.disbursementDate > today ? (
-              <p className="text-body text-ink-muted">
-                Can be disbursed from{" "}
-                {formatBusinessDate(record.disbursementDate)}
-              </p>
-            ) : canDisburse ? (
-              <Button tone="primary" onClick={() => setConfirming(true)}>
-                Disburse
-              </Button>
-            ) : null}
-            {/* US-035: Super Admin only, and only while there is still
-                something to stop collecting. */}
-            {me.role === "SUPER_ADMIN" && record.status === "ACTIVE" ? (
-              <Button tone="danger" onClick={() => setClosing(true)}>
-                Close account
-              </Button>
-            ) : null}
-          </>
-        }
+        // Nothing at all for someone who can neither disburse nor close, so
+        // the header draws no empty action row.
+        actions={actions.length > 0 ? <>{actions}</> : null}
       />
 
       <StatGrid columns={4}>

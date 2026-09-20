@@ -343,7 +343,8 @@ export class CustomerService {
    * is the new line's, and the sector follows the line. Past collections keep
    * the line they were taken under (BR-15) and are not touched.
    *
-   * The move closes the open period yesterday and opens one today, so a
+   * The move closes the open period today and opens the next one today too,
+   * so on the transfer day both lines cover the date and a
    * collection taken at the door before the transfer can still be synced by
    * the Junior who took it — `collectableAccountScope` reads these rows.
    */

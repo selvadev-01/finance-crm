@@ -436,13 +436,24 @@ export class AccountService {
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<Account> {
     return this.database.transaction(async (tx) => {
-      const account = foundInScope(
+      const inScopeAccount = foundInScope(
         await tx.accountLoan.findFirst({
           where: inScope(accountScope(context), { id: accountId }),
-          select: accountFields,
+          select: { id: true },
         }),
         'account',
       );
+      // Serialise against every other write to this account, as the collection
+      // path does. The write-off credits the receivable by the outstanding
+      // read here: a collection committing between the read and the posting
+      // would leave the receivable negative and unearned profit with a
+      // residue. The lock is held to commit, so the balances below are the
+      // ones the posting uses.
+      await tx.$queryRaw`SELECT id FROM account_loan WHERE id = ${inScopeAccount.id} FOR UPDATE`;
+      const account = await tx.accountLoan.findUniqueOrThrow({
+        where: { id: inScopeAccount.id },
+        select: accountFields,
+      });
       if (account.status !== 'ACTIVE') {
         throw new DomainError(
           'ACCOUNT_NOT_ACTIVE',
@@ -487,7 +498,10 @@ export class AccountService {
         after: {
           status: input.status,
           closureNote: input.note,
-          writtenOff: money(account.outstandingAmount),
+          // Only a write-off gives money up; DEFAULTED leaves it owed.
+          ...(input.status === 'WRITTEN_OFF'
+            ? { writtenOff: money(account.outstandingAmount) }
+            : {}),
         },
       });
 

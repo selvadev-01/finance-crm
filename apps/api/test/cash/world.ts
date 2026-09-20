@@ -184,6 +184,7 @@ export async function cashWorld(tx: PrismaClient) {
   return {
     tx,
     organizationId,
+    accounts,
     line,
     otherLine,
     admin,

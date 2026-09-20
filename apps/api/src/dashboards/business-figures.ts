@@ -869,6 +869,10 @@ export async function readInvestmentByLine(
         : [[receivable.accountLoanId, toMoney(receivable.balance.toString())]],
     ),
   );
+  // A write-off credits the receivable for money that never came back
+  // (US-035), so without this the account would read as fully repaid with all
+  // its profit earned.
+  const writtenOffOf = await readWrittenOffByAccount(tx, context);
 
   const byLine = new Map<string, InvestmentPosition>();
   for (const account of byAccount.values()) {
@@ -887,7 +891,11 @@ export async function readInvestmentByLine(
       outstandingOf.get(account.accountLoanId) ?? account.accountAmount,
       account.accountAmount,
     );
-    const returned = account.accountAmount.minus(outstanding);
+    const givenUp = clamp(
+      writtenOffOf.get(account.accountLoanId) ?? ZERO(),
+      account.accountAmount,
+    );
+    const returned = account.accountAmount.minus(outstanding).minus(givenUp);
     const earned = account.profit.isZero()
       ? ZERO()
       : recognisedProfit({
@@ -902,12 +910,36 @@ export async function readInvestmentByLine(
     position.outstanding = position.outstanding.plus(outstanding);
     position.returned = position.returned.plus(returned);
     position.profitEarned = position.profitEarned.plus(earned);
+    // Nothing is left to earn on an account that has been given up.
     position.profitToEarn = position.profitToEarn.plus(
-      account.profit.minus(earned),
+      givenUp.isZero() ? account.profit.minus(earned) : ZERO(),
     );
     byLine.set(account.lineId, position);
   }
   return byLine;
+}
+
+/**
+ * What each account’s write-off gave up (US-035): the amount a `WRITE_OFF`
+ * posting credited to its receivable. Read from the ledger, like every other
+ * figure here, rather than from the account row.
+ */
+async function readWrittenOffByAccount(
+  tx: Tx,
+  context: RequestContext,
+): Promise<Map<string, Decimal>> {
+  const rows = await tx.$queryRaw<{ accountLoanId: string; amount: string }[]>`
+    SELECT a."accountLoanId", COALESCE(SUM(e.amount), 0)::text AS amount
+    FROM ledger_entry e
+    JOIN ledger_account a ON a.id = e."ledgerAccountId"
+    JOIN ledger_transaction t ON t.id = e."ledgerTransactionId"
+    WHERE t."transactionType" = 'WRITE_OFF'
+      AND e.direction = 'CREDIT'
+      AND a."accountType" = 'LOAN_RECEIVABLE'
+      AND a."organizationId" = ${context.organizationId}
+      AND a."accountLoanId" IS NOT NULL
+    GROUP BY a."accountLoanId"`;
+  return new Map(rows.map((row) => [row.accountLoanId, toMoney(row.amount)]));
 }
 
 /**
@@ -947,7 +979,9 @@ const noMovement = (): InvestmentMovement => ({
  * `LOAN_RECEIVABLE` entry, and that receivable names the account — so a
  * transaction lands on the line holding that account now, the same attribution
  * as the position's, whichever staff member or business-wide account the other
- * side of it touched. (A WRITE_OFF is not posted anywhere yet, M09.)
+ * side of it touched. A WRITE_OFF (US-035) is deliberately **not** movement:
+ * nothing came back and no profit was recognised. It shows in the position
+ * instead, as money that stopped being outstanding without being returned.
  *
  * `lineIds` is already scoped (M02); a line with no posting in the range comes
  * back at zero, and the accounts are filtered by `accountScope` again here.
