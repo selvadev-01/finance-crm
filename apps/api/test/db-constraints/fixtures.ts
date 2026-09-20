@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -77,6 +78,7 @@ export async function createActiveAccount(tx: PrismaClient) {
       address: 'Address',
       sectorId: sector.id,
       lineId: line.id,
+      linePeriods: openLinePeriod(line.id),
     },
   });
   const account = await tx.accountLoan.create({

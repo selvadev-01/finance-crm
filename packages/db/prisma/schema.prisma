@@ -218,6 +218,9 @@ enum LedgerAccountType {
   CAPITAL
   UNEARNED_PROFIT
   EARNED_PROFIT
+  /// What a written-off account cost the business (US-035). Debit-normal,
+  /// like the expense it is. Added 2026-09-20.
+  WRITE_OFF_LOSS
 }
 
 enum Direction {
@@ -403,13 +406,14 @@ model Line {
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   createdByUserId String?
 
-  organization Organization     @relation(fields: [organizationId], references: [id])
-  sector       Sector           @relation(fields: [sectorId], references: [id])
-  assignments  LineAssignment[]
-  customers    Customer[]
-  accountLoans AccountLoan[]
-  collections  Collection[]
-  dayCloses    DayClose[]
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  sector              Sector               @relation(fields: [sectorId], references: [id])
+  assignments         LineAssignment[]
+  customers           Customer[]
+  customerLinePeriods CustomerLinePeriod[]
+  accountLoans        AccountLoan[]
+  collections         Collection[]
+  dayCloses           DayClose[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -472,17 +476,53 @@ model Customer {
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)
   createdByUserId String?
 
-  organization Organization        @relation(fields: [organizationId], references: [id])
-  sector       Sector              @relation(fields: [sectorId], references: [id])
-  line         Line                @relation(fields: [lineId], references: [id])
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  sector       Sector               @relation(fields: [sectorId], references: [id])
+  line         Line                 @relation(fields: [lineId], references: [id])
   references   CustomerReference[]
   accountLoans AccountLoan[]
+  linePeriods  CustomerLinePeriod[]
 
   @@index([organizationId])
   @@index([sectorId])
   @@index([lineId])
   @@index([mobile])
   @@map("customer")
+}
+
+/// Which line a customer belonged to, and when (US-023). The open row — the
+/// one with no effectiveTo — is the current line, mirrored on customer.lineId.
+///
+/// It exists so a collection taken offline can still be synced by the Junior
+/// who took it after the customer has moved on: the check is "was this
+/// customer on my line on that collection's business date", not "is it now".
+/// On the transfer day both periods cover the date, so both lines' Juniors
+/// may sync that day's collection — either one really could have taken it.
+/// Attribution is still frozen on the collection itself (BR-15).
+///
+/// CHECK: effectiveTo >= effectiveFrom (migration constraints_customer_line_period).
+model CustomerLinePeriod {
+  id            String    @id @default(cuid())
+  customerId    String
+  lineId        String
+  effectiveFrom DateTime  @db.Date
+  /// NULL means this is the current line.
+  effectiveTo   DateTime? @db.Date
+  reason        String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  line     Line     @relation(fields: [lineId], references: [id])
+
+  // One current line per customer.
+  @@unique([customerId], map: "customer_line_period_current_key", where: raw("(\"effectiveTo\" IS NULL)"))
+  // Serves "who was on my line on this date" from the collection path.
+  @@index([lineId, effectiveFrom])
+  @@index([customerId, effectiveFrom])
+  @@map("customer_line_period")
 }
 
 model CustomerReference {
@@ -820,7 +860,7 @@ model LedgerAccount {
   entries      LedgerEntry[]
 
   @@unique([ownerUserId], map: "ledger_account_cash_in_hand_owner_key", where: raw("(\"accountType\" = 'CASH_IN_HAND'::\"LedgerAccountType\")"))
-  @@unique([organizationId, accountType], map: "ledger_account_organization_singleton_key", where: raw("(\"accountType\" = ANY (ARRAY['CASH_AT_OFFICE'::\"LedgerAccountType\", 'CAPITAL'::\"LedgerAccountType\", 'UNEARNED_PROFIT'::\"LedgerAccountType\", 'EARNED_PROFIT'::\"LedgerAccountType\"]))"))
+  @@unique([organizationId, accountType], map: "ledger_account_organization_singleton_key", where: raw("(\"accountType\" = ANY (ARRAY['CASH_AT_OFFICE'::\"LedgerAccountType\", 'CAPITAL'::\"LedgerAccountType\", 'UNEARNED_PROFIT'::\"LedgerAccountType\", 'EARNED_PROFIT'::\"LedgerAccountType\", 'WRITE_OFF_LOSS'::\"LedgerAccountType\"]))"))
   @@unique([accountLoanId], map: "ledger_account_loan_receivable_key", where: raw("(\"accountType\" = 'LOAN_RECEIVABLE'::\"LedgerAccountType\")"))
   @@index([organizationId])
   @@index([accountType])
@@ -972,7 +1012,7 @@ model NotificationOutbox {
 /// _failed_has_error_check, _notification_kind_check, _content_check
 /// (migration constraints_email_outbox).
 model EmailOutbox {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   userId         String
   kind           EmailKind

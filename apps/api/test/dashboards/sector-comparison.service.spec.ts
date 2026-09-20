@@ -1,4 +1,5 @@
 import type { SectorComparison } from '@repo/contracts';
+import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
@@ -416,6 +417,7 @@ describe('SectorComparisonService (US-081)', () => {
           address: '1 Other Street',
           sectorId: other.sector.id,
           lineId: other.line.id,
+          linePeriods: openLinePeriod(other.line.id),
         },
       });
       const view = await w.sectors.view(w.admin, MONDAY, MONDAY_EVENING);

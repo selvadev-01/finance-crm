@@ -1,4 +1,5 @@
 import type { InvestmentReport } from '@repo/contracts';
+import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { addCalendarDays, parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
@@ -181,6 +182,7 @@ describe('InvestmentReportService (US-085)', () => {
         address: '12 Market Road',
         sectorId: w.south.id,
         lineId: w.lineC.id,
+        linePeriods: openLinePeriod(w.lineC.id),
       },
     });
     return w.accounts.create(
@@ -197,6 +199,47 @@ describe('InvestmentReportService (US-085)', () => {
       SATURDAY,
     );
   }
+
+  it('US-035: a written-off account is not money returned — what it never repaid leaves the position, and its unearned profit with it', async () => {
+    await withRollback(prisma, async (tx) => {
+      const w = await businessWorld(tx);
+      const account = await unevenAccount(w);
+      await w.collect(w.juniorC, account.id, '100', MONDAY);
+
+      const before = await w.investment.view(
+        w.admin,
+        { from: MONDAY, to: MONDAY, lineId: w.lineC.id },
+        THURSDAY_EVENING,
+      );
+      const lineBefore = before.lines!.find(
+        (line) => line.lineId === w.lineC.id,
+      )!;
+
+      await w.accounts.close(
+        w.admin,
+        account.id,
+        { status: 'WRITTEN_OFF', note: 'Shop closed; customer moved away' },
+        MONDAY,
+      );
+
+      const after = await w.investment.view(
+        w.admin,
+        { from: MONDAY, to: MONDAY, lineId: w.lineC.id },
+        THURSDAY_EVENING,
+      );
+      const lineAfter = after.lines!.find((line) => line.lineId === w.lineC.id)!;
+
+      // The ₹100 that really arrived is still returned, and the profit it
+      // earned is still earned: only what was given up leaves the figures.
+      expect(lineAfter.position!.returned).toBe(lineBefore.position!.returned);
+      expect(lineAfter.position!.profitEarned).toBe(
+        lineBefore.position!.profitEarned,
+      );
+      // Nothing is outstanding any more, and nothing is left to earn.
+      expect(lineAfter.position!.outstanding).toBe('0.00');
+      expect(lineAfter.position!.profitToEarn).toBe('0.00');
+    });
+  });
 
   it('recognises profit per BR-18 on the running total, to the paisa, for an uneven account amount', async () => {
     await withRollback(prisma, async (tx) => {

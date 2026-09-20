@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { dayOfWeek, parseCalendarDate } from '@repo/domain';
 import { randomUUID } from 'node:crypto';
 
@@ -52,6 +53,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
         address: '12 Market Road',
         sectorId: sector.id,
         lineId: line.id,
+        linePeriods: openLinePeriod(line.id),
       },
     });
     const database = new Database(tx);
@@ -565,6 +567,151 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           account.id,
         );
         expect(senior.profitAmount).toBe('1500.00');
+      });
+    });
+  });
+
+  /**
+   * US-035 — closing an account by hand. Only WRITTEN_OFF posts (decided
+   * 2026-09-20): DEFAULTED stops collection and leaves the money owed.
+   */
+  describe('closing an account (US-035)', () => {
+    const balancesOf = async (tx: PrismaClient, organizationId: string) =>
+      Object.fromEntries(
+        (await tx.ledgerAccount.findMany({ where: { organizationId } })).map(
+          (account) => [account.accountType, account.balance.toFixed(2)],
+        ),
+      );
+
+    it('Scenario: written off before a rupee arrives — the receivable and its unearned profit clear, and the 8,500 put out is the loss', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organizationId, context, service, terms } = await world(tx);
+        const account = await service.create(
+          context,
+          terms({ disburse: true }),
+          SATURDAY,
+        );
+
+        const closed = await service.close(
+          context,
+          account.id,
+          { status: 'WRITTEN_OFF', note: 'Left the area; not traceable' },
+          SATURDAY,
+        );
+
+        expect(closed.status).toBe('WRITTEN_OFF');
+        expect(await balancesOf(tx, organizationId)).toEqual({
+          // Nothing is owed and no profit is expected any more; what the
+          // business paid out and did not get back is the loss.
+          LOAN_RECEIVABLE: '0.00',
+          CASH_AT_OFFICE: '-8500.00',
+          UNEARNED_PROFIT: '0.00',
+          WRITE_OFF_LOSS: '8500.00',
+        });
+
+        const writeOff = await tx.ledgerTransaction.findFirstOrThrow({
+          where: { sourceId: account.id, transactionType: 'WRITE_OFF' },
+          include: { entries: { include: { ledgerAccount: true } } },
+        });
+        expect(
+          writeOff.entries.map((entry) => [
+            entry.ledgerAccount.accountType,
+            entry.direction,
+            entry.amount.toFixed(2),
+          ]),
+        ).toEqual([
+          ['LOAN_RECEIVABLE', 'CREDIT', '10000.00'],
+          ['UNEARNED_PROFIT', 'DEBIT', '1500.00'],
+          ['WRITE_OFF_LOSS', 'DEBIT', '8500.00'],
+        ]);
+
+        // Nothing is expected any more, and the closure is on the record.
+        expect(
+          await tx.accountSchedule.count({
+            where: { accountLoanId: account.id, status: 'PENDING' },
+          }),
+        ).toBe(0);
+        const row = await tx.accountLoan.findUniqueOrThrow({
+          where: { id: account.id },
+        });
+        expect(row.closureNote).toBe('Left the area; not traceable');
+        expect(row.isOverdue).toBe(false);
+        expect(
+          await tx.auditLog.findFirst({
+            where: { entityId: account.id, action: 'UPDATE' },
+          }),
+        ).not.toBeNull();
+      });
+    });
+
+    it('defaulting stops collection but posts nothing — the money is still owed', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organizationId, context, service, terms } = await world(tx);
+        const account = await service.create(
+          context,
+          terms({ disburse: true }),
+          SATURDAY,
+        );
+
+        const closed = await service.close(
+          context,
+          account.id,
+          { status: 'DEFAULTED', note: 'Refusing to pay; with the Senior' },
+          SATURDAY,
+        );
+
+        expect(closed.status).toBe('DEFAULTED');
+        expect(await balancesOf(tx, organizationId)).toEqual({
+          // Exactly the disbursement, untouched: the receivable stands.
+          LOAN_RECEIVABLE: '10000.00',
+          CASH_AT_OFFICE: '-8500.00',
+          UNEARNED_PROFIT: '1500.00',
+        });
+        expect(
+          await tx.ledgerTransaction.count({
+            where: { sourceId: account.id, transactionType: 'WRITE_OFF' },
+          }),
+        ).toBe(0);
+        expect(
+          await tx.accountSchedule.count({
+            where: { accountLoanId: account.id, status: 'PENDING' },
+          }),
+        ).toBe(0);
+      });
+    });
+
+    it('a pending account cannot be closed, and neither can one that is already closed', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const pending = await service.create(context, terms(), SATURDAY);
+        await expect(
+          service.close(
+            context,
+            pending.id,
+            { status: 'DEFAULTED', note: 'Never disbursed' },
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
+
+        const active = await service.create(
+          context,
+          terms({ disburse: true }),
+          SATURDAY,
+        );
+        await service.close(
+          context,
+          active.id,
+          { status: 'WRITTEN_OFF', note: 'Gone' },
+          SATURDAY,
+        );
+        await expect(
+          service.close(
+            context,
+            active.id,
+            { status: 'DEFAULTED', note: 'Again' },
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
       });
     });
   });

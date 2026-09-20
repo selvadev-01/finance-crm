@@ -76,10 +76,15 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.lineAssignment.deleteMany({
     where: { staffProfile: { user: { email: taggedEmail } } },
   });
-  // PENDING accounts only: a disbursed account has ledger rows, which reject
-  // DELETE, so Tier 2 never disburses (schedules cascade with the account).
+  // Accounts with no ledger account of their own — which is every account a
+  // Tier 2 test may have, because Tier 2 never disburses. A disbursed account
+  // has ledger rows that reject DELETE, so it would fail loudly here rather
+  // than be quietly skipped. Schedules cascade with the account.
   await prisma.accountLoan.deleteMany({
-    where: { organization: { name: taggedCode }, status: 'PENDING' },
+    where: {
+      organization: { name: taggedCode },
+      ledgerAccounts: { none: {} },
+    },
   });
   // Customers inserted directly by a test carry a tagged code; customers
   // created over HTTP get an API-issued `CUS-…` code (US-020) and are matched
@@ -113,4 +118,18 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.line.deleteMany({ where: { code: taggedCode } });
   await prisma.sector.deleteMany({ where: { code: taggedCode } });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });
+}
+
+/**
+ * The open line period `CustomerService.create` writes for a real customer
+ * (US-023), for a test that inserts one straight through Prisma. The
+ * collection path reads these rows to decide which line a customer was on
+ * when the money was taken, so a customer without one cannot be collected
+ * from. The default start is far enough back to cover any seeded history.
+ */
+export function openLinePeriod(
+  lineId: string,
+  effectiveFrom = new Date('2020-01-01'),
+) {
+  return { create: { lineId, effectiveFrom } };
 }

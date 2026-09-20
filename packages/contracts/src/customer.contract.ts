@@ -5,6 +5,8 @@ import {
   errorSchema,
   idSchema,
   nameSchema,
+  calendarDateSchema,
+  moneyStringSchema,
   pageQuerySchema,
   pageSchema,
 } from "./shared.js";
@@ -84,14 +86,63 @@ export const customerDetailSchema = customerSummarySchema.extend({
   references: z.array(customerReferenceSchema),
 });
 
+/**
+ * One stay on a line (US-023). `effectiveTo` is null for the current line;
+ * past collections keep the line they were taken under (BR-15).
+ */
+export const customerLinePeriodSchema = z.object({
+  id: idSchema,
+  lineId: idSchema,
+  lineName: z.string(),
+  lineCode: z.string(),
+  effectiveFrom: calendarDateSchema,
+  effectiveTo: calendarDateSchema.nullable(),
+  reason: z.string().nullable(),
+});
+
+/**
+ * Customer 360's figures (US-022). Outstanding is **summed across the
+ * customer's active accounts at read time**, never stored on the customer
+ * (M04): a customer may hold several accounts (BR-01a), and a stored total
+ * would be a cache of a sum of caches.
+ */
+export const customerOverviewSchema = z.object({
+  accounts: z.object({
+    active: z.number().int(),
+    completed: z.number().int(),
+    /** Pending, defaulted or written off — open but not collecting. */
+    other: z.number().int(),
+  }),
+  /** The sum across active accounts, labelled as such wherever it is shown. */
+  outstandingTotal: moneyStringSchema,
+  /** Collected across every account the customer has ever held. */
+  collectedTotal: moneyStringSchema,
+  /** Who works this customer's line today (M03). */
+  staff: z.object({
+    seniorName: z.string().nullable(),
+    juniorNames: z.array(z.string()),
+  }),
+});
+
 const customerParams = z.object({ customerId: idSchema });
 
 export const customerContract = {
   listCustomers: route({
     method: "GET",
     path: "/api/customers",
-    summary: "Customers visible to the caller (S-08)",
+    summary:
+      "Customers visible to the caller, optionally searched (S-08, US-024)",
     query: pageQuerySchema.extend({
+      /**
+       * US-024: a name (any part, any case), a customer code (`CUS-00417` or
+       * just `417`), or a mobile as typed anywhere else. Matches any of them.
+       */
+      q: z
+        .string()
+        .trim()
+        .max(80)
+        .optional()
+        .transform((value) => (value ? value : undefined)),
       lineId: idSchema.optional(),
       /** Exact match after normalising — the duplicate-mobile lookup. */
       mobile: mobileSchema.optional(),
@@ -151,8 +202,95 @@ export const customerContract = {
       422: errorSchema,
     },
   }),
+
+  updateCustomer: route({
+    method: "PATCH",
+    path: "/api/customers/:customerId",
+    summary: "Edit a customer's details, status and references (US-021)",
+    pathParams: customerParams,
+    /**
+     * The whole editable record, as the form holds it. The line is not here:
+     * moving a customer is a transfer (US-023), with its own rules (BR-15).
+     */
+    body: z.object({
+      name: nameSchema,
+      mobile: mobileSchema,
+      /** Omitted clears it. */
+      alternateMobile: mobileSchema.optional(),
+      address: z.string().trim().min(1).max(300),
+      notes: optionalText(1000),
+      /** A contact-quality flag; it never stops collection (M04). */
+      status: customerStatusSchema,
+      /**
+       * The references to keep: one with an `id` is updated, one without is
+       * added, and any not listed is removed. At least one remains (§7).
+       */
+      references: z
+        .array(referenceInputSchema.extend({ id: idSchema.optional() }))
+        .min(1, "at least one reference person is required")
+        .max(5),
+      /** As at onboarding, checked only when the mobile changes. */
+      confirmDuplicateMobile: z.boolean().default(false),
+    }),
+    responses: {
+      200: customerDetailSchema,
+      400: errorSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      409: errorSchema,
+      422: errorSchema,
+    },
+  }),
+  transferCustomer: route({
+    method: "POST",
+    path: "/api/customers/:customerId/line-transfer",
+    summary: "Move a customer to another line from today (US-023)",
+    pathParams: customerParams,
+    body: z.object({
+      lineId: idSchema,
+      /** Why they moved — shown in the transfer history. */
+      reason: optionalText(200),
+    }),
+    responses: {
+      200: customerDetailSchema,
+      400: errorSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      422: errorSchema,
+    },
+  }),
+
+  getCustomerOverview: route({
+    method: "GET",
+    path: "/api/customers/:customerId/overview",
+    summary: "Customer 360's totals and assigned staff (US-022, S-09)",
+    pathParams: customerParams,
+    responses: {
+      200: customerOverviewSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+  }),
+
+  listCustomerTransfers: route({
+    method: "GET",
+    path: "/api/customers/:customerId/line-transfers",
+    summary: "Which line this customer was on, and when (US-023)",
+    pathParams: customerParams,
+    responses: {
+      200: z.object({ data: z.array(customerLinePeriodSchema) }),
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+  }),
 } as const;
 
+export type CustomerOverview = z.infer<typeof customerOverviewSchema>;
 export type CustomerSummary = z.infer<typeof customerSummarySchema>;
+export type CustomerLinePeriod = z.infer<typeof customerLinePeriodSchema>;
 export type CustomerDetail = z.infer<typeof customerDetailSchema>;
 export type CustomerReference = z.infer<typeof customerReferenceSchema>;

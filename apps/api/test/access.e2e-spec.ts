@@ -19,6 +19,7 @@ import {
   deleteTestRunData,
   testCode,
 } from './database.js';
+import { openLinePeriod } from './database.js';
 import { createTestStaff, signIn } from './staff.js';
 
 /** Rows created once for the file, read by the probe controller and the tests. */
@@ -163,6 +164,7 @@ describe('server-side scope enforcement (US-004, e2e)', () => {
           name: 'Customer',
           mobile: '+919800000000',
           address: 'Address',
+          linePeriods: openLinePeriod(lineId),
         },
       });
 

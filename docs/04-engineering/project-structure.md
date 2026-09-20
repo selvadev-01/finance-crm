@@ -140,14 +140,15 @@ PostgreSQL is **installed natively, no Docker** ([system-architecture](../02-arc
 
 **One database, one schema.** `rasi_dev` holds everything in `public`, and development and the test suite share it through a single `DATABASE_URL`. Neither the separately-specified `rasi_test` database nor the later `test` schema exists. Because tests share development data, the harness never truncates: service tests roll back, and HTTP tests delete only the rows tagged with their own run ([backlog](../06-delivery/backlog.md#phase-0--foundations)). The suite refuses to run with pending migrations rather than applying them. Setup steps are in [`packages/db/README.md`](../../packages/db/README.md).
 
-**Thirty-three migrations**:
+**Thirty-seven migrations**:
 
 - `add_better_auth` and `rasi_core`.
-- Twelve `constraints_*` migrations holding CHECKs, triggers and partial unique indexes; `constraints_collection_corrections` (US-044) specifies the collection status transitions and allows one pending correction per collection.
+- Fourteen `constraints_*` migrations holding CHECKs, triggers and partial unique indexes; `constraints_collection_corrections` (US-044) specifies the collection status transitions and allows one pending correction per collection.
 - `staff_must_change_password` (US-003).
 - `customer_code_sequence` (US-020).
+- `customer_line_period` (US-023), with the backfill giving every existing customer one open period.
 - `ledger_account_organization` and `account_code_sequence` (US-030, US-032).
-- `collection_status_rejected` (US-044), alone because PostgreSQL cannot use a new enum value in the transaction that adds it.
+- `collection_status_rejected` (US-044) and `ledger_write_off_loss` (US-035), each alone because PostgreSQL cannot use a new enum value in the transaction that adds it; `constraints_ledger_write_off_loss` then makes the new ledger account debit-normal and one per organization.
 - `day_close_handovers` and `cash_handover_note` (M08): the handover's hop and note, and `device_sync_report`; with `constraints_day_close` and `constraints_cash_handover_note`.
 - `notification_events` (M10's new event values, alone for the enum rule), `notification_preference`, and `constraints_notifications` (ALERT always on, non-blank title and body, a FAILED delivery has its error).
 - `audit_log_organization` and `constraints_audit_log_organization` (US-090): each audit entry names its organization; new rows must, except sign-ins.

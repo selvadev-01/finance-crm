@@ -10,17 +10,56 @@ import type {
 import type { Prisma } from '@repo/db';
 import {
   fromUtcMidnight,
+  isCalendarDate,
   parseCalendarDate,
   toMoney,
   toUtcMidnight,
 } from '@repo/domain';
 
 import { roleHasPermission } from '../access/permissions.js';
-import { collectionScope, foundInScope, inScope } from '../access/scope.js';
+import {
+  collectionScope,
+  customerScope,
+  foundInScope,
+  inScope,
+} from '../access/scope.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { ValidationError } from '../platform/errors/errors.js';
-import { type Page, pageArgs, toPage } from '../platform/pagination.js';
+import {
+  decodeCursor,
+  type Page,
+  type PageRequest,
+  pageArgs,
+  toPage,
+  toPageBy,
+} from '../platform/pagination.js';
+
+/**
+ * The keyset for {@link CollectionHistoryService.forCustomer}: rows older than
+ * the cursor's business date, or on it with a smaller id.
+ */
+function beforeCursor(cursor?: string): Prisma.CollectionWhereInput {
+  if (cursor === undefined) return {};
+  const decoded = decodeCursor(cursor);
+  const at = decoded.indexOf('|');
+  const key = decoded.slice(0, Math.max(at, 0));
+  const id = decoded.slice(at + 1);
+  if (at === -1 || !isCalendarDate(key) || id === '') {
+    throw new ValidationError(
+      'INVALID_CURSOR',
+      'The page cursor is not valid',
+      [{ field: 'cursor', issue: 'is not a cursor this API issued' }],
+    );
+  }
+  const date = toUtcMidnight(key);
+  return {
+    OR: [
+      { businessDate: { lt: date } },
+      { AND: [{ businessDate: date }, { id: { lt: id } }] },
+    ],
+  };
+}
 
 type ListQuery = RouteInput<typeof collectionContract.listCollections>['query'];
 
@@ -120,6 +159,51 @@ export class CollectionHistoryService {
     });
     const names = await this.names(rows.map((row) => row.collectedByUserId));
     return toPage(rows, query, (row) => toItem(row, names));
+  }
+
+  /**
+   * US-022: one customer's collections across every account they hold, newest
+   * first. Not date-bounded as S-16 is — this is one customer's own history,
+   * and Customer 360 shows all of it. Still `collectionScope`, so a Junior
+   * sees their own entries and a Senior their line's (BR-15).
+   */
+  async forCustomer(
+    context: RequestContext,
+    customerId: string,
+    page: PageRequest,
+  ): Promise<Page<CollectionListItem>> {
+    const customer = foundInScope(
+      await this.database.client.customer.findFirst({
+        where: inScope(customerScope(context), {
+          id: customerId,
+          deletedAt: null,
+        }),
+        select: { id: true },
+      }),
+      'customer',
+    );
+    const rows = await this.database.client.collection.findMany({
+      where: {
+        AND: [
+          inScope(collectionScope(context), {
+            accountLoan: { customerId: customer.id },
+          }),
+          beforeCursor(page.cursor),
+        ],
+      },
+      select: itemSelect,
+      // Newest first, with the id breaking ties so the order is total and a
+      // page boundary can neither repeat nor drop a row.
+      orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
+      take: page.limit + 1,
+    });
+    const names = await this.names(rows.map((row) => row.collectedByUserId));
+    return toPageBy(
+      rows,
+      page,
+      (row) => `${fromUtcMidnight(row.businessDate)}|${row.id}`,
+      (row) => toItem(row, names),
+    );
   }
 
   async get(

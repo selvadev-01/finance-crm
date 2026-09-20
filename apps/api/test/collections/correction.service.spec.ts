@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { parseCalendarDate } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -115,6 +116,7 @@ describe('CorrectionService (US-044, BR-14)', () => {
           address: '12 Market Road',
           sectorId: sector.id,
           lineId: line.id,
+          linePeriods: openLinePeriod(line.id),
         },
       });
       return accounts.create(

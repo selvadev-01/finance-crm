@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@repo/db';
-import { parseCalendarDate } from '@repo/domain';
+import { parseCalendarDate, toUtcMidnight } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 
@@ -8,6 +8,7 @@ import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { DayCloseService } from '../../src/cash/day-close.service.js';
 import { HandoverViews } from '../../src/cash/handover-views.js';
 import { AccountSettlement } from '../../src/collections/account-settlement.js';
+import { CollectionHistoryService } from '../../src/collections/collection-history.service.js';
 import { CollectionService } from '../../src/collections/collection.service.js';
 import { RouteService } from '../../src/collections/route.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
@@ -88,6 +89,9 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
     );
     const routes = new RouteService(database);
 
+    // The open line period is what `CustomerService.create` writes for a real
+    // customer (US-023); the collection path reads it to decide whose line
+    // this customer was on when the money was taken.
     const customer = async (name = 'Lakshmi') =>
       tx.customer.create({
         data: {
@@ -98,6 +102,9 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           address: '12 Market Road',
           sectorId: sector.id,
           lineId: line.id,
+          linePeriods: {
+            create: { lineId: line.id, effectiveFrom: toUtcMidnight(SATURDAY) },
+          },
         },
       });
 
@@ -583,6 +590,222 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           day: { kind: 'HOLIDAY', name: 'Pongal' },
           customers: [],
         });
+      });
+    });
+  });
+
+  /**
+   * US-035 after money has arrived: the profit already earned on what was
+   * collected stays earned, and only the rest of the account is given up.
+   */
+  describe('US-035 writing off a part-collected account', () => {
+    it('clears what is left owed and the profit never earned; the 15 recognised on the 100 collected stays', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const account = await w.account();
+        await w.collect(account.id, '100');
+
+        const closed = await w.accounts.close(
+          w.adminContext,
+          account.id,
+          { status: 'WRITTEN_OFF', note: 'Shop closed; customer moved away' },
+          parseCalendarDate('2026-01-05'),
+        );
+
+        expect(closed.status).toBe('WRITTEN_OFF');
+        expect(await w.balances()).toMatchObject({
+          CASH_AT_OFFICE: '-8500.00',
+          // 1,500 − the 15 earned on the 100 collected.
+          UNEARNED_PROFIT: '0.00',
+          EARNED_PROFIT: '15.00',
+          // The 9,900 still owed, less the 1,485 of it that was never profit.
+          WRITE_OFF_LOSS: '8415.00',
+        });
+        const receivable = await tx.ledgerAccount.findFirstOrThrow({
+          where: { accountLoanId: account.id },
+        });
+        expect(receivable.balance.toFixed(2)).toBe('0.00');
+      });
+    });
+
+    it('a written-off account takes no more collections', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const account = await w.account();
+        await w.accounts.close(
+          w.adminContext,
+          account.id,
+          { status: 'WRITTEN_OFF', note: 'Given up' },
+          parseCalendarDate('2026-01-05'),
+        );
+
+        await expect(w.collect(account.id, '100')).rejects.toMatchObject({
+          code: 'ACCOUNT_NOT_ACTIVE',
+        });
+      });
+    });
+  });
+
+  /**
+   * US-022: Customer 360 shows one customer's whole history across accounts,
+   * newest first and not date-bounded, unlike S-16.
+   */
+  describe('US-022 a customer’s collection history', () => {
+    it('lists every account’s collections newest first, pages without repeating, and is refused for another organization’s customer', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const history = new CollectionHistoryService(new Database(tx));
+        const person = await w.customer();
+        const first = await w.account({}, person.id);
+        const second = await w.account({}, person.id);
+        // Three days, two accounts — the history spans both.
+        await w.collect(first.id, '100', '2026-01-05');
+        await w.collect(second.id, '100', '2026-01-06');
+        await w.collect(first.id, '100', '2026-01-07');
+
+        const page = await history.forCustomer(w.adminContext, person.id, {
+          limit: 2,
+        });
+        expect(page.data.map((row) => row.businessDate)).toEqual([
+          '2026-01-07',
+          '2026-01-06',
+        ]);
+        expect(page.hasMore).toBe(true);
+
+        const next = await history.forCustomer(w.adminContext, person.id, {
+          limit: 2,
+          cursor: page.nextCursor!,
+        });
+        expect(next.data.map((row) => row.businessDate)).toEqual([
+          '2026-01-05',
+        ]);
+        expect(next.hasMore).toBe(false);
+        // Both accounts are represented, and no row appears on both pages.
+        const ids = [...page.data, ...next.data].map((row) => row.id);
+        expect(new Set(ids).size).toBe(3);
+        expect(
+          new Set([...page.data, ...next.data].map((row) => row.accountLoanId)),
+        ).toEqual(new Set([first.id, second.id]));
+
+        const elsewhere = await world(tx);
+        await expect(
+          history.forCustomer(elsewhere.adminContext, person.id, { limit: 10 }),
+        ).rejects.toMatchObject({ code: 'CUSTOMER_NOT_FOUND' });
+      });
+    });
+  });
+
+  /**
+   * US-023 with US-050: the Junior collects at the door with no signal, the
+   * customer is transferred, and only then does the phone sync. The money was
+   * really taken, so it must land — and on the line that took it (BR-15).
+   */
+  describe('US-023 a collection synced after the customer was transferred', () => {
+    /** Moves the customer to a new line as the transfer does, from `on`. */
+    async function transfer(
+      tx: PrismaClient,
+      customer: { id: string },
+      organizationId: string,
+      sectorId: string,
+      on: string,
+    ) {
+      const destination = await tx.line.create({
+        data: {
+          organizationId,
+          sectorId,
+          code: `L-${randomUUID()}`,
+          name: 'Line B',
+        },
+      });
+      await tx.customerLinePeriod.updateMany({
+        where: { customerId: customer.id, effectiveTo: null },
+        data: { effectiveTo: toUtcMidnight(parseCalendarDate(on)) },
+      });
+      await tx.customerLinePeriod.create({
+        data: {
+          customerId: customer.id,
+          lineId: destination.id,
+          effectiveFrom: toUtcMidnight(parseCalendarDate(on)),
+        },
+      });
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { lineId: destination.id },
+      });
+      return destination;
+    }
+
+    it('the old line’s Junior can still sync it, and it is attributed to the old line', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const person = await w.customer();
+        const account = await w.account({}, person.id);
+        // Collected on Monday at the door; transferred on Tuesday; synced
+        // later — the Junior's phone had no signal in between.
+        await transfer(tx, person, w.organizationId, w.sector.id, '2026-01-06');
+
+        const { collection } = await w.collect(account.id, '100', '2026-01-05');
+
+        expect(collection).toMatchObject({
+          businessDate: '2026-01-05',
+          amount: '100.00',
+          // Not the line they are on now: the one that collected it (BR-15).
+          lineId: w.line.id,
+          collectedByUserId: w.juniorContext.userId,
+        });
+      });
+    });
+
+    it('on the transfer day itself either line’s Junior may sync it', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const person = await w.customer();
+        const account = await w.account({}, person.id);
+        const destination = await transfer(
+          tx,
+          person,
+          w.organizationId,
+          w.sector.id,
+          '2026-01-05',
+        );
+
+        // The old line's Junior, who called at the door that morning.
+        const { collection } = await w.collect(account.id, '100', '2026-01-05');
+        expect(collection.lineId).toBe(w.line.id);
+
+        // The new line's Junior, on the same date, is in scope too.
+        const newJunior = await createStaff(tx, w.organizationId, 'JUNIOR');
+        const second = await w.collections.record(
+          {
+            ...w.juniorContext,
+            userId: newJunior.userId,
+            staffProfileId: newJunior.id,
+            currentLineId: destination.id,
+          },
+          {
+            idempotencyKey: randomUUID(),
+            accountLoanId: account.id,
+            amount: '100',
+            capturedAt: at('2026-01-05'),
+            note: undefined,
+          },
+          serverNow('2026-01-05'),
+        );
+        expect(second.collection.lineId).toBe(destination.id);
+      });
+    });
+
+    it('a Junior cannot record for a date after the customer left their line', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const person = await w.customer();
+        const account = await w.account({}, person.id);
+        await transfer(tx, person, w.organizationId, w.sector.id, '2026-01-05');
+
+        // Two days after the move, this customer is no longer theirs to visit.
+        await expect(
+          w.collect(account.id, '100', '2026-01-07'),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
       });
     });
   });

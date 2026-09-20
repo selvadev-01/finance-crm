@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { openLinePeriod } from './database.js';
 import { organisationContract, type RouteDefinition } from '@repo/contracts';
 import type { PrismaClient, StaffRole } from '@repo/db';
 import { toBusinessDate } from '@repo/domain';
@@ -456,6 +457,7 @@ describe('organisation (M03, e2e)', () => {
           organizationId,
           sectorId,
           lineId,
+          linePeriods: openLinePeriod(lineId),
           customerCode: testCode('CUS'),
           name: 'Staffing customer',
           mobile: '+919800000001',

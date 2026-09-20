@@ -242,6 +242,8 @@ Line-wise reports group by `collection.lineId`, **not** by the customer's curren
 > **Worked example.** A customer on Line 3 for 60 days transfers to Line 7. Without this rule, Line 3's historical collection totals would instantly drop by that customer's 60 days of payments and Line 7's would jump — rewriting the past performance of two lines and two Seniors. Frozen attribution keeps every closed day permanently reproducible.
 >
 > The same applies to `collectedByUserId`, which records who actually collected, independent of who is assigned to the line today.
+>
+> **The frozen line is the one the customer was on when the money was taken**, which for a collection synced after a transfer (US-023) is not the line they are on now. `customer_line_period` records which line that was on any business date; on the transfer day itself both lines cover the date and the collecting Junior’s own line is used.
 
 ---
 

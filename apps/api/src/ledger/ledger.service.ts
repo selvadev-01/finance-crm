@@ -9,7 +9,11 @@ import { InternalError } from '../platform/errors/errors.js';
 
 /** The business-wide ledger accounts, one of each per organization. */
 export type OrganizationAccountType =
-  'CASH_AT_OFFICE' | 'CAPITAL' | 'UNEARNED_PROFIT' | 'EARNED_PROFIT';
+  | 'CASH_AT_OFFICE'
+  | 'CAPITAL'
+  | 'UNEARNED_PROFIT'
+  | 'EARNED_PROFIT'
+  | 'WRITE_OFF_LOSS';
 
 const NORMAL_BALANCE: Record<LedgerAccountType, 'DEBIT' | 'CREDIT'> = {
   CASH_IN_HAND: 'DEBIT',
@@ -18,6 +22,8 @@ const NORMAL_BALANCE: Record<LedgerAccountType, 'DEBIT' | 'CREDIT'> = {
   CAPITAL: 'CREDIT',
   UNEARNED_PROFIT: 'CREDIT',
   EARNED_PROFIT: 'CREDIT',
+  // An expense: what a written-off account cost the business (US-035).
+  WRITE_OFF_LOSS: 'DEBIT',
 };
 
 export interface PostingLine {
@@ -67,7 +73,7 @@ export class LedgerService {
       VALUES (${randomUUID()}, ${organizationId},
               ${type}::"LedgerAccountType", ${NORMAL_BALANCE[type]}::"Direction")
       ON CONFLICT ("organizationId", "accountType")
-        WHERE "accountType" = ANY (ARRAY['CASH_AT_OFFICE'::"LedgerAccountType", 'CAPITAL'::"LedgerAccountType", 'UNEARNED_PROFIT'::"LedgerAccountType", 'EARNED_PROFIT'::"LedgerAccountType"])
+        WHERE "accountType" = ANY (ARRAY['CASH_AT_OFFICE'::"LedgerAccountType", 'CAPITAL'::"LedgerAccountType", 'UNEARNED_PROFIT'::"LedgerAccountType", 'EARNED_PROFIT'::"LedgerAccountType", 'WRITE_OFF_LOSS'::"LedgerAccountType"])
       DO NOTHING`;
     const account = await tx.ledgerAccount.findFirstOrThrow({
       where: { organizationId, accountType: type },

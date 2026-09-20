@@ -162,13 +162,16 @@ export const Card = {
  * the row, so a ruled frame never shows an empty cell.
  */
 const statGrid = cva(
-  "grid grid-cols-2 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1",
+  "grid grid-cols-2 [&>*:last-child:nth-child(odd)]:col-span-2",
   {
     variants: {
+      // The odd one out stops spanning where the grid itself grows past two
+      // columns, and not before: a four-column grid is still two wide below
+      // 1024px.
       columns: {
         2: "",
-        3: "sm:grid-cols-3",
-        4: "lg:grid-cols-4",
+        3: "sm:grid-cols-3 sm:[&>*:last-child:nth-child(odd)]:col-span-1",
+        4: "lg:grid-cols-4 lg:[&>*:last-child:nth-child(odd)]:col-span-1",
       },
       frame: {
         /** One frame, hairline dividers: a ledger's totals row. */

@@ -94,6 +94,27 @@ The partial uniques are declared in `schema.prisma` (`partialIndexes` preview), 
 
 **Open is not the same as current.** The row in effect on a business date is the one with `effectiveFrom ≤ date ≤ effectiveTo` (null `effectiveTo` open-ended). A move made "effective tomorrow" closes the old row today and opens the new one — which is open, but not yet in effect.
 
+### `customer_line_period`
+
+Which line a customer belonged to, and when (US-023). The open row is the current line, mirrored on `customer.lineId`.
+
+| Column          | Type                | Null | Notes                       |
+| --------------- | ------------------- | ---- | --------------------------- |
+| `customerId`    | `String`            | No   | FK → `customer.id`, cascade |
+| `lineId`        | `String`            | No   | FK → `line.id`              |
+| `effectiveFrom` | `DateTime @db.Date` | No   |                             |
+| `effectiveTo`   | `DateTime @db.Date` | Yes  | `NULL` = current line       |
+| `reason`        | `String`            | Yes  | Free text for the transfer  |
+
+Constraints:
+
+- Partial unique `customer_line_period_current_key` on `(customerId)` where `effectiveTo IS NULL` — one current line per customer, declared in `schema.prisma`
+- Check `effectiveTo IS NULL OR effectiveTo >= effectiveFrom`
+
+**Why this table exists, when `customer.lineId` already holds the current line.** A Junior records a collection at the door with no signal, and the phone may not sync for hours or days ([offline sync](../02-architecture/offline-sync.md)). If the customer is transferred in between, judging the Junior's permission by today's line would refuse money already taken and leave it stranded in the outbox. The collection path instead asks which line the customer was on **on that collection's business date**, which is what these rows record. Attribution is still frozen on the collection itself (BR-15).
+
+**Both lines cover the transfer day.** A transfer closes the old period on the day it happens rather than the day before, so on that one date either line's Junior may sync a collection — either of them really could have called at the door that morning. The collection is attributed to the caller's own line.
+
 ---
 
 ## Customers and accounts
@@ -310,18 +331,18 @@ Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the
 
 ### `ledger_account`
 
-| Column           | Type                | Null | Notes                                                                                                        |
-| ---------------- | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------ |
-| `organizationId` | `String`            | No   | FK → `organization.id` (added 2026-09-13)                                                                    |
-| `accountType`    | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` |
-| `ownerUserId`    | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                  |
-| `accountLoanId`  | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                               |
-| `normalBalance`  | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                          |
-| `balance`        | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                          |
+| Column           | Type                | Null | Notes                                                                                                                            |
+| ---------------- | ------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `organizationId` | `String`            | No   | FK → `organization.id` (added 2026-09-13)                                                                                        |
+| `accountType`    | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` \| `WRITE_OFF_LOSS` |
+| `ownerUserId`    | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                                      |
+| `accountLoanId`  | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                                                   |
+| `normalBalance`  | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                                              |
+| `balance`        | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                                              |
 
-One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` and `EARNED_PROFIT` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
+One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT`, `EARNED_PROFIT` and `WRITE_OFF_LOSS` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
 
-Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE` and `LOAN_RECEIVABLE` and `CREDIT` for the rest; partial uniques make the two per-owner accounts one each.
+Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE`, `LOAN_RECEIVABLE` and `WRITE_OFF_LOSS` — an expense, like the assets — and `CREDIT` for the rest; partial uniques make the two per-owner accounts one each.
 
 ### `ledger_transaction`
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import type { Prisma } from '@repo/db';
+import { Prisma } from '@repo/db';
 import { toMoney, unearnedProfit } from '@repo/domain';
 
 import { AuditWriter } from '../audit/audit.writer.js';
@@ -157,20 +157,35 @@ export class ReconciliationService {
     const receivableOf = new Map(
       receivables.map((r) => [r.accountLoanId!, r.id]),
     );
+    // What a write-off cleared, per account (US-035). It credits the
+    // receivable for money that never arrived, so without it every
+    // written-off account would read as fully collected and mismatch here
+    // every night, unclearably.
+    const writtenOff = await this.writtenOffByAccount(
+      loans.map((loan) => loan.id),
+    );
     let expectedUnearned = toMoney('0');
 
     for (const loan of loans) {
       const receivable =
         fromEntries.get(receivableOf.get(loan.id)!) ?? toMoney('0');
-      const collectedFromLedger = toMoney(loan.accountAmount.toString()).minus(
-        receivable,
-      );
+      const givenUp = writtenOff.get(loan.id) ?? toMoney('0');
+      const collectedFromLedger = toMoney(loan.accountAmount.toString())
+        .minus(receivable)
+        .minus(givenUp);
       expectedUnearned = expectedUnearned.plus(
-        unearnedProfit({
-          accountAmount: loan.accountAmount.toString(),
-          profitAmount: loan.profitAmount.toString(),
-          collected: clamp(collectedFromLedger, loan.accountAmount.toString()),
-        }),
+        // A write-off clears the account's unearned profit too, so a
+        // written-off account expects none.
+        givenUp.isZero()
+          ? unearnedProfit({
+              accountAmount: loan.accountAmount.toString(),
+              profitAmount: loan.profitAmount.toString(),
+              collected: clamp(
+                collectedFromLedger,
+                loan.accountAmount.toString(),
+              ),
+            })
+          : toMoney('0'),
       );
       if (this.agrees(loan, collectedFromLedger)) continue;
 
@@ -189,9 +204,14 @@ export class ReconciliationService {
           receivableOf.get(loan.id)!,
           'DEBIT',
         );
-        const nowCollected = toMoney(locked.accountAmount.toString()).minus(
-          nowReceivable,
-        );
+        // Re-read what was written off as well: a closure may have committed
+        // between the first read and this lock.
+        const nowGivenUp =
+          (await this.writtenOffByAccount([loan.id], tx)).get(loan.id) ??
+          toMoney('0');
+        const nowCollected = toMoney(locked.accountAmount.toString())
+          .minus(nowReceivable)
+          .minus(nowGivenUp);
         if (this.agrees(locked, nowCollected)) return null;
         const found = {
           accountLoanId: loan.id,
@@ -304,6 +324,35 @@ export class ReconciliationService {
       WHERE a."organizationId" = ${organizationId}
       GROUP BY a.id`;
     return new Map(rows.map((row) => [row.id, toMoney(row.balance)]));
+  }
+
+  /**
+   * What each account's write-off gave up (US-035), from the ledger itself:
+   * the amount credited to its receivable by a `WRITE_OFF` transaction.
+   *
+   * The collected figure here is inferred as `A − receivable`, which a
+   * write-off would otherwise inflate to the whole account amount — money
+   * that never arrived. Reading it back from the posting keeps the check
+   * meaningful for a written-off account instead of skipping it.
+   */
+  private async writtenOffByAccount(
+    accountLoanIds: string[],
+    tx: Tx = this.database.client,
+  ): Promise<Map<string, Decimal>> {
+    if (accountLoanIds.length === 0) return new Map();
+    const rows = await tx.$queryRaw<
+      { accountLoanId: string; amount: string }[]
+    >`
+      SELECT a."accountLoanId", COALESCE(SUM(e.amount), 0)::text AS amount
+      FROM ledger_entry e
+      JOIN ledger_account a ON a.id = e."ledgerAccountId"
+      JOIN ledger_transaction t ON t.id = e."ledgerTransactionId"
+      WHERE t."transactionType" = 'WRITE_OFF'
+        AND e.direction = 'CREDIT'
+        AND a."accountType" = 'LOAN_RECEIVABLE'
+        AND a."accountLoanId" IN (${Prisma.join(accountLoanIds)})
+      GROUP BY a."accountLoanId"`;
+    return new Map(rows.map((row) => [row.accountLoanId, toMoney(row.amount)]));
   }
 
   private async balanceOf(

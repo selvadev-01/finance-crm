@@ -6,28 +6,40 @@ import { useSyncExternalStore } from "react";
  * and then open the browser's own install dialog (ADR-0016). Browsers without
  * the event — Safari, Firefox — install from their own menu; the installed app
  * then asks on its first launch instead.
+ *
+ * The listener is attached by `app/install-prompt-listener.tsx`, from the root
+ * layout, on every page: the event fires once per page load, usually on the
+ * first page — the sign-in screen — and signing in moves to the console
+ * without a reload, so a listener that arrived with the console would miss it.
  */
-interface BeforeInstallPromptEvent extends Event {
+export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   readonly userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 let deferred: BeforeInstallPromptEvent | null = null;
+let listening = false;
 const listeners = new Set<() => void>();
 
 function notify() {
   for (const listener of listeners) listener();
 }
 
-// The event can fire as soon as the page loads, before any screen mounts, so
-// it is caught when this module is first evaluated in the browser.
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (event) => {
+/**
+ * Starts holding the browser's offer. On the Junior's field app (`/route`) the
+ * offer is left alone: that app has no account menu to install from, so the
+ * browser's own install banner is the way in.
+ */
+export function listenForInstallPrompt(target: Window): void {
+  if (listening) return;
+  listening = true;
+  target.addEventListener("beforeinstallprompt", (event) => {
+    if (target.location.pathname.startsWith("/route")) return;
     event.preventDefault();
     deferred = event as BeforeInstallPromptEvent;
     notify();
   });
-  window.addEventListener("appinstalled", () => {
+  target.addEventListener("appinstalled", () => {
     deferred = null;
     notify();
   });
@@ -41,15 +53,19 @@ function subscribe(listener: () => void) {
 }
 
 /** Whether the browser will install Rasi on request. */
-export function useCanInstall(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => deferred !== null,
-    () => false,
-  );
+export function canInstall(): boolean {
+  return deferred !== null;
 }
 
-/** Opens the browser's install dialog. The offer can be used once. */
+export function useCanInstall(): boolean {
+  return useSyncExternalStore(subscribe, canInstall, () => false);
+}
+
+/**
+ * Opens the browser's install dialog. Call it from the click that asked for
+ * it: the browser allows the dialog only during a user gesture. The offer can
+ * be used once.
+ */
 export async function install(): Promise<
   "accepted" | "dismissed" | "unavailable"
 > {

@@ -58,6 +58,28 @@ describe('scheduled job handlers (M14, US-095)', () => {
   }
 
   describe('US-095 nightly reconciliation', () => {
+    it('US-035: a written-off account reconciles to nothing — the cleared receivable is not read as money collected', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, system, reconciliation, errors } = await jobs(tx);
+        const account = await w.account('100');
+        await w.collect(account.id, '100');
+        await w.accounts.close(
+          w.admin,
+          account.id,
+          { status: 'WRITTEN_OFF', note: 'Left the area' },
+          parseCalendarDate('2026-01-05'),
+        );
+
+        // Twice: the second run must find nothing either (M14 job rules).
+        for (let run = 0; run < 2; run += 1) {
+          const report = await reconciliation.reconcile(system);
+          expect(report.accountMismatches, `run ${run}`).toEqual([]);
+          expect(report.unearnedMismatch, `run ${run}`).toBeNull();
+        }
+        expect(errors).toEqual([]);
+      });
+    });
+
     it('Scenario: cached balances are verified — a clean ledger reconciles to nothing, twice', async () => {
       await withRollback(prisma, async (tx) => {
         const { w, system, reconciliation, errors } = await jobs(tx);

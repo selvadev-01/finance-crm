@@ -32,7 +32,7 @@ The Junior's service worker keeps its own narrower scope and does not change.
 
 **When the question is asked:**
 
-1. **When installing through Rasi.** Where the browser offers installation, the account menu shows "Install Rasi on this device". It asks for the layout first, then opens the browser's install dialog.
+1. **When installing through Rasi.** Where the browser offers installation, the account menu shows "Install Rasi on this device". It asks for the layout first, then opens the browser's install dialog. The browser makes its offer once per page load, usually on the sign-in screen, so the offer is held from the root layout on every page, not by the console. The one exception is the Junior's `/route`, which has no account menu: there the browser shows its own install banner.
 2. **On the installed app's first launch.** When the app runs standalone and no layout has been chosen, the console shows the question before anything else. This covers every browser, including installs from the browser's own menu and iOS "Add to Home Screen".
 3. **At any time,** from the account menu (computer) or the "More" sheet (phone).
 

@@ -110,11 +110,30 @@ By name, mobile or customer code, scoped by role. Postgres trigram index on name
 
 In `apps/api/src/customers/`, served through `packages/contracts/src/customer.contract.ts` ([ADR-0011](../../02-architecture/adr/0011-in-house-api-contract.md)). Status is in the [backlog](../../06-delivery/backlog.md).
 
-| Endpoint                         | Permission        | Refusals                                                                                  |
-| -------------------------------- | ----------------- | ----------------------------------------------------------------------------------------- |
-| `GET /api/customers`             | `customer.view`   | — (scoped by `customerScope`; `?lineId=`, `?mobile=`, `?status=`)                         |
-| `GET /api/customers/:customerId` | `customer.view`   | `404` (out of scope identical to missing). Includes references                            |
-| `POST /api/customers`            | `customer.create` | `400` (no reference, bad mobile), `404` line, `422 LINE_INACTIVE`, `409 DUPLICATE_MOBILE` |
+| Endpoint                                        | Permission            | Refusals                                                                                   |
+| ----------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /api/customers`                            | `customer.view`       | `400` over-long `q` (scoped by `customerScope`; `?q=`, `?lineId=`, `?mobile=`, `?status=`) |
+| `GET /api/customers/:customerId`                | `customer.view`       | `404` (out of scope identical to missing). Includes references                             |
+| `POST /api/customers`                           | `customer.create`     | `400` (no reference, bad mobile), `404` line, `422 LINE_INACTIVE`, `409 DUPLICATE_MOBILE`  |
+| `PATCH /api/customers/:customerId`              | `customer.update`     | `400` (no reference, bad mobile), `404`, `409 DUPLICATE_MOBILE`, `422 UNKNOWN_REFERENCE`   |
+| `POST /api/customers/:customerId/line-transfer` | `customer.changeLine` | `404` customer or line, `422 LINE_INACTIVE`, `422 SAME_LINE`                               |
+| `GET /api/customers/:customerId/line-transfers` | `customer.view`       | `404`. Every line this customer has been on, newest first                                  |
+| `GET /api/customers/:customerId/overview`       | `customer.view`       | `404`. Customer 360’s totals and today’s Senior and Juniors                                |
+| `GET /api/customers/:customerId/collections`    | `collection.view`     | `400` bad cursor, `404`. The customer’s whole history, newest first (M07)                  |
+
+**Editing (US-021, 2026-09-20)** sends the whole editable record: name, mobiles, address, notes, status and 1–5 references. "Manage references" is part of the edit, not a separate route: a reference sent with its `id` is updated, one without is added, and one left out is removed. An `id` that is not this customer's reference is `422 UNKNOWN_REFERENCE`, so an edit can never reach another customer's row. The duplicate-mobile warning applies only when the mobile changes, and never counts the customer itself. **The line is not editable** — moving a customer is a transfer (US-023, BR-15). The audit entry records the editable fields before and after.
+
+**Search (US-024, 2026-09-20)** is `?q=` on the list: any part of the name, case-insensitive (`ILIKE`), or exactly a customer code — whole or as its number, `417` finding `CUS-00417` — or exactly a mobile in any form onboarding accepts. It runs inside `customerScope`, so a Senior or Junior can never find another line’s customer, even by its exact code. **The trigram index on the name is not built:** `pg_trgm` is available on the server but the `rasi` role has no `CREATE` on the database, so installing it needs a superuser once, as the `pgboss` schema did. The query needs no change when it arrives; at ~1,000 customers a sequential scan is well under a millisecond, so this waits until it is measured to matter.
+
+**Customer 360 (US-022, 2026-09-20).** `GET /api/customers/:customerId/overview` returns the counts of active, completed and other accounts, the **outstanding summed across active accounts**, the lifetime collected across every account, and the line’s current Senior and Juniors — "current" meaning in effect on today’s business date, not merely open (M03). Nothing is stored on the customer: the totals are summed at read time, because a customer may hold several accounts (BR-01a) and a stored total would be a cache of a sum of caches.
+
+The collection history is M07’s, served at `GET /api/customers/:customerId/collections`: one customer’s rows across every account, newest first, cursor-paged on (business date, id). **It is not date-bounded** as S-16 is — that limit exists for an organization-wide list, and 360 shows the whole of one customer’s history. Scope is still `collectionScope`, so a Junior sees their own entries and a Senior their line’s.
+
+**Transfer (US-023, 2026-09-20)** moves the customer and their denormalised sector to the new line **from today**. Past collections are untouched, so neither line’s history changes (BR-15).
+
+Which line a customer was on, and when, is now a table: `customer_line_period` ([data dictionary](../../03-data/data-dictionary.md#customer_line_period)), whose open row mirrors `customer.lineId`. Onboarding opens the first period; a transfer closes the open one and opens the next.
+
+**It exists for offline sync, not for reporting.** A Junior collects at the door with no signal and the phone may not sync for hours ([offline sync](../../02-architecture/offline-sync.md)). If the customer were transferred in between, judging permission by today’s line would refuse money already taken and strand it in the outbox, leaving paper as the only fallback. The collection path (`collectableAccountScope`) instead asks which line the customer was on **on that collection’s business date**, and attributes the collection to that line — not to the line they are on now. On the transfer day both periods cover the date, so either line’s Junior may sync it and the caller’s own line is used.
 
 **Decided 2026-09-13:**
 
@@ -127,11 +146,13 @@ In `apps/api/src/customers/`, served through `packages/contracts/src/customer.co
 
 **Screens:**
 
-- `/customers`: the list, with a line filter for Admins.
+- `/customers`: the list, with a search box for every role (`?q=`) and a line filter for Admins.
 - `/customers/new` (S-10): keyboard-first, validated with the contract's own schema, "Save and add another" keeps the line.
 - `/customers/:id`: the profile and references. Accounts and collections are stated as not yet available.
+- `/customers/:id` (S-09) shows the totals above the tabs, the assigned Senior and Junior in the details, and a Collections tab with the whole history beside the Accounts tab (US-022). It also carries a Transfer action for Admin+ (US-023), stating that the new line collects from today and past collections do not move, and shows a line history once there has been a transfer.
+- `/customers/:id/edit` (US-021): the record as saved, validated with the contract's schema; reached from an Edit action on the profile, shown to Admin+.
 
-**Not built:** edit (US-021), Customer 360's accounts and collections (US-022), line transfer (US-023), search by name (US-024, trigram index), soft delete, the `customer.created` notification, and assigning a customer to a particular Junior (no model for it; a Junior sees their whole line, decided 2026-09-13).
+**Not built:** the trigram index for name search, soft delete, the `customer.created` notification, and assigning a customer to a particular Junior (no model for it; a Junior sees their whole line, decided 2026-09-13).
 
 ---
 

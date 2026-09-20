@@ -71,7 +71,9 @@ export async function downloadFile<Route extends RouteDefinition>(
   request: RouteRequest<Route>,
 ): Promise<DownloadResult> {
   if (!definition.file) {
-    throw new Error(`${definition.method} ${definition.path} is not a file route`);
+    throw new Error(
+      `${definition.method} ${definition.path} is not a file route`,
+    );
   }
   const parts = request as {
     params?: Record<string, unknown>;

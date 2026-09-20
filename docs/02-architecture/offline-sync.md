@@ -141,12 +141,14 @@ A hard limit is unpleasant but better than silent storage-quota eviction, which 
 
 Genuine conflicts are rare, because collections are **append-only and additive** — there is no field-level merge problem, since nothing is edited.
 
-| Situation                         | Resolution                                                 |
-| --------------------------------- | ---------------------------------------------------------- |
-| Account completed while offline   | Server rejects with a domain error; surfaced to the Junior |
-| Customer reassigned while offline | Server rejects on scope; surfaced                          |
-| Day closed before sync            | **Accepted**, day reopens (BR-16a)                         |
-| Same collection replayed          | Idempotency key deduplicates                               |
+| Situation                          | Resolution                                                 |
+| ---------------------------------- | ---------------------------------------------------------- |
+| Account completed while offline    | Server rejects with a domain error; surfaced to the Junior |
+| Customer transferred while offline | **Accepted** on the line they were on that date (US-023)   |
+| Day closed before sync             | **Accepted**, day reopens (BR-16a)                         |
+| Same collection replayed           | Idempotency key deduplicates                               |
+
+> **Changed 2026-09-20 (US-023).** A transfer used to be listed here as a refusal: the Junior’s scope was judged by the customer’s current line, so a collection taken at the door before the transfer was rejected when the phone finally synced. That is money already in the Junior’s hand, with paper the only fallback — the very failure this document exists to prevent. The collection path now asks which line the customer was on **on that collection’s business date** (`customer_line_period`, M04), and attributes it there (BR-15). Only a date after the customer left the line is refused.
 
 > Append-only is what makes this tractable. A design where offline edits modify existing records would need field-level merge rules and last-write-wins arbitration — which for money is a data-loss generator.
 

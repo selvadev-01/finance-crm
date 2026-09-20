@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import { BRAND_TEAL } from "./brand-colours";
+import { InstallPromptListener } from "./install-prompt-listener";
 import "./globals.css";
 
 /**
@@ -61,7 +62,10 @@ export default function RootLayout({
       data-density="compact"
       className={`${plexSans.variable} ${plexMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <InstallPromptListener />
+        {children}
+      </body>
     </html>
   );
 }

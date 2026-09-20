@@ -83,6 +83,8 @@ erDiagram
 ```mermaid
 erDiagram
     customer ||--o{ customer_reference : "has"
+    customer ||--o{ customer_line_period : "was on"
+    line ||--o{ customer_line_period : "held"
     customer ||--o{ account_loan : "holds"
     line ||--o{ customer : "serves"
     account_loan ||--o{ account_schedule : "plans"
@@ -105,6 +107,14 @@ erDiagram
         string mobile
         string relation
         string address
+    }
+    customer_line_period {
+        string id PK
+        string customerId FK
+        string lineId FK
+        date effectiveFrom
+        date effectiveTo "null = current line"
+        string reason
     }
     account_loan {
         string id PK

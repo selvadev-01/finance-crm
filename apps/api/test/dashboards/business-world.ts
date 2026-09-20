@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -98,6 +99,7 @@ export async function businessWorld(tx: PrismaClient) {
         address: '12 Market Road',
         sectorId,
         lineId,
+        linePeriods: openLinePeriod(lineId),
       },
     });
     return accounts.create(

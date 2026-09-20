@@ -34,6 +34,7 @@ All three are **append-only with no update path at all**. A correction is a new 
 | `CAPITAL`         | One                  | Credit         |
 | `UNEARNED_PROFIT` | One                  | Credit         |
 | `EARNED_PROFIT`   | One                  | Credit         |
+| `WRITE_OFF_LOSS`  | One                  | Debit          |
 
 Created automatically with their owner — a staff member gets a cash account, an account gets a receivable.
 
@@ -68,7 +69,18 @@ Using the reference figures: `A = 10,000`, `I = 8,500`, `P = 1,500`.
 | `CASH_IN_HAND` (Junior) |          | 5,000.00 |
 
 **Adjustment** — the reverse of the original, at the original's proportions.
-**Write-off** — remaining receivable and unearned profit cleared against a loss account.
+
+**Write-off ₹10,000 account, ₹100 collected** (US-035, as built 2026-09-20) — outstanding `O` and the unearned profit `U` the account still holds:
+
+| Ledger account    |    Debit |   Credit |
+| ----------------- | -------: | -------: |
+| `UNEARNED_PROFIT` | 1,485.00 |          |
+| `WRITE_OFF_LOSS`  | 8,415.00 |          |
+| `LOAN_RECEIVABLE` |          | 9,900.00 |
+
+`WRITE_OFF_LOSS` is a sixth business-wide account, one per organization and **debit-normal** like the expense it is (migrations `ledger_write_off_loss` and `constraints_ledger_write_off_loss`). The loss is `O − U`: what the business actually put out and did not get back. Profit already earned on what _was_ collected stays earned — the ₹15 above.
+
+**Only `WRITTEN_OFF` posts** (decided 2026-09-20). `DEFAULTED` stops collection and leaves the receivable standing, because the money is still owed and may still be recovered; a defaulted account can be written off later.
 
 ---
 
@@ -134,6 +146,12 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 - **`post(context, posting)`** refuses to run outside a `Database.transaction`. It drops zero lines, refuses negative ones, writes the transaction and its entries, and moves each account's `balance` cache, signed by its normal balance. Balancing is left to the deferred trigger (ADR-0006).
 - **`organizationAccount(organizationId, type)`** returns the organization's `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` or `EARNED_PROFIT` account. It creates one with `INSERT … ON CONFLICT DO NOTHING` against the one-per-organization partial index, so concurrent first uses neither fail nor abort the caller's transaction.
 - **`createReceivable(organizationId, accountLoanId)`** creates an account's `LOAN_RECEIVABLE`.
+- **`organizationAccount` also serves `WRITE_OFF_LOSS`** (US-035), the one debit-normal business-wide account.
+
+**A write-off changes what a receivable balance means, and its readers were updated with it (2026-09-20).** The collected figure is inferred everywhere as `A − receivable balance`, which a write-off would inflate to the whole account amount — money that never arrived. Both readers now subtract what the `WRITE_OFF` posting credited to that receivable:
+
+- the **nightly reconciliation** (US-095), which would otherwise report every written-off account as a mismatch every night, unclearably; it expects no unearned profit for one, since the write-off cleared it;
+- the **investment overview's position** (US-085), which would otherwise show a written-off account as fully repaid with all its profit earned. A write-off is deliberately not _movement_: nothing came back.
 
 **Decided 2026-09-13: ledger accounts carry `organizationId`** (migration `ledger_account_organization`). Before this, the business-wide accounts had no owner at all.
 

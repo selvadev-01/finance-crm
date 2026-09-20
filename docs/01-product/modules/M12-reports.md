@@ -148,6 +148,8 @@ Every report, every dashboard and the collection list can be downloaded as an Ex
 
 ## As built — investment overview (US-085, 2026-09-18)
 
+**A written-off account (US-035, 2026-09-20)** leaves the position rather than completing it: what it never repaid stops being outstanding without being returned, and nothing is left to earn on it. The money and the profit it did pay stay in the figures. The range's movement excludes `WRITE_OFF` postings entirely.
+
 `GET /api/reports/investment?from=&to=&sectorId=&lineId=`, in `apps/api/src/reports/investment-report.service.ts`, on the same `report.view`, read-only and unaudited. It follows the pattern above with nothing added to it: the same `reportRange` bounds, scope before filters with an out-of-scope sector or line `404`, lines by code with the totals row the rows summed exactly, and a group that fails `null` everywhere rather than zero.
 
 **Every figure comes from the ledger** (§22's point — summing `account_loan` would give the contracted position twice over), in two groups:
