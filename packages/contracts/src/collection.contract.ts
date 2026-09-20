@@ -290,6 +290,20 @@ export const collectionContract = {
     responses: { 200: pageSchema(collectionListItemSchema), ...historyErrors },
   }),
 
+  listCustomerCollections: route({
+    method: "GET",
+    path: "/api/customers/:customerId/collections",
+    summary:
+      "One customer’s collections across all their accounts, newest first (US-022)",
+    pathParams: z.object({ customerId: idSchema }),
+    /**
+     * Customer 360 shows the whole history, so this one is not date-bounded
+     * as S-16 is: it is a single customer’s rows, paged newest first.
+     */
+    query: pageQuerySchema,
+    responses: { 200: pageSchema(collectionListItemSchema), ...historyErrors },
+  }),
+
   getCollection: route({
     method: "GET",
     path: "/api/collections/:collectionId",

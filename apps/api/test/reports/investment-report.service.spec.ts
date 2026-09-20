@@ -1,4 +1,5 @@
 import type { InvestmentReport } from '@repo/contracts';
+import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { addCalendarDays, parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
@@ -181,6 +182,7 @@ describe('InvestmentReportService (US-085)', () => {
         address: '12 Market Road',
         sectorId: w.south.id,
         lineId: w.lineC.id,
+        linePeriods: openLinePeriod(w.lineC.id),
       },
     });
     return w.accounts.create(

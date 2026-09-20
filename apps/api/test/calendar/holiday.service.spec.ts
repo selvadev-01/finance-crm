@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { parseCalendarDate } from '@repo/domain';
 import { randomUUID } from 'node:crypto';
 
@@ -341,6 +342,7 @@ describe('HolidayService (US-093, US-034)', () => {
             await tx.line.findUniqueOrThrow({ where: { id: w.line.id } })
           ).sectorId,
           lineId: w.line.id,
+          linePeriods: openLinePeriod(w.line.id),
         },
       });
       const database = new Database(tx);

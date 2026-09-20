@@ -88,6 +88,11 @@ describe('collections (M07, e2e)', () => {
           address: 'Market Road',
           sectorId: org.sector.id,
           lineId,
+          // The open period real onboarding writes (US-023); the collection
+          // path reads it to place the customer on a line for that date.
+          linePeriods: {
+            create: { lineId, effectiveFrom: new Date('2026-01-01') },
+          },
         },
       });
       const created = await prisma.accountLoan.create({

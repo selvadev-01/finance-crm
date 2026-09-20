@@ -150,6 +150,41 @@ export function accountScope(
 }
 
 /**
+ * Accounts the caller may **record money against for one business date** —
+ * the scope the collection path uses instead of {@link accountScope}.
+ *
+ * It asks whether the customer was on the caller's line *on that date*, not
+ * whether they are today. A Junior collects at the door with no signal; by the
+ * time the phone syncs, the customer may have been transferred to another line
+ * (US-023). Judging by today's line would refuse money already taken and
+ * strand it in the outbox, with paper the only fallback. The customer's line
+ * on a date is `customer_line_period`, whose open row is today's.
+ *
+ * On the transfer day both periods cover the date, so either line's Junior may
+ * sync it: both really could have collected. What the collection is attributed
+ * to is frozen on the row itself (BR-15), not decided here.
+ */
+export function collectableAccountScope(
+  context: RequestContext,
+  businessDate: Date,
+): Prisma.AccountLoanWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  if (context.currentLineId === null) return NO_ROWS;
+  return {
+    customer: {
+      linePeriods: {
+        some: {
+          lineId: context.currentLineId,
+          effectiveFrom: { lte: businessDate },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: businessDate } }],
+        },
+      },
+    },
+  };
+}
+
+/**
  * The single definition of "customers assigned to this Junior".
  *
  * **Decided 2026-09-13: every customer on the Junior's current line.** The

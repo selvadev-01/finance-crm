@@ -211,6 +211,23 @@ export const accountContract = {
     responses: { 200: accountSchema, ...errors, 422: errorSchema },
   }),
 
+  closeAccount: route({
+    method: "POST",
+    path: "/api/accounts/:accountId/closure",
+    summary: "Stop collecting on an account, with a reason (US-035)",
+    pathParams: accountParams,
+    body: z.object({
+      /**
+       * `DEFAULTED` stops collection and leaves the money owed on the books;
+       * `WRITTEN_OFF` also gives it up, and posts the write-off (M09).
+       */
+      status: z.enum(["DEFAULTED", "WRITTEN_OFF"]),
+      /** Mandatory: the closure is a judgement, and it is kept with the account. */
+      note: z.string().trim().min(1).max(500),
+    }),
+    responses: { 200: accountSchema, ...errors, 422: errorSchema },
+  }),
+
   listAccounts: route({
     method: "GET",
     path: "/api/accounts",

@@ -1,4 +1,5 @@
 import type { OverdueReport } from '@repo/contracts';
+import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
@@ -70,6 +71,7 @@ describe('OverdueReportService (US-087)', () => {
         address: '12 Market Road',
         sectorId: options.sectorId,
         lineId: options.lineId,
+        linePeriods: openLinePeriod(options.lineId),
       },
     });
     return w.accounts.create(

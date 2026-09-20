@@ -34,6 +34,7 @@ All three are **append-only with no update path at all**. A correction is a new 
 | `CAPITAL`         | One                  | Credit         |
 | `UNEARNED_PROFIT` | One                  | Credit         |
 | `EARNED_PROFIT`   | One                  | Credit         |
+| `WRITE_OFF_LOSS`  | One                  | Debit          |
 
 Created automatically with their owner — a staff member gets a cash account, an account gets a receivable.
 
@@ -68,7 +69,18 @@ Using the reference figures: `A = 10,000`, `I = 8,500`, `P = 1,500`.
 | `CASH_IN_HAND` (Junior) |          | 5,000.00 |
 
 **Adjustment** — the reverse of the original, at the original's proportions.
-**Write-off** — remaining receivable and unearned profit cleared against a loss account.
+
+**Write-off ₹10,000 account, ₹100 collected** (US-035, as built 2026-09-20) — outstanding `O` and the unearned profit `U` the account still holds:
+
+| Ledger account    |    Debit |   Credit |
+| ----------------- | -------: | -------: |
+| `UNEARNED_PROFIT` | 1,485.00 |          |
+| `WRITE_OFF_LOSS`  | 8,415.00 |          |
+| `LOAN_RECEIVABLE` |          | 9,900.00 |
+
+`WRITE_OFF_LOSS` is a sixth business-wide account, one per organization and **debit-normal** like the expense it is (migrations `ledger_write_off_loss` and `constraints_ledger_write_off_loss`). The loss is `O − U`: what the business actually put out and did not get back. Profit already earned on what _was_ collected stays earned — the ₹15 above.
+
+**Only `WRITTEN_OFF` posts** (decided 2026-09-20). `DEFAULTED` stops collection and leaves the receivable standing, because the money is still owed and may still be recovered; a defaulted account can be written off later.
 
 ---
 

@@ -44,7 +44,8 @@ describe('M12 export (e2e)', () => {
       });
     return role ? pending.set('Cookie', cookies[role]) : pending;
   };
-  const json = (body: Buffer) => JSON.parse(body.toString('utf8')) as { code: string };
+  const json = (body: Buffer) =>
+    JSON.parse(body.toString('utf8')) as { code: string };
 
   beforeAll(async () => {
     prisma = createTestPrismaClient();
@@ -119,13 +120,15 @@ describe('M12 export (e2e)', () => {
           format === 'xlsx' ? XLSX : 'application/pdf',
         );
         expect(response.headers['content-disposition']).toMatch(
-          new RegExp(`^attachment; filename="rasi-[A-Za-z0-9.-]+\\.${format}"$`),
+          new RegExp(
+            `^attachment; filename="rasi-[A-Za-z0-9.-]+\\.${format}"$`,
+          ),
         );
         const bytes = response.body as Buffer;
         // A workbook is a zip; a PDF says so in its first bytes.
-        expect(bytes.subarray(0, format === 'xlsx' ? 2 : 5).toString('latin1')).toBe(
-          format === 'xlsx' ? 'PK' : '%PDF-',
-        );
+        expect(
+          bytes.subarray(0, format === 'xlsx' ? 2 : 5).toString('latin1'),
+        ).toBe(format === 'xlsx' ? 'PK' : '%PDF-');
 
         const entries = recordedAudit.slice(before);
         expect(entries).toHaveLength(1);
@@ -161,9 +164,10 @@ describe('M12 export (e2e)', () => {
   });
 
   it('a Senior exports their own line; another line or sector is 404, and nothing is recorded', async () => {
-    await download('SENIOR', '/api/exports/reports/line-wise?format=pdf').expect(
-      200,
-    );
+    await download(
+      'SENIOR',
+      '/api/exports/reports/line-wise?format=pdf',
+    ).expect(200);
     const before = recordedAudit.length;
     const otherLine = await download(
       'SENIOR',
@@ -189,8 +193,13 @@ describe('M12 export (e2e)', () => {
       '/api/exports/reports/line-wise?format=xlsx',
     ).expect(403);
     expect(json(report.body as Buffer).code).toBe('PERMISSION_DENIED');
-    await download('JUNIOR', '/api/exports/dashboards/line?format=pdf').expect(403);
-    await download('SENIOR', '/api/exports/dashboards/sectors?format=pdf').expect(403);
+    await download('JUNIOR', '/api/exports/dashboards/line?format=pdf').expect(
+      403,
+    );
+    await download(
+      'SENIOR',
+      '/api/exports/dashboards/sectors?format=pdf',
+    ).expect(403);
     const anonymous = await download(
       null,
       '/api/exports/reports/line-wise?format=xlsx',
@@ -199,9 +208,14 @@ describe('M12 export (e2e)', () => {
   });
 
   it('refuses a missing or unknown format, and a view’s own bad input, with its JSON error', async () => {
-    const missing = await download('ADMIN', '/api/exports/reports/line-wise').expect(400);
+    const missing = await download(
+      'ADMIN',
+      '/api/exports/reports/line-wise',
+    ).expect(400);
     expect(json(missing.body as Buffer).code).toBe('VALIDATION_FAILED');
-    await download('ADMIN', '/api/exports/reports/line-wise?format=csv').expect(400);
+    await download('ADMIN', '/api/exports/reports/line-wise?format=csv').expect(
+      400,
+    );
     // S-16's own rule: the list needs its dates.
     await download('ADMIN', '/api/exports/collections?format=xlsx').expect(400);
     const future = await download(

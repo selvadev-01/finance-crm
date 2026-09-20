@@ -157,6 +157,7 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 | `POST /api/accounts/preview`                        | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                                                                                    |
 | `POST /api/accounts`                                | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`; `disburse: true` also disburses a day-one account |
 | `POST /api/accounts/:accountId/disbursement`        | `account.disburse`     | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`                                                                                           |
+| `POST /api/accounts/:accountId/closure`             | `account.close`        | `404`, `422 ACCOUNT_NOT_ACTIVE`; `400` without a reason. Super Admin only                                                                                     |
 | `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                               |
 | `GET /api/accounts/:accountId/schedule`             | `account.viewSchedule` | `404`                                                                                                                                                         |
 
@@ -173,6 +174,13 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 - The status change is a conditional update from `PENDING`, so a concurrent second disbursement is refused before it writes anything.
 - The BR-18 posting goes through `LedgerService` in the same transaction.
 - A pending account whose planned date has passed is disbursed today: its disbursement date moves, its schedule is regenerated, and the audit entry records both dates.
+
+**Closing by hand (US-035, 2026-09-20).** `POST /api/accounts/:accountId/closure` takes `DEFAULTED` or `WRITTEN_OFF` and a mandatory reason, kept as `closureNote`. Super Admin only (`account.close`): a write-off destroys receivable value, and must not be a way for an Admin to tidy away a difficult account.
+
+- Only an `ACTIVE` account can be closed (`422 ACCOUNT_NOT_ACTIVE`), and the status change is a conditional update as disbursement's is, so a second closure posts nothing.
+- Remaining `PENDING` slots become `CANCELLED` and `isOverdue` clears — nothing more is expected. Answered slots are history and are untouched.
+- **Only `WRITTEN_OFF` posts to the ledger** (decided 2026-09-20): it clears the outstanding and the unearned profit still held, carrying the difference to the new `WRITE_OFF_LOSS` account ([M09](M09-ledger.md#the-postings)). `DEFAULTED` stops collection and leaves the money owed, so a defaulted account keeps its receivable and can be written off later.
+- The console shows a Close action on the account for a Super Admin, naming what each closure does before it happens.
 
 **Mid-term accounts (US-030a, decided 2026-09-13).** A disbursement date before today makes a mid-term account.
 

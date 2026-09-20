@@ -6,12 +6,15 @@ import {
   buttonClass,
   DataView,
   FilterBar,
+  FilterField,
+  Input,
   ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
 } from "@repo/ui";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import {
   displayColumn,
@@ -28,9 +31,16 @@ import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
 import { usePagedQuery } from "../../../lib/use-paged-query";
 
-export const CUSTOMER_FILTERS = { line: "" };
+export const CUSTOMER_FILTERS = { q: "", line: "" };
 
-/** S-08 · Customers (US-020): paged, so a book of 1,000+ customers is all reachable. */
+/** Long enough to type a name without a request per keystroke. */
+const SEARCH_DELAY_MS = 300;
+
+/**
+ * S-08 · Customers (US-020): paged, so a book of 1,000+ customers is all
+ * reachable, and searched by name, code or mobile (US-024) within the
+ * caller's own scope — the API applies it, so a Senior finds only their line.
+ */
 export function CustomerList({
   initial,
 }: {
@@ -44,9 +54,22 @@ export function CustomerList({
   );
   // Only Admins filter by line; a Senior or Junior already sees just their own.
   const lineId = manages ? filters.line : "";
+  const [searchText, setSearchText] = useState(filters.q);
+
+  // The URL (and the query) follow the box once typing settles.
+  useEffect(() => {
+    const q = searchText.trim();
+    if (q === filters.q) return;
+    const timer = setTimeout(() => setFilter("q", q), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [searchText, filters.q, setFilter]);
 
   const customers = usePagedQuery(customerContract.listCustomers, {
-    query: { limit: LIST_LIMIT, ...(lineId ? { lineId } : {}) },
+    query: {
+      limit: LIST_LIMIT,
+      ...(filters.q ? { q: filters.q } : {}),
+      ...(lineId ? { lineId } : {}),
+    },
   });
 
   const newCustomer = manages ? (
@@ -67,14 +90,31 @@ export function CustomerList({
         actions={newCustomer}
       />
 
-      {manages ? (
-        <FilterBar summary={filters.line ? "One line" : "All lines"}>
+      <FilterBar
+        summary={[
+          filters.q ? `“${filters.q}”` : null,
+          manages ? (filters.line ? "One line" : "All lines") : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        <FilterField label="Search" width="lg">
+          <Input
+            type="search"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="Name, code or mobile"
+            autoComplete="off"
+            maxLength={80}
+          />
+        </FilterField>
+        {manages ? (
           <LineFilter
             value={filters.line}
             onChange={(value) => setFilter("line", value)}
           />
-        </FilterBar>
-      ) : null}
+        ) : null}
+      </FilterBar>
 
       {customers.status === "ready" && customers.rows.length > 0 ? (
         <>
@@ -129,11 +169,28 @@ export function CustomerList({
           query={customers}
           columns={4}
           empty={
-            manages && filtered ? (
+            filtered ? (
               <NoMatches
-                title="No customers on this line"
-                description="Choose another line, or show every line."
-                action={<Button onClick={reset}>Show all lines</Button>}
+                title={
+                  filters.q
+                    ? `No customers match “${filters.q}”`
+                    : "No customers on this line"
+                }
+                description={
+                  filters.q
+                    ? "Search by part of a name, or a whole customer code or mobile number."
+                    : "Choose another line, or show every line."
+                }
+                action={
+                  <Button
+                    onClick={() => {
+                      setSearchText("");
+                      reset();
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
               />
             ) : manages ? (
               <NothingYet

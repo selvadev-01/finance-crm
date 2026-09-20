@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -368,6 +369,7 @@ describe('BusinessOverviewService (US-080)', () => {
           address: '1 Other Street',
           sectorId: other.sector.id,
           lineId: other.line.id,
+          linePeriods: openLinePeriod(other.line.id),
         },
       });
       const view = await w.overview.view(w.admin, MONDAY, MONDAY_EVENING);

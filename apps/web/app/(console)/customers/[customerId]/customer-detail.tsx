@@ -1,24 +1,34 @@
 "use client";
 
-import { customerContract } from "@repo/contracts";
+import { collectionContract, customerContract } from "@repo/contracts";
 import {
+  Button,
+  buttonClass,
   Card,
   Description,
   DescriptionList,
+  formatBusinessDate,
+  formatCurrency,
   PageHeader,
   Section,
+  Stat,
+  StatGrid,
   Tabs,
 } from "@repo/ui";
 import Link from "next/link";
+import { useState } from "react";
 
 import { PageTrail } from "../../../../components/page-trail";
 import { RecordFallback } from "../../../../components/query-state";
 import { StatusBadge } from "../../../../components/status-badge";
 import { formatMobile } from "../../../../lib/format";
+import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
 import { CustomerAccounts } from "../../accounts/account-parts";
+import { CustomerCollections } from "./customer-collections";
+import { TransferCustomer } from "./transfer-customer";
 
 export const CUSTOMER_TABS = { tab: "profile" };
 
@@ -37,8 +47,22 @@ export function CustomerDetailView({
   const me = useSignedIn();
   const { filters, setFilter } = useListState(CUSTOMER_TABS, initial);
   // An unknown `?tab=` opens the profile rather than an empty page.
-  const tab = filters.tab === "accounts" ? "accounts" : "profile";
+  const tab =
+    filters.tab === "accounts" || filters.tab === "collections"
+      ? filters.tab
+      : "profile";
   const customer = useApiQuery(customerContract.getCustomer, {
+    params: { customerId },
+  });
+  const manages = canManageOrganisation(me.role);
+  const [transferring, setTransferring] = useState(false);
+  // Every customer has one period; a second means they have been transferred.
+  const lineHistory = useApiQuery(customerContract.listCustomerTransfers, {
+    params: { customerId },
+  });
+  // US-022: the figures are summed across accounts server-side, never stored
+  // on the customer (M04).
+  const overview = useApiQuery(customerContract.getCustomerOverview, {
     params: { customerId },
   });
 
@@ -46,6 +70,7 @@ export function CustomerDetailView({
     return <RecordFallback query={customer} noun="Customer" />;
 
   const record = customer.data;
+  const periods = lineHistory.status === "ready" ? lineHistory.data.data : [];
   const phone = (mobile: string) => (
     <a
       href={`tel:${mobile}`}
@@ -74,12 +99,50 @@ export function CustomerDetailView({
             <StatusBadge kind="customer" value={record.status} />
           </>
         }
+        actions={
+          manages ? (
+            <>
+              <Button onClick={() => setTransferring(true)}>Transfer</Button>
+              <Link
+                href={`/customers/${record.id}/edit`}
+                className={buttonClass("secondary")}
+              >
+                Edit
+              </Link>
+            </>
+          ) : null
+        }
       />
+
+      {overview.status === "ready" ? (
+        <StatGrid columns={3}>
+          <Stat
+            label={
+              overview.data.accounts.active === 1
+                ? "Outstanding on 1 active account"
+                : `Outstanding across ${overview.data.accounts.active} active accounts`
+            }
+          >
+            {formatCurrency(overview.data.outstandingTotal)}
+          </Stat>
+          <Stat label="Collected, all accounts">
+            {formatCurrency(overview.data.collectedTotal)}
+          </Stat>
+          <Stat label="Accounts">
+            {overview.data.accounts.active} active ·{" "}
+            {overview.data.accounts.completed} completed
+            {overview.data.accounts.other > 0
+              ? ` · ${overview.data.accounts.other} other`
+              : ""}
+          </Stat>
+        </StatGrid>
+      ) : null}
 
       <Tabs.Root value={tab} onValueChange={(tab) => setFilter("tab", tab)}>
         <Tabs.List aria-label="Customer">
           <Tabs.Trigger value="profile">Profile</Tabs.Trigger>
           <Tabs.Trigger value="accounts">Accounts</Tabs.Trigger>
+          <Tabs.Trigger value="collections">Collections</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="profile">
@@ -104,6 +167,18 @@ export function CustomerDetailView({
                     </Link>
                   </Description>
                   <Description term="Sector">{record.sectorName}</Description>
+                  {overview.status === "ready" ? (
+                    <>
+                      <Description term="Senior">
+                        {overview.data.staff.seniorName ?? "No Senior assigned"}
+                      </Description>
+                      <Description term="Junior">
+                        {overview.data.staff.juniorNames.length > 0
+                          ? overview.data.staff.juniorNames.join(", ")
+                          : "No Junior assigned"}
+                      </Description>
+                    </>
+                  ) : null}
                   <Description term="Address">
                     <span className="whitespace-pre-line">
                       {record.address}
@@ -120,6 +195,35 @@ export function CustomerDetailView({
               </Card.Body>
             </Card.Root>
           </Section>
+
+          {periods.length > 1 ? (
+            <Section title="Line history" as="h3">
+              <Card.Root>
+                <Card.Body>
+                  <DescriptionList layout="rows">
+                    {periods.map((period) => (
+                      <Description
+                        key={period.id}
+                        term={`${period.lineName} (${period.lineCode})`}
+                      >
+                        <span>
+                          {formatBusinessDate(period.effectiveFrom)}
+                          {period.effectiveTo
+                            ? ` to ${formatBusinessDate(period.effectiveTo)}`
+                            : " — current"}
+                          {period.reason ? ` · ${period.reason}` : ""}
+                        </span>
+                      </Description>
+                    ))}
+                  </DescriptionList>
+                  <p className="text-body text-ink-muted">
+                    Collections stay with the line that took them, so past
+                    figures for either line are unchanged (BR-15).
+                  </p>
+                </Card.Body>
+              </Card.Root>
+            </Section>
+          ) : null}
 
           <Section title="Reference persons" as="h3">
             <ul className="grid gap-3 sm:grid-cols-2">
@@ -151,12 +255,27 @@ export function CustomerDetailView({
         <Tabs.Content value="accounts">
           <Section title="Accounts" as="h3">
             <CustomerAccounts customerId={record.id} role={me.role} />
-            <p className="text-body text-ink-muted">
-              Collection history appears here once collections are recorded.
-            </p>
+          </Section>
+        </Tabs.Content>
+
+        <Tabs.Content value="collections">
+          <Section title="Collection history" as="h3">
+            <CustomerCollections customerId={record.id} role={me.role} />
           </Section>
         </Tabs.Content>
       </Tabs.Root>
+
+      {transferring ? (
+        <TransferCustomer
+          customer={record}
+          onClose={() => setTransferring(false)}
+          onDone={() => {
+            setTransferring(false);
+            customer.reload();
+            lineHistory.reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }

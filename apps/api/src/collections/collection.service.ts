@@ -15,7 +15,11 @@ import {
   toUtcMidnight,
 } from '@repo/domain';
 
-import { accountScope, foundInScope, inScope } from '../access/scope.js';
+import {
+  collectableAccountScope,
+  foundInScope,
+  inScope,
+} from '../access/scope.js';
 import { AuditWriter } from '../audit/audit.writer.js';
 import { LedgerService } from '../ledger/ledger.service.js';
 import type { RequestContext } from '../platform/context/request-context.js';
@@ -140,9 +144,26 @@ export class CollectionService {
     now: Date,
   ): Promise<RecordResult> {
     const tx = this.database.client;
+    const captured = new Date(input.capturedAt);
+    const believed =
+      captured.getTime() - now.getTime() > CLOCK_SKEW_MS ? now : captured;
+    if (believed !== captured) {
+      this.logger.warn(
+        { idempotencyKey: input.idempotencyKey, userId: context.userId },
+        'Collection captured ahead of server time; business date taken from server time',
+      );
+    }
+    const businessDate = toBusinessDate(believed);
+    const day = toUtcMidnight(businessDate);
+
+    // Scoped by the customer's line on the collection's own business date, so
+    // a transfer (US-023) between the door and the sync cannot refuse money
+    // that was already taken.
     const inScopeAccount = foundInScope(
       await tx.accountLoan.findFirst({
-        where: inScope(accountScope(context), { id: input.accountLoanId }),
+        where: inScope(collectableAccountScope(context, day), {
+          id: input.accountLoanId,
+        }),
         select: { id: true },
       }),
       'account',
@@ -168,6 +189,7 @@ export class CollectionService {
           outstandingAmount: true,
           disbursementDate: true,
           targetCompletionDate: true,
+          customerId: true,
           customer: { select: { lineId: true, sectorId: true, name: true } },
         },
       }),
@@ -179,17 +201,6 @@ export class CollectionService {
         `Account ${account.accountCode} is ${account.status.toLowerCase()}; collections are recorded only on an active account`,
       );
     }
-
-    const captured = new Date(input.capturedAt);
-    const believed =
-      captured.getTime() - now.getTime() > CLOCK_SKEW_MS ? now : captured;
-    if (believed !== captured) {
-      this.logger.warn(
-        { idempotencyKey: input.idempotencyKey, userId: context.userId },
-        'Collection captured ahead of server time; business date taken from server time',
-      );
-    }
-    const businessDate = toBusinessDate(believed);
 
     const amount = toMoney(input.amount);
     const outstanding = toMoney(account.outstandingAmount.toString());
@@ -206,7 +217,6 @@ export class CollectionService {
       );
     }
 
-    const day = toUtcMidnight(businessDate);
     const slot =
       (await tx.accountSchedule.findFirst({
         where: {
@@ -229,6 +239,25 @@ export class CollectionService {
       );
     }
 
+    // BR-15: the line this money is attributed to is the one the customer was
+    // on when it was collected, not the one they are on now. They differ only
+    // for a collection synced after a transfer (US-023); on the transfer day
+    // both periods cover the date, so the caller's own line wins.
+    const periods = await tx.customerLinePeriod.findMany({
+      where: {
+        customerId: account.customerId,
+        effectiveFrom: { lte: day },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: day } }],
+      },
+      select: { lineId: true },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    const collectedLineId =
+      periods.find((period) => period.lineId === context.currentLineId)
+        ?.lineId ??
+      periods[0]?.lineId ??
+      account.customer.lineId;
+
     const D = toMoney(account.dailyAmount.toString());
     const expected = capExpectedAmount(D, outstanding);
     const { variance, classification } = classifyCollection({
@@ -241,7 +270,7 @@ export class CollectionService {
         idempotencyKey: input.idempotencyKey,
         accountLoanId: account.id,
         accountScheduleId: slot.id,
-        lineId: account.customer.lineId,
+        lineId: collectedLineId,
         collectedByUserId: context.userId,
         businessDate: day,
         capturedAt: captured,
@@ -333,7 +362,7 @@ export class CollectionService {
       actorUserId: context.userId,
       collectionId: collection.id,
       accountLoanId: account.id,
-      lineId: account.customer.lineId,
+      lineId: collectedLineId,
       accountCode: account.accountCode,
       customerName: account.customer.name,
       classification,
@@ -343,11 +372,7 @@ export class CollectionService {
     });
 
     // BR-16a: a collection for a closed day reopens it.
-    await this.dayCloses.moneyWritten(
-      context,
-      account.customer.lineId,
-      businessDate,
-    );
+    await this.dayCloses.moneyWritten(context, collectedLineId, businessDate);
 
     await this.audit.record(context, {
       action: 'CREATE',

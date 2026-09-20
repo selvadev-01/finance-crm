@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
+import { openLinePeriod } from './database.js';
 import type { PrismaClient, StaffRole } from '@repo/db';
-import { addCalendarDays, toBusinessDate } from '@repo/domain';
+import { addCalendarDays, toBusinessDate, toUtcMidnight } from '@repo/domain';
 import type { Server } from 'node:http';
 import request from 'supertest';
 
@@ -93,6 +94,7 @@ describe('accounts (M05, US-030, e2e)', () => {
           sectorId: org.sector.id,
           lineId,
           references: { create: [{ name: 'Ref', mobile: '+919800000010' }] },
+          linePeriods: openLinePeriod(lineId),
         },
       });
     customerOnA = (await customer(lineA, 'On A')).id;
@@ -282,5 +284,119 @@ describe('accounts (M05, US-030, e2e)', () => {
       .get(`/api/accounts/${later.body.id}`)
       .expect(200)
       .then((response) => expect(response.body.status).toBe('PENDING'));
+  });
+
+  /**
+   * US-035 over HTTP. Only the DEFAULTED path is exercised here: a write-off
+   * posts to the ledger, which Tier 2 may never write, and is proven in Tier 1
+   * (`test/accounts/account.service.spec.ts`).
+   */
+  describe('closing an account (US-035)', () => {
+    /** An ACTIVE account with no ledger rows, so cleanup can remove it. */
+    const activeAccount = async () =>
+      prisma.accountLoan.create({
+        data: {
+          organizationId,
+          accountCode: testCode('ACC'),
+          customerId: customerOnA,
+          lineId: lineA,
+          accountAmount: '10000',
+          investedAmount: '8500',
+          profitAmount: '1500',
+          dailyAmount: '100',
+          termDays: 100,
+          outstandingAmount: '10000',
+          status: 'ACTIVE',
+          // BR-03: the first collection comes after disbursement.
+          disbursementDate: toUtcMidnight(addCalendarDays(today, -1)),
+          firstCollectionDate: toUtcMidnight(today),
+          targetCompletionDate: toUtcMidnight(today),
+          schedules: {
+            create: [
+              {
+                sequence: 1,
+                dueDate: toUtcMidnight(today),
+                expectedAmount: '100',
+                status: 'PENDING',
+              },
+            ],
+          },
+        },
+      });
+
+    it('a Super Admin defaults an account: collection stops, the reason is kept, and nothing is posted', async () => {
+      const account = await activeAccount();
+
+      const response = await as('SUPER_ADMIN')
+        .post(`/api/accounts/${account.id}/closure`, {
+          status: 'DEFAULTED',
+          note: 'Refusing to pay; with the Senior since March',
+        })
+        .expect(200);
+      expect(response.body).toMatchObject({
+        id: account.id,
+        status: 'DEFAULTED',
+      });
+
+      const row = await prisma.accountLoan.findUniqueOrThrow({
+        where: { id: account.id },
+      });
+      expect(row.closureNote).toContain('Refusing to pay');
+      expect(
+        await prisma.accountSchedule.count({
+          where: { accountLoanId: account.id, status: 'PENDING' },
+        }),
+      ).toBe(0);
+      // DEFAULTED leaves the money owed, so the ledger is untouched.
+      expect(
+        await prisma.ledgerTransaction.count({
+          where: { sourceId: account.id },
+        }),
+      ).toBe(0);
+    });
+
+    it('the reason is mandatory, and a pending account cannot be closed', async () => {
+      const account = await activeAccount();
+      const missing = await as('SUPER_ADMIN')
+        .post(`/api/accounts/${account.id}/closure`, {
+          status: 'DEFAULTED',
+          note: '  ',
+        })
+        .expect(400);
+      expect(missing.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'note' })]),
+      );
+
+      const pending = await as('ADMIN')
+        .post('/api/accounts', terms())
+        .expect(201);
+      const refused = await as('SUPER_ADMIN')
+        .post(`/api/accounts/${pending.body.id}/closure`, {
+          status: 'DEFAULTED',
+          note: 'Never disbursed',
+        })
+        .expect(422);
+      expect(refused.body.code).toBe('ACCOUNT_NOT_ACTIVE');
+    });
+
+    it('an Admin, Senior or Junior cannot close an account', async () => {
+      const account = await activeAccount();
+      for (const role of ['ADMIN', 'SENIOR', 'JUNIOR'] as const) {
+        const response = await as(role)
+          .post(`/api/accounts/${account.id}/closure`, {
+            status: 'DEFAULTED',
+            note: 'Not mine to close',
+          })
+          .expect(403);
+        expect(response.body.code).toBe('PERMISSION_DENIED');
+      }
+      expect(
+        (
+          await prisma.accountLoan.findUniqueOrThrow({
+            where: { id: account.id },
+          })
+        ).status,
+      ).toBe('ACTIVE');
+    });
   });
 });

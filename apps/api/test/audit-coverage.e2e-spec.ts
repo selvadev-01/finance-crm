@@ -81,11 +81,18 @@ const WRITE_ROUTES: Record<string, Decision> = {
   },
   // M04, M05
   'POST /api/customers': { audits: [['customer', 'CREATE']] },
+  'PATCH /api/customers/:customerId': { audits: [['customer', 'UPDATE']] },
+  'POST /api/customers/:customerId/line-transfer': {
+    audits: [['customer', 'UPDATE']],
+  },
   'POST /api/accounts/preview': {
     notAudited: 'computes a schedule; writes nothing',
   },
   'POST /api/accounts': { audits: [['account_loan', 'CREATE']] },
   'POST /api/accounts/:accountId/disbursement': {
+    audits: [['account_loan', 'UPDATE']],
+  },
+  'POST /api/accounts/:accountId/closure': {
     audits: [['account_loan', 'UPDATE']],
   },
   // M07

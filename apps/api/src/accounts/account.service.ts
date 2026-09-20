@@ -19,6 +19,7 @@ import {
   toBusinessDate,
   toMoney,
   toUtcMidnight,
+  unearnedProfit,
 } from '@repo/domain';
 
 import {
@@ -41,6 +42,7 @@ import {
 
 type PreviewInput = RouteInput<typeof accountContract.previewAccount>['body'];
 type CreateInput = RouteInput<typeof accountContract.createAccount>['body'];
+type CloseInput = RouteInput<typeof accountContract.closeAccount>['body'];
 
 const accountFields = {
   id: true,
@@ -416,6 +418,142 @@ export class AccountService {
         status: slot.status,
       })),
     };
+  }
+
+  /**
+   * US-035: stop collecting on an account, with a mandatory reason. Super
+   * Admin only (`account.close`) — writing off destroys receivable value, and
+   * must not be a way for an Admin to tidy away a difficult account (M05).
+   *
+   * `DEFAULTED` stops collection and **leaves the money on the books**: it is
+   * still owed and still chaseable, so nothing is posted. `WRITTEN_OFF` is the
+   * decision that the money is gone, and posts it (decided 2026-09-20).
+   */
+  close(
+    context: RequestContext,
+    accountId: string,
+    input: CloseInput,
+    today: CalendarDate = toBusinessDate(new Date()),
+  ): Promise<Account> {
+    return this.database.transaction(async (tx) => {
+      const account = foundInScope(
+        await tx.accountLoan.findFirst({
+          where: inScope(accountScope(context), { id: accountId }),
+          select: accountFields,
+        }),
+        'account',
+      );
+      if (account.status !== 'ACTIVE') {
+        throw new DomainError(
+          'ACCOUNT_NOT_ACTIVE',
+          `Account ${account.accountCode} is ${account.status.toLowerCase()}; only an active account can be closed`,
+        );
+      }
+
+      // As at disbursement, the status change is the guard: a second closure
+      // waits on this row, then finds it no longer ACTIVE and changes nothing,
+      // so the write-off below is posted exactly once.
+      const claimed = await tx.accountLoan.updateMany({
+        where: { id: account.id, status: 'ACTIVE' },
+        data: {
+          status: input.status,
+          closureNote: input.note,
+          // BR-05: the flag belongs to an account still being collected.
+          isOverdue: false,
+        },
+      });
+      if (claimed.count === 0) {
+        throw new DomainError(
+          'ACCOUNT_NOT_ACTIVE',
+          `Account ${account.accountCode} has just been closed`,
+        );
+      }
+      // Nothing more is expected, so the plan stops. Answered slots are
+      // history and are never touched.
+      await tx.accountSchedule.updateMany({
+        where: { accountLoanId: account.id, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+
+      if (input.status === 'WRITTEN_OFF') {
+        await this.postWriteOff(context, account, today);
+      }
+
+      await this.audit.record(context, {
+        action: 'UPDATE',
+        entityTable: 'account_loan',
+        entityId: account.id,
+        before: { status: account.status },
+        after: {
+          status: input.status,
+          closureNote: input.note,
+          writtenOff: money(account.outstandingAmount),
+        },
+      });
+
+      const closed = await tx.accountLoan.findUniqueOrThrow({
+        where: { id: account.id },
+        select: accountFields,
+      });
+      return toAccount(closed, context);
+    });
+  }
+
+  /**
+   * The write-off (M09): clear what the account still owes and the profit
+   * never earned on it, and carry the difference — the money the business
+   * actually put out and did not get back — to `WRITE_OFF_LOSS`.
+   *
+   * Outstanding `O` and unearned profit `U` come from the same figures BR-18
+   * posts on every collection, so the three lines balance exactly: credit the
+   * receivable `O`, debit unearned profit `U`, debit the loss `O − U`.
+   */
+  private async postWriteOff(
+    context: RequestContext,
+    account: AccountRow,
+    businessDate: CalendarDate,
+  ): Promise<void> {
+    const outstanding = toMoney(account.outstandingAmount.toString());
+    if (outstanding.isZero()) return;
+
+    const unearned = unearnedProfit({
+      accountAmount: account.accountAmount.toString(),
+      profitAmount: account.profitAmount.toString(),
+      collected: account.collectedAmount.toString(),
+    });
+    const receivable = await this.ledger.receivableFor(account.id);
+    const unearnedAccount = await this.ledger.organizationAccount(
+      account.organizationId,
+      'UNEARNED_PROFIT',
+    );
+    const loss = await this.ledger.organizationAccount(
+      account.organizationId,
+      'WRITE_OFF_LOSS',
+    );
+    await this.ledger.post(context, {
+      transactionType: 'WRITE_OFF',
+      source: { table: 'account_loan', id: account.id },
+      businessDate,
+      eventAt: new Date(),
+      description: `Write-off ${account.accountCode}`,
+      lines: [
+        {
+          ledgerAccountId: receivable,
+          direction: 'CREDIT',
+          amount: outstanding.toFixed(2),
+        },
+        {
+          ledgerAccountId: unearnedAccount,
+          direction: 'DEBIT',
+          amount: unearned.toFixed(2),
+        },
+        {
+          ledgerAccountId: loss,
+          direction: 'DEBIT',
+          amount: outstanding.minus(unearned).toFixed(2),
+        },
+      ],
+    });
   }
 
   /**

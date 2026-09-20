@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { randomUUID } from 'node:crypto';
 
 import { createTestPrismaClient } from '../database.js';
@@ -64,6 +65,7 @@ describe('account_loan constraints (BR-01)', () => {
         address: 'Address',
         sectorId: sector.id,
         lineId: line.id,
+        linePeriods: openLinePeriod(line.id),
       },
     });
 

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { openLinePeriod } from '../database.js';
 import { parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -109,6 +110,7 @@ describe('OperationsDashboardService (US-082)', () => {
           address: '12 Market Road',
           sectorId,
           lineId,
+          linePeriods: openLinePeriod(lineId),
         },
       });
 

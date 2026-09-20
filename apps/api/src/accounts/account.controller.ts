@@ -51,6 +51,16 @@ export class AccountController {
     return this.accounts.disburse(context, params.accountId);
   }
 
+  /** US-035 — Super Admin only; a write-off destroys receivable value (M05). */
+  @RequirePermission('account.close')
+  @ContractRoute(api.closeAccount)
+  closeAccount(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: In<'closeAccount'>,
+  ): Out<'closeAccount'> {
+    return this.accounts.close(context, params.accountId, body);
+  }
+
   @RequirePermission('account.view')
   @ContractRoute(api.listAccounts)
   listAccounts(

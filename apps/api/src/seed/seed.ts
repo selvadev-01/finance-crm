@@ -410,6 +410,34 @@ export async function seedDataset(
   await tx.customer.createMany({ data: customers });
   await tx.customerReference.createMany({ data: references });
 
+  // Which line each customer has been on, from the start of the seeded
+  // history (US-023). The transferred customer has two: the old line up to
+  // the move, then the new one — which is what makes their collections before
+  // the move attributable to the old line (BR-15).
+  await tx.customerLinePeriod.createMany({
+    data: customers.map((customer) => ({
+      // Every seeded customer is pushed with an explicit id above.
+      customerId: customer.id!,
+      lineId:
+        customer.id === transferred.customerId
+          ? transferred.lineId
+          : customer.lineId,
+      effectiveFrom: toUtcMidnight(historyFloor),
+      effectiveTo:
+        customer.id === transferred.customerId
+          ? toUtcMidnight(transferred.transfer!.on)
+          : null,
+    })),
+  });
+  await tx.customerLinePeriod.create({
+    data: {
+      customerId: transferred.customerId,
+      lineId: transferred.transfer!.toLineId,
+      effectiveFrom: toUtcMidnight(transferred.transfer!.on),
+      reason: 'Moved to another part of town',
+    },
+  });
+
   // ------------------------------------------------------------------- ledger
   const ledgerAccounts: Prisma.LedgerAccountCreateManyInput[] = [];
   // The seed organization is new, so its business-wide accounts are too: one

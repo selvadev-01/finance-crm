@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { openLinePeriod } from './database.js';
 import type { PrismaClient, StaffRole } from '@repo/db';
 import type { Server } from 'node:http';
 import request from 'supertest';
@@ -213,6 +214,7 @@ describe('business settings (US-094, e2e)', () => {
           address: 'Address',
           sectorId,
           lineId,
+          linePeriods: openLinePeriod(lineId),
         },
       });
       // PENDING: never disbursed, so it has no ledger rows and cleanup removes it.

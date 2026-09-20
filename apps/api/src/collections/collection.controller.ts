@@ -70,6 +70,17 @@ export class CollectionController {
     return this.history.list(context, query);
   }
 
+  /** US-022 — one customer’s whole history, newest first, in scope. */
+  @RequirePermission('collection.view')
+  @ContractRoute(api.listCustomerCollections)
+  listCustomerCollections(
+    @CurrentContext() context: RequestContext,
+    @ContractInput()
+    { params, query }: RouteInput<typeof api.listCustomerCollections>,
+  ): Promise<RouteSuccess<typeof api.listCustomerCollections>> {
+    return this.history.forCustomer(context, params.customerId, query);
+  }
+
   /**
    * S-16 as Excel or PDF (M12): every entry the list's filters match, read
    * through the list itself, and recorded as an EXPORT in the audit log (M13).
