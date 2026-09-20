@@ -38,6 +38,7 @@ import {
 import { apiWrite } from "../../../../lib/api-write";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { CloseAccount } from "./close-account";
+import { CorrectTerms } from "./correct-terms";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 import { AccountHistory } from "./account-history";
@@ -46,6 +47,7 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
   const me = useSignedIn();
   const [confirming, setConfirming] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const account = useApiQuery(accountContract.getAccount, {
     params: { accountId },
   });
@@ -71,6 +73,12 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
     ) : canDisburse ? (
       <Button key="disburse" tone="primary" onClick={() => setConfirming(true)}>
         Disburse
+      </Button>
+    ) : null,
+    // US-030: terms are correctable only before disbursement.
+    canDisburse ? (
+      <Button key="correct" onClick={() => setCorrecting(true)}>
+        Correct terms
       </Button>
     ) : null,
     // US-035: Super Admin only, and only while there is still something to
@@ -219,6 +227,18 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
           onClose={() => setConfirming(false)}
           onDisbursed={() => {
             setConfirming(false);
+            account.reload();
+            schedule.reload();
+          }}
+        />
+      ) : null}
+
+      {correcting ? (
+        <CorrectTerms
+          account={record}
+          onClose={() => setCorrecting(false)}
+          onDone={() => {
+            setCorrecting(false);
             account.reload();
             schedule.reload();
           }}

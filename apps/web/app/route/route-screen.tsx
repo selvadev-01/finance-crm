@@ -2,6 +2,7 @@ import {
   ArrowClockwise,
   CaretRight,
   Money,
+  PencilSimple,
 } from "@phosphor-icons/react/dist/ssr";
 import type { RouteView } from "@repo/contracts";
 import {
@@ -118,6 +119,17 @@ export function RouteScreen({
           >
             <Money aria-hidden size={20} weight="regular" />
             Hand over today's cash
+          </Button>
+          {/* US-044: a figure entered wrongly is corrected by asking, never
+              by editing (BR-14). Needs signal, so it sits below the day's
+              work rather than among it. */}
+          <Button
+            tone="ghost"
+            onClick={() => openView("#correct")}
+            className="w-full"
+          >
+            <PencilSimple aria-hidden size={18} weight="regular" />
+            Ask to correct a collection
           </Button>
         </>
       )}

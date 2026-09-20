@@ -191,6 +191,7 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   // Only a Super Admin changes a role — otherwise an Admin promotes themselves.
   'POST /api/staff/:staffProfileId/role': 'staff.changeRole',
   'POST /api/staff/:staffProfileId/status': 'staff.suspend',
+  'DELETE /api/staff/:staffProfileId': 'staff.delete',
   'POST /api/staff/:staffProfileId/password-reset': 'staff.resetPassword',
   // M03 Organisation
   'GET /api/sectors': 'organisation.view',
@@ -199,6 +200,7 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'POST /api/accounts': 'account.create',
   'POST /api/accounts/:accountId/disbursement': 'account.disburse',
   'POST /api/accounts/:accountId/closure': 'account.close',
+  'PATCH /api/accounts/:accountId': 'account.updateTerms',
   'GET /api/accounts': 'account.view',
   'GET /api/accounts/:accountId': 'account.view',
   'GET /api/accounts/:accountId/history': 'audit.view',

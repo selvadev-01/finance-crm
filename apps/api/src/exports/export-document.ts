@@ -77,6 +77,7 @@ export interface RenderedExport {
 export const CONTENT_TYPE: Record<ExportFormat, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pdf: 'application/pdf',
+  csv: 'text/csv; charset=utf-8',
 };
 
 /** Said wherever a `null` was drawn, so a dash is never read as nothing. */

@@ -525,7 +525,7 @@ describe('CorrectionService (US-044, BR-14)', () => {
       });
     });
 
-    it('lists history by business date in scope, and the approval queue shows who may decide', async () => {
+    it('lists history newest first by business date, in scope, and the approval queue shows who may decide', async () => {
       await withRollback(prisma, async (tx) => {
         const w = await world(tx);
         const account = await w.account();
@@ -544,8 +544,10 @@ describe('CorrectionService (US-044, BR-14)', () => {
         expect(
           juniorSees.data.map((row) => [row.entryType, row.amount]),
         ).toEqual([
-          ['ORIGINAL', '100.00'],
+          // Newest first (US-045): the correction was made the day after the
+          // collection it adjusts.
           ['ADJUSTMENT', '-20.00'],
+          ['ORIGINAL', '100.00'],
         ]);
         expect((await w.history.list(w.senior, range)).data).toHaveLength(3);
         await expect(

@@ -7,6 +7,7 @@ import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { AccountSettlement } from '../../src/collections/account-settlement.js';
 import { CollectionHistoryService } from '../../src/collections/collection-history.service.js';
 import { CorrectionService } from '../../src/collections/correction.service.js';
+import { CustomerService } from '../../src/customers/customer.service.js';
 import { EmailOutbox } from '../../src/email/email-outbox.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import { NotificationCentreService } from '../../src/notifications/notification-centre.service.js';
@@ -177,6 +178,64 @@ describe('notifications (M10, US-070…US-073)', () => {
           category: 'ALERT',
         });
         expect(admin.at(-1)!.body).toContain('₹100.00 short of the record');
+
+        // US-062: the Junior who handed the cash over is told it arrived, and
+        // with what count — a short count is a WARNING, not a silent SUCCESS.
+        const junior = await inbox(tx, w.junior.userId);
+        expect(junior.at(-1)).toMatchObject({
+          eventType: 'HANDOVER_ACKNOWLEDGED',
+          category: 'WARNING',
+        });
+        expect(junior.at(-1)!.body).toContain('₹400.00');
+        // The receiver acted, so hears nothing of their own acknowledgement.
+        expect(
+          (await inbox(tx, w.senior.userId)).map((n) => n.eventType),
+        ).not.toContain('HANDOVER_ACKNOWLEDGED');
+      });
+    });
+
+    it('US-020: onboarding tells the line’s Senior who has joined their round, and never the Admin who did it', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await cashWorld(tx);
+        const database = new Database(tx);
+        const customers = new CustomerService(
+          database,
+          new AuditWriter(database),
+          w.notices,
+        );
+
+        const customer = await customers.create(
+          w.admin,
+          {
+            name: 'Parvathi Sundaram',
+            mobile: '+919800000044',
+            address: '44 Market Road',
+            lineId: w.line.id,
+            notes: undefined,
+            alternateMobile: undefined,
+            references: [
+              {
+                name: 'Ravi',
+                mobile: '+919123456780',
+                relation: undefined,
+                address: undefined,
+              },
+            ],
+            confirmDuplicateMobile: true,
+          },
+          MONDAY,
+        );
+
+        const senior = await inbox(tx, w.senior.userId);
+        expect(senior.at(-1)).toMatchObject({
+          eventType: 'NEW_CUSTOMER',
+          category: 'INFORMATION',
+        });
+        expect(senior.at(-1)!.body).toContain('Parvathi Sundaram');
+        expect(senior.at(-1)!.body).toContain(customer.customerCode);
+        expect(
+          (await inbox(tx, w.admin.userId)).map((n) => n.eventType),
+        ).not.toContain('NEW_CUSTOMER');
       });
     });
 

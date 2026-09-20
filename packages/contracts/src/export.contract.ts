@@ -22,7 +22,7 @@ import { errorSchema } from "./shared.js";
  * - **A figure that could not be read is blank with a note, never `0`** (S-07).
  */
 
-export const exportFormatSchema = z.enum(["xlsx", "pdf"]);
+export const exportFormatSchema = z.enum(["xlsx", "pdf", "csv"]);
 
 /** Rows one export may carry: past it, narrow the filters. */
 export const EXPORT_ROW_LIMIT = 10_000;

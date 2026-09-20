@@ -380,6 +380,134 @@ describe('AccountService (US-030, US-031, US-032)', () => {
     });
   });
 
+  describe('correcting terms before disbursement (US-030)', () => {
+    it('rebuilds the schedule from the new terms — 10,000 at 100 becomes 12,000 at 150, with a new target date, audited', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const pending = await service.create(context, terms(), SATURDAY);
+        const before = await service.schedule(context, pending.id);
+
+        const corrected = await service.updateTerms(
+          context,
+          pending.id,
+          {
+            accountAmount: '12000',
+            investedAmount: '10200',
+            dailyAmount: '150',
+            termDays: 100,
+            disbursementDate: SATURDAY,
+          },
+          SATURDAY,
+        );
+
+        expect(corrected).toMatchObject({
+          status: 'PENDING',
+          accountAmount: '12000.00',
+          investedAmount: '10200.00',
+          // P = A − I, derived and never sent (BR-01).
+          profitAmount: '1800.00',
+          dailyAmount: '150.00',
+          outstandingAmount: '12000.00',
+        });
+
+        const after = await service.schedule(context, corrected.id);
+        // ceil(12,000 / 150) = 80 slots, where 10,000 at 100 took 100.
+        expect(before.slots).toHaveLength(100);
+        expect(after.slots).toHaveLength(80);
+        expect(sum(after.slots.map((slot) => slot.expectedAmount))).toBe(
+          1_200_000n,
+        );
+        expect(corrected.targetCompletionDate).toBe(
+          after.slots.at(-1)!.dueDate,
+        );
+        // The code never changes: it is the same account, corrected.
+        expect(corrected.accountCode).toBe(pending.accountCode);
+
+        expect(
+          await tx.auditLog.findFirst({
+            where: { entityId: pending.id, action: 'UPDATE' },
+          }),
+        ).not.toBeNull();
+      });
+    });
+
+    it('refuses once the account is disbursed — the amounts are fixed from then on', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const account = await service.create(
+          context,
+          terms({ disburse: true }),
+          SATURDAY,
+        );
+
+        await expect(
+          service.updateTerms(
+            context,
+            account.id,
+            {
+              accountAmount: '12000',
+              investedAmount: '10200',
+              dailyAmount: '150',
+              termDays: 100,
+              disbursementDate: SATURDAY,
+            },
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_PENDING' });
+      });
+    });
+
+    it('refuses to move a pending account into the past, which is how a mid-term account is entered', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const pending = await service.create(context, terms(), SATURDAY);
+
+        await expect(
+          service.updateTerms(
+            context,
+            pending.id,
+            {
+              accountAmount: '10000',
+              investedAmount: '8500',
+              dailyAmount: '100',
+              termDays: 100,
+              disbursementDate: '2026-01-02',
+            },
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'DISBURSEMENT_DATE_IN_PAST' });
+      });
+    });
+
+    it('another organization’s account is not found', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const elsewhere = await world(tx);
+        const theirs = await elsewhere.service.create(
+          elsewhere.context,
+          elsewhere.terms(),
+          SATURDAY,
+        );
+
+        await expect(
+          service.updateTerms(
+            context,
+            theirs.id,
+            {
+              accountAmount: '10000',
+              investedAmount: '8500',
+              dailyAmount: '100',
+              termDays: 100,
+              disbursementDate: SATURDAY,
+            },
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
+        expect(terms).toBeDefined();
+      });
+    });
+  });
+
   describe('disbursement (US-032, BR-18)', () => {
     it('activates the account and posts receivable 10,000 against office cash 8,500 and unearned profit 1,500, balanced', async () => {
       await withRollback(prisma, async (tx) => {

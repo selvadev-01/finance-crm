@@ -203,6 +203,22 @@ export const accountContract = {
     responses: { 201: accountSchema, ...errors, 422: errorSchema },
   }),
 
+  updateAccountTerms: route({
+    method: "PATCH",
+    path: "/api/accounts/:accountId",
+    summary: "Correct a PENDING account’s terms before it is disbursed (US-030)",
+    pathParams: accountParams,
+    /**
+     * The whole set of terms, checked exactly as at creation (BR-01). The
+     * customer does not change: an account on the wrong customer is cancelled
+     * and entered again, not edited.
+     */
+    // Inline, not `accountTermsSchema`: the exported alias widens the type
+    // and the handler then loses `params` and `body`.
+    body: z.object(termsShape).superRefine(checkTerms),
+    responses: { 200: accountSchema, ...errors, 422: errorSchema },
+  }),
+
   disburseAccount: route({
     method: "POST",
     path: "/api/accounts/:accountId/disbursement",

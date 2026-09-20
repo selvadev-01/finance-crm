@@ -30,7 +30,7 @@ The split is deliberate: keeping Rasi data out of the generated tables means `be
 - A staff member is created by an Admin, never self-registered. The one exception is the owner of a new organization, who signs up publicly as its Super Admin ([ADR-0012](../../02-architecture/adr/0012-organization-sign-up.md)).
 - Role is single-valued — Senior or Junior, never both.
 - `status` gates sign-in: only `ACTIVE` may authenticate. `SUSPENDED` and `INACTIVE` are refused with a message that does not reveal whether the password was correct.
-- Soft delete (`deletedAt`) is blocked while the staff member holds an open line assignment or has unacknowledged cash.
+- Soft delete (`deletedAt`) is blocked while the staff member holds an open line assignment or has unacknowledged cash. **Built 2026-09-20:** `DELETE /api/staff/:staffProfileId` (`staff.delete`, **Admin and above** — a new matrix row; decided 2026-09-20, since Admins already create, suspend and reset passwords, and the rank rule still stops them touching anyone senior). The row stays and `deletedAt` is set: their collections, handovers and audit entries name them, and history that loses its actor is not history. They vanish from every list and their sessions are revoked. **Blocked, never acknowledged away** — unlike a suspension, which offers `acknowledgeOnDuty` — while they hold an open assignment, have a handover still unacknowledged (either side), or have collections still on their phone; and never on yourself (`422 CANNOT_DELETE_SELF`). The console shows **Delete** last on the staff page, and the dialog lists the reasons when the API refuses.
 
 ### Session duration is a field-driven decision
 
@@ -190,7 +190,7 @@ In `apps/api/src/identity/staff-admin.service.ts`, on the Team read model above.
 
 **The console** is S-14, extended rather than duplicated: "Add staff" on `/team` (Admin+) opens a dialog whose second step shows the temporary password once; `/team/:staffProfileId` adds "Edit details", "Change role" (Super Admin), and "Suspend"/"Reactivate" last in the header, each behind a confirmation naming the consequence. `STAFF_ON_DUTY` becomes a second dialog listing each reason before `acknowledgeOnDuty` is offered.
 
-**`INACTIVE` has no console control yet.** The endpoint accepts it — "they have left the business", as distinct from a suspension — but the screen offers only Suspend and Reactivate, which is what the matrix names.
+**`INACTIVE` is “Mark as left” in the console (2026-09-20).** The staff page offers Suspend (temporary) and Mark as left (they have gone for good) separately, and Reactivate from either. Each dialog names its own consequence, and the departure one says the record, collections and history are kept. The on-duty and unsynced-collection guards are the endpoint’s, unchanged.
 
 **Notifications are not raised.** M01's `staff.created`, `staff.suspended` and `staff.role_changed` events have no consumer besides M13, which is served by the audit entry; adding notices is an M10 decision, not an implicit one.
 

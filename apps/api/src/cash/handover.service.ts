@@ -443,6 +443,15 @@ export class HandoverService {
         businessDate: parseCalendarDate(view!.businessDate),
         discrepancy: view!.discrepancy,
       });
+      // US-062: the sender hears that their cash arrived, and with what count.
+      await this.notices.handoverAcknowledged({
+        actorUserId: context.userId,
+        fromUserId: view!.fromUserId,
+        lineName: view!.lineName,
+        businessDate: parseCalendarDate(view!.businessDate),
+        countedAmount: view!.declaredAmount,
+        discrepancy: view!.discrepancy,
+      });
       return view!;
     });
   }

@@ -147,6 +147,19 @@ export const staffStatusChangeSchema = staffDutySchema.extend({
   sessionsRevoked: z.number().int().min(0),
 });
 
+/**
+ * What a soft delete removed (US-092). The record itself stays: their
+ * collections, handovers and audit entries name them, and history that loses
+ * its actor is not history.
+ */
+export const staffDeletionSchema = z.object({
+  staffProfileId: idSchema,
+  name: z.string(),
+  deletedAt: z.string(),
+  /** Sessions deleted with them: they can never sign in again. */
+  sessionsRevoked: z.number().int().min(0),
+});
+
 export const staffContract = {
   listStaff: route({
     method: "GET",
@@ -240,6 +253,20 @@ export const staffContract = {
     },
   }),
 
+  deleteStaff: route({
+    method: "DELETE",
+    path: "/api/staff/:staffProfileId",
+    summary: "Soft-delete a staff member who has left, keeping their history (US-092)",
+    pathParams: z.object({ staffProfileId: idSchema }),
+    responses: {
+      200: staffDeletionSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      422: errorSchema,
+    },
+  }),
+
   changeStaffStatus: route({
     method: "POST",
     path: "/api/staff/:staffProfileId/status",
@@ -284,6 +311,7 @@ export const staffContract = {
 export type PasswordReset = z.infer<typeof passwordResetSchema>;
 export type Me = z.infer<typeof meSchema>;
 export type StaffSummary = z.infer<typeof staffSummarySchema>;
+export type StaffDeletion = z.infer<typeof staffDeletionSchema>;
 export type StaffDetail = z.infer<typeof staffDetailSchema>;
 export type CreateStaffRequest = z.infer<typeof createStaffSchema>;
 export type StaffCreated = z.infer<typeof staffCreatedSchema>;

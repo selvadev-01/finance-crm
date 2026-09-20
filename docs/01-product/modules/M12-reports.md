@@ -99,7 +99,11 @@ Still deferred: CSV, scheduled report delivery by email, and custom report build
 
 ---
 
-## As built — Excel and PDF export (2026-09-19)
+## As built — Excel, PDF and CSV export (2026-09-19, CSV 2026-09-20)
+
+**CSV (US-087, 2026-09-20)** is the third format on the same ten routes: `?format=csv`, one `ExportDocument` rendered three ways, so the figures cannot differ between them. A CSV has no sheets, so the sections follow one another under their own titles with a blank line between, headed by the same facts — period, filters, when the figures were read — because a file that outlives its download folder has to explain itself.
+
+Two details that are not decoration: the file starts with a **byte-order mark**, so Excel reads it as UTF-8 and rupee signs and Tamil names survive rather than arriving as mojibake; and a field beginning `=`, `+`, `@` or a lone `-` is **prefixed with an apostrophe**, so a customer named `=cmd()` cannot run as a formula when the file is opened. A plain negative number is left alone, so `-20.00` still sums.
 
 Every report, every dashboard and the collection list can be downloaded as an Excel workbook or a PDF. Ten routes, each `GET` with the view's own filters plus `format=xlsx|pdf`:
 

@@ -43,6 +43,8 @@ describe('accounts (M05, US-030, e2e)', () => {
     get: (path: string) => http().get(path).set('Cookie', cookies[role]),
     post: (path: string, body?: object) =>
       http().post(path).set('Cookie', cookies[role]).send(body),
+    patch: (path: string, body?: object) =>
+      http().patch(path).set('Cookie', cookies[role]).send(body),
   });
 
   const terms = (overrides: object = {}) => ({
@@ -291,6 +293,79 @@ describe('accounts (M05, US-030, e2e)', () => {
    * posts to the ledger, which Tier 2 may never write, and is proven in Tier 1
    * (`test/accounts/account.service.spec.ts`).
    */
+  /**
+   * US-030 over HTTP: correcting a pending account's terms. Nothing here is
+   * ever disbursed, so no ledger row is written (see the file's note).
+   */
+  describe('correcting terms before disbursement (US-030)', () => {
+    const newTerms = (overrides: object = {}) => ({
+      accountAmount: '12000',
+      investedAmount: '10200',
+      dailyAmount: '150',
+      termDays: 100,
+      disbursementDate: today,
+      ...overrides,
+    });
+
+    it('an Admin corrects a pending account, and the response carries the new figures', async () => {
+      const pending = await as('ADMIN')
+        .post('/api/accounts', terms())
+        .expect(201);
+
+      const corrected = await as('ADMIN')
+        .patch(`/api/accounts/${pending.body.id}`, newTerms())
+        .expect(200);
+      expect(corrected.body).toMatchObject({
+        id: pending.body.id,
+        accountCode: pending.body.accountCode,
+        status: 'PENDING',
+        accountAmount: '12000.00',
+        profitAmount: '1800.00',
+        dailyAmount: '150.00',
+      });
+
+      const schedule = await as('ADMIN')
+        .get(`/api/accounts/${pending.body.id}/schedule`)
+        .expect(200);
+      expect(schedule.body.slots).toHaveLength(80);
+    });
+
+    it('BR-01 is checked exactly as at creation, at the field', async () => {
+      const pending = await as('ADMIN')
+        .post('/api/accounts', terms())
+        .expect(201);
+
+      const invested = await as('ADMIN')
+        .patch(
+          `/api/accounts/${pending.body.id}`,
+          newTerms({ investedAmount: '12500' }),
+        )
+        .expect(400);
+      expect(invested.body.details).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'investedAmount' }),
+        ]),
+      );
+    });
+
+    it('a Senior or Junior cannot correct terms, and another organization’s account is 404', async () => {
+      const pending = await as('ADMIN')
+        .post('/api/accounts', terms())
+        .expect(201);
+
+      for (const role of ['SENIOR', 'JUNIOR'] as const) {
+        const refused = await as(role)
+          .patch(`/api/accounts/${pending.body.id}`, newTerms())
+          .expect(403);
+        expect(refused.body.code).toBe('PERMISSION_DENIED');
+      }
+
+      await as('ADMIN')
+        .patch('/api/accounts/does-not-exist', newTerms())
+        .expect(404);
+    });
+  });
+
   describe('closing an account (US-035)', () => {
     /** An ACTIVE account with no ledger rows, so cleanup can remove it. */
     const activeAccount = async () =>

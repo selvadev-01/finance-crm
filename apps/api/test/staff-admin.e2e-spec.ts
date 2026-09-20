@@ -43,6 +43,8 @@ describe('staff administration (US-092, e2e)', () => {
       request(app.getHttpServer()).patch(path).set('Cookie', cookies[who]!),
     get: (path: string) =>
       request(app.getHttpServer()).get(path).set('Cookie', cookies[who]!),
+    delete: (path: string) =>
+      request(app.getHttpServer()).delete(path).set('Cookie', cookies[who]!),
   });
 
   const newStaff = (overrides: Record<string, unknown> = {}) => ({
@@ -279,6 +281,68 @@ describe('staff administration (US-092, e2e)', () => {
       expect(response.body.details).toEqual([
         expect.objectContaining({ field: 'role' }),
       ]);
+    });
+  });
+
+  describe('DELETE /api/staff/:staffProfileId', () => {
+    it('a Super Admin deletes someone who has left: gone from the list, signed out, record kept', async () => {
+      const person = await subject();
+
+      const removed = await as('superAdmin')
+        .delete(`/api/staff/${person.staffProfileId}`)
+        .expect(200);
+      expect(removed.body).toMatchObject({
+        staffProfileId: person.staffProfileId,
+        sessionsRevoked: expect.any(Number),
+      });
+      expect(removed.body.deletedAt).toEqual(expect.any(String));
+
+      // Gone from the directory, and a second delete cannot find them.
+      const listed = await as('superAdmin')
+        .get('/api/staff?limit=200')
+        .expect(200);
+      expect(
+        listed.body.data.map(
+          (row: { staffProfileId: string }) => row.staffProfileId,
+        ),
+      ).not.toContain(person.staffProfileId);
+      await as('superAdmin')
+        .delete(`/api/staff/${person.staffProfileId}`)
+        .expect(404);
+      // The row itself stays: history keeps its actor.
+      expect(
+        await prisma.staffProfile.findUnique({
+          where: { id: person.staffProfileId },
+        }),
+      ).not.toBeNull();
+    });
+
+    it('an Admin may delete too (decided 2026-09-20); a Senior or Junior may not', async () => {
+      const person = await subject();
+      for (const who of ['senior', 'junior']) {
+        const refused = await as(who)
+          .delete(`/api/staff/${person.staffProfileId}`)
+          .expect(403);
+        expect(refused.body.code).toBe('PERMISSION_DENIED');
+      }
+      expect(
+        (
+          await prisma.staffProfile.findUniqueOrThrow({
+            where: { id: person.staffProfileId },
+          })
+        ).deletedAt,
+      ).toBeNull();
+
+      // An Admin may remove someone who has left — but never the owner.
+      const other = await subject();
+      await as('admin')
+        .delete(`/api/staff/${other.staffProfileId}`)
+        .expect(200);
+      const owner = await subject('SUPER_ADMIN');
+      const refused = await as('admin')
+        .delete(`/api/staff/${owner.staffProfileId}`)
+        .expect(403);
+      expect(refused.body.code).toBe('CANNOT_MANAGE_HIGHER_ROLE');
     });
   });
 

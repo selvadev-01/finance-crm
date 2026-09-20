@@ -149,6 +149,41 @@ export class EventNotices {
     });
   }
 
+  /**
+   * US-020 (§12 "new customer"): the Senior of the line the customer joins
+   * hears that someone new is on their round. The Admin who onboarded them
+   * is not told of their own action.
+   */
+  async customerOnboarded(event: {
+    actorUserId: string;
+    customerId: string;
+    customerCode: string;
+    customerName: string;
+    lineId: string;
+    lineName: string;
+  }): Promise<void> {
+    const tx = this.database.client;
+    const senior = await this.recipients.seniorOf(
+      tx,
+      event.lineId,
+      toBusinessDate(new Date()),
+    );
+    const by = await this.recipients.nameOf(tx, event.actorUserId);
+    await this.notifications.raise({
+      recipients: [senior],
+      actorUserId: event.actorUserId,
+      category: 'INFORMATION',
+      eventType: 'NEW_CUSTOMER',
+      title: `New customer · ${event.lineName}`,
+      body: `${by} onboarded ${event.customerName} (${event.customerCode}) onto ${event.lineName}`,
+      link: {
+        entityType: 'customer',
+        entityId: event.customerId,
+        url: `/customers/${event.customerId}`,
+      },
+    });
+  }
+
   /** M03: the person assigned, and the Seniors of the lines involved. */
   async assignmentMade(event: {
     actorUserId: string;
@@ -253,6 +288,36 @@ export class EventNotices {
       eventType: 'HANDOVER_SUBMITTED',
       title: `Cash to acknowledge · ${event.lineName}`,
       body: `${sender} handed over ${rupees(event.declaredAmount)} for ${dateText(event.businessDate)}${differs ? ` (${rupees(event.discrepancy)} against the record)` : ''}`,
+      link: { entityType: 'cash_handover', entityId: null, url: '/cash' },
+    });
+  }
+
+  /**
+   * US-062: the cash is settled, so the person who handed it over is told.
+   * The receiver acted, and is never notified of their own action.
+   */
+  async handoverAcknowledged(event: {
+    actorUserId: string;
+    fromUserId: string;
+    lineName: string;
+    businessDate: CalendarDate;
+    countedAmount: string;
+    discrepancy: string;
+  }): Promise<void> {
+    const receiver = await this.recipients.nameOf(
+      this.database.client,
+      event.actorUserId,
+    );
+    const differs = event.discrepancy !== '0.00';
+    await this.notifications.raise({
+      recipients: [event.fromUserId],
+      actorUserId: event.actorUserId,
+      // A difference is already an ALERT of its own to the Senior and Admins
+      // (`handoverDiscrepancy`); this one tells the sender their cash arrived.
+      category: differs ? 'WARNING' : 'SUCCESS',
+      eventType: 'HANDOVER_ACKNOWLEDGED',
+      title: `Cash received · ${event.lineName}`,
+      body: `${receiver} counted ${rupees(event.countedAmount)} for ${dateText(event.businessDate)}${differs ? `, ${rupees(event.discrepancy)} against what you declared` : ''}`,
       link: { entityType: 'cash_handover', entityId: null, url: '/cash' },
     });
   }
@@ -368,6 +433,41 @@ export class EventNotices {
   }
 
   /** US-095: every mismatch is an ALERT to Admins and Super Admins. */
+  /**
+   * BR-05 / US-033: accounts that went past their target date with money
+   * still owed, found by the nightly job (M14). One summary per line, not one
+   * per account — a hundred ageing accounts is one thing to look at, and the
+   * overdue report (US-087) is where the list lives.
+   *
+   * A `WARNING`, not an `ALERT` (decided 2026-09-20): going overdue is
+   * expected on a slow account, and the loud events stay the low and
+   * no-payment visits of a single day.
+   */
+  async accountsOverdue(event: {
+    lineId: string;
+    count: number;
+    today: CalendarDate;
+  }): Promise<void> {
+    if (event.count === 0) return;
+    const senior = await this.recipients.seniorOf(
+      this.database.client,
+      event.lineId,
+      event.today,
+    );
+    await this.notifications.raise({
+      recipients: [senior],
+      category: 'WARNING',
+      eventType: 'ACCOUNT_OVERDUE',
+      title: `${event.count === 1 ? 'An account is' : `${event.count} accounts are`} overdue`,
+      body: `${event.count === 1 ? 'It has' : 'They have'} passed the target completion date with money still owed.`,
+      link: {
+        entityType: 'account_loan',
+        entityId: null,
+        url: `/reports/overdue?line=${event.lineId}`,
+      },
+    });
+  }
+
   async reconciliationMismatch(event: {
     organizationId: string;
     rebuilt: number;

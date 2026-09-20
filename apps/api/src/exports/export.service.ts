@@ -12,6 +12,7 @@ import {
   type RenderedExport,
   rowCount,
 } from './export-document.js';
+import { renderCsv } from './csv-renderer.js';
 import { renderPdf } from './pdf-renderer.js';
 import { renderXlsx } from './xlsx-renderer.js';
 
@@ -91,7 +92,9 @@ export class ExportService {
     const bytes =
       format === 'xlsx'
         ? await renderXlsx(document)
-        : await renderPdf(document);
+        : format === 'csv'
+          ? renderCsv(document)
+          : await renderPdf(document);
     return {
       bytes,
       filename: `${safeFilename(document.filename)}.${format}`,

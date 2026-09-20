@@ -6,7 +6,8 @@ import { useSyncExternalStore } from "react";
  * The Junior's screens are views of one page, told apart by the URL hash
  * (decision 2026-09-14): `/route` is S-01, `/route#collect/<customerId>` S-02,
  * `/route#sync` S-03, `/route#handover` S-06 (which needs signal), and
- * `/route#notifications` S-21 (which needs signal too). The
+ * `/route#notifications` S-21 and `/route#correct` US-044 (which need signal
+ * too). The
  * service worker caches pages by exact URL, so separate `/route/collect/<id>`
  * pages would not open offline for a customer whose page was never visited
  * with signal — a hash never reaches the network, and every view is the one
@@ -17,7 +18,8 @@ export type View =
   | { name: "collect"; customerId: string }
   | { name: "sync" }
   | { name: "handover" }
-  | { name: "notifications" };
+  | { name: "notifications" }
+  | { name: "correct" };
 
 const ROUTE: View = { name: "route" };
 
@@ -26,6 +28,7 @@ export function parseView(hash: string): View {
   if (value === "sync") return { name: "sync" };
   if (value === "handover") return { name: "handover" };
   if (value === "notifications") return { name: "notifications" };
+  if (value === "correct") return { name: "correct" };
   const collect = /^collect\/([\w-]+)$/.exec(value);
   if (collect) return { name: "collect", customerId: collect[1]! };
   return ROUTE;

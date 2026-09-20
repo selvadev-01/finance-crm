@@ -66,6 +66,7 @@ const ROW_PERMISSIONS: Record<string, Permission | null> = {
   'Administration (M01, M13, M15) › Update staff details': 'staff.update',
   'Administration (M01, M13, M15) › Change staff role': 'staff.changeRole',
   'Administration (M01, M13, M15) › Suspend staff': 'staff.suspend',
+  'Administration (M01, M13, M15) › Delete staff (soft)': 'staff.delete',
   "Administration (M01, M13, M15) › Reset another's password":
     'staff.resetPassword',
   'Administration (M01, M13, M15) › View audit log': 'audit.view',

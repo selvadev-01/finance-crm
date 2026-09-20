@@ -8,6 +8,7 @@ import {
 } from "@repo/contracts";
 import {
   DownloadSimple,
+  FileCsv,
   FilePdf,
   FileXls,
   SpinnerGap,
@@ -91,6 +92,10 @@ export function ExportMenu<Route extends RouteDefinition & { file: true }>({
         <Menu.Item onSelect={() => void run("xlsx")}>
           <FileXls aria-hidden size={16} />
           Excel (.xlsx)
+        </Menu.Item>
+        <Menu.Item onSelect={() => void run("csv")}>
+          <FileCsv aria-hidden size={16} />
+          CSV
         </Menu.Item>
         <Menu.Item onSelect={() => void run("pdf")}>
           <FilePdf aria-hidden size={16} />

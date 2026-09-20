@@ -142,6 +142,8 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 ## Events
 
+> **As built: no event bus exists** (decided 2026-09-15, [M13](M13-audit.md#as-built)). The events below name what _would_ be published; nothing publishes or consumes them. What they were for is covered directly: the audit log records every change with its actor, dashboards read state from the database, and a notification is raised only where [M10](M10-notifications.md#categories-and-events) catalogues one and a service calls `EventNotices`.
+
 **Emitted:** `account.created`, `account.disbursed` (→ M09 ledger), `account.completed` (→ M10), `account.overdue` (→ M10), `account.written_off` (→ M09).
 
 **Consumed:** `collection.confirmed` (M07) → recompute balances, regenerate tail, check completion. `holiday.declared` (M06) → shift affected pending slots (as built: `HolidayService` shifts them directly in the declaring transaction, [M06 as built](M06-working-calendar.md#as-built--holidays-us-093-2026-09-17)).
@@ -156,6 +158,7 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 | --------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /api/accounts/preview`                        | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                                                                                    |
 | `POST /api/accounts`                                | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`; `disburse: true` also disburses a day-one account |
+| `PATCH /api/accounts/:accountId`                    | `account.updateTerms`  | `400` (BR-01, at the field), `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_PAST`                                                                |
 | `POST /api/accounts/:accountId/disbursement`        | `account.disburse`     | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`                                                                                           |
 | `POST /api/accounts/:accountId/closure`             | `account.close`        | `404`, `422 ACCOUNT_NOT_ACTIVE`; `400` without a reason. Super Admin only                                                                                     |
 | `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                               |
@@ -174,6 +177,13 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 - The status change is a conditional update from `PENDING`, so a concurrent second disbursement is refused before it writes anything.
 - The BR-18 posting goes through `LedgerService` in the same transaction.
 - A pending account whose planned date has passed is disbursed today: its disbursement date moves, its schedule is regenerated, and the audit entry records both dates.
+
+**Correcting terms before disbursement (US-030, 2026-09-20).** `PATCH /api/accounts/:accountId` takes the whole set of terms and checks them exactly as creation does (BR-01, in the contract). Only a `PENDING` account: after disbursement the amounts are immutable in the service and in the database (`constraints_account_lifecycle`), so this is the only window in which a typo can be fixed rather than written off.
+
+- The plan is rebuilt by the same code creation uses, so the schedule, first collection date and target date cannot drift from a fresh account on those terms. The account code never changes.
+- **A past disbursement date is refused** (`422 DISBURSEMENT_DATE_IN_PAST`): that is how a mid-term account is entered (US-030a), which needs a collected-to-date figure and posts to the ledger — a new account, not a correction.
+- The customer is not editable here: an account on the wrong customer is a different account.
+- The console shows **Correct terms** beside Disburse while the account is pending.
 
 **Closing by hand (US-035, 2026-09-20).** `POST /api/accounts/:accountId/closure` takes `DEFAULTED` or `WRITTEN_OFF` and a mandatory reason, kept as `closureNote`. Super Admin only (`account.close`): a write-off destroys receivable value, and must not be a way for an Admin to tidy away a difficult account.
 

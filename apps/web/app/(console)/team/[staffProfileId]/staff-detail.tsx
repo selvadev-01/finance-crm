@@ -19,6 +19,7 @@ import {
   Section,
 } from "@repo/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { identityColumn, valueColumn } from "../../../../components/columns";
@@ -29,6 +30,7 @@ import { formatMobile } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import {
   canChangeRoleOf,
+  canDeleteStaff,
   canChangeStatusOf,
   canEditStaff,
   canManageOrganisation,
@@ -42,12 +44,21 @@ import { AssignDialog } from "../../_organisation/assign-dialog";
 import {
   ChangeRoleDialog,
   ChangeStatusDialog,
+  DeleteStaffDialog,
   EditStaffDialog,
 } from "../staff-dialogs";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 
 type Open =
-  "assign" | "reset" | "edit" | "role" | "suspend" | "reactivate" | null;
+  | "assign"
+  | "reset"
+  | "edit"
+  | "role"
+  | "suspend"
+  | "deactivate"
+  | "reactivate"
+  | "delete"
+  | null;
 type AssignmentRow = StaffDetail["assignments"][number];
 
 /** A staff member: today's line, contact details and assignment history (US-014, US-015). */
@@ -58,6 +69,7 @@ export function StaffDetailView({
 }) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
+  const router = useRouter();
   const [open, setOpen] = useState<Open>(null);
 
   const person = useApiQuery(staffContract.getStaff, {
@@ -119,15 +131,32 @@ export function StaffDetailView({
             ) : null}
             {/* Last: the destructive action never sits where Enter finds it. */}
             {canChangeStatusOf(me, record) ? (
-              record.status === "ACTIVE" ? (
-                <Button tone="danger" onClick={() => setOpen("suspend")}>
-                  Suspend
-                </Button>
-              ) : (
-                <Button onClick={() => setOpen("reactivate")}>
-                  Reactivate
-                </Button>
-              )
+              <>
+                {record.status !== "ACTIVE" ? (
+                  <Button onClick={() => setOpen("reactivate")}>
+                    Reactivate
+                  </Button>
+                ) : null}
+                {/* Suspension is temporary; "left the business" is not, and
+                    M01 keeps them apart. Neither deletes anything. */}
+                {record.status === "ACTIVE" ? (
+                  <Button tone="danger" onClick={() => setOpen("suspend")}>
+                    Suspend
+                  </Button>
+                ) : null}
+                {record.status !== "INACTIVE" ? (
+                  <Button tone="danger" onClick={() => setOpen("deactivate")}>
+                    Mark as left
+                  </Button>
+                ) : null}
+                {/* US-092: removal is Super Admin only and cannot be undone,
+                    so it sits last and never where Enter finds it. */}
+                {canDeleteStaff(me, record) ? (
+                  <Button tone="danger" onClick={() => setOpen("delete")}>
+                    Delete
+                  </Button>
+                ) : null}
+              </>
             ) : null}
           </>
         }
@@ -268,10 +297,27 @@ export function StaffDetailView({
           }}
         />
       ) : null}
-      {open === "suspend" || open === "reactivate" ? (
+      {open === "delete" ? (
+        <DeleteStaffDialog
+          staff={record}
+          onClose={() => setOpen(null)}
+          onDeleted={() => {
+            setOpen(null);
+            router.replace("/team");
+          }}
+        />
+      ) : null}
+
+      {open === "suspend" || open === "deactivate" || open === "reactivate" ? (
         <ChangeStatusDialog
           staff={record}
-          status={open === "suspend" ? "SUSPENDED" : "ACTIVE"}
+          status={
+            open === "suspend"
+              ? "SUSPENDED"
+              : open === "deactivate"
+                ? "INACTIVE"
+                : "ACTIVE"
+          }
           onClose={() => setOpen(null)}
           onChanged={() => {
             setOpen(null);

@@ -3,6 +3,7 @@ import { type CalendarDate, toUtcMidnight } from '@repo/domain';
 
 import type { SystemContext } from '../platform/context/system-context.js';
 import { Database } from '../platform/database/database.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import { SettingReader } from '../settings/setting-reader.js';
 import { overdueCutoff } from './overdue-cutoff.js';
 
@@ -29,6 +30,7 @@ export class OverdueService {
   constructor(
     private readonly database: Database,
     private readonly settings: SettingReader,
+    private readonly notices: EventNotices,
   ) {}
 
   async flag(
@@ -42,7 +44,10 @@ export class OverdueService {
     // An account is behind only once its target is more than `grace` days past.
     const day = toUtcMidnight(overdueCutoff(today, grace));
     return this.database.transaction(async (tx) => {
-      const flagged = await tx.accountLoan.updateMany({
+      // Read the accounts about to flip before flipping them: the Senior of
+      // each line is told how many went overdue (US-033), and an updateMany
+      // cannot say which rows it touched.
+      const going = await tx.accountLoan.findMany({
         where: {
           organizationId: system.organizationId,
           status: 'ACTIVE',
@@ -50,6 +55,10 @@ export class OverdueService {
           outstandingAmount: { gt: 0 },
           targetCompletionDate: { lt: day },
         },
+        select: { id: true, customer: { select: { lineId: true } } },
+      });
+      const flagged = await tx.accountLoan.updateMany({
+        where: { id: { in: going.map((account) => account.id) } },
         data: { isOverdue: true },
       });
       const cleared = await tx.accountLoan.updateMany({
@@ -64,6 +73,15 @@ export class OverdueService {
         },
         data: { isOverdue: false },
       });
+      // One notice per line, in this transaction: no flag, no notice.
+      const byLine = new Map<string, number>();
+      for (const account of going) {
+        const lineId = account.customer.lineId;
+        byLine.set(lineId, (byLine.get(lineId) ?? 0) + 1);
+      }
+      for (const [lineId, count] of byLine) {
+        await this.notices.accountsOverdue({ lineId, count, today });
+      }
       return { flagged: flagged.count, cleared: cleared.count };
     });
   }

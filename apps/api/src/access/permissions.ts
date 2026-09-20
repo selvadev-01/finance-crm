@@ -79,6 +79,7 @@ export const PERMISSIONS = {
   'staff.changeRole': SUPER_ADMIN,
   'staff.suspend': ADMINS,
   'staff.resetPassword': ADMINS,
+  'staff.delete': ADMINS,
   'audit.view': ADMINS,
   // Reading the settings shows how the business behaves; changing one alters
   // it for everyone (M15). Both are the owner's alone.

@@ -21,6 +21,7 @@ import {
   lineScope,
 } from '../access/scope.js';
 import { AuditWriter } from '../audit/audit.writer.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { ConflictError, DomainError } from '../platform/errors/errors.js';
@@ -108,6 +109,7 @@ export class CustomerService {
   constructor(
     private readonly database: Database,
     private readonly audit: AuditWriter,
+    private readonly notices: EventNotices,
   ) {}
 
   async list(
@@ -229,6 +231,16 @@ export class CustomerService {
           references: customer.references.length,
           duplicateMobileConfirmed: input.confirmDuplicateMobile,
         },
+      });
+      // US-020, §12: the line's Senior hears who has joined their round, in
+      // this transaction — no customer, no notice.
+      await this.notices.customerOnboarded({
+        actorUserId: context.userId,
+        customerId: customer.id,
+        customerCode: customer.customerCode,
+        customerName: customer.name,
+        lineId: customer.lineId,
+        lineName: customer.line.name,
       });
       return toDetail(customer);
     });

@@ -152,6 +152,10 @@ The most important screen in the application (see [personas](../../00-overview/p
 
 ## As built
 
+**The Junior asks from the field app (US-044, 2026-09-20).** `/route#correct` lists the Junior’s own collections for today and sends a request naming what was actually collected and why. It **needs signal**, unlike recording: a correction is a request to a person, and one queued on a phone would be an approval nobody knows is waiting — the screen says so, and says collections still save without signal, so the difference does not read as a failure.
+
+**History is newest first, by business date (US-045, 2026-09-20).** `GET /api/collections` and the customer history page on `(businessDate, id)` descending rather than on the id alone: a cuid is only accidentally chronological, and a collection synced late carries an older business date with a newer id (BR-15). The id breaks ties, so a page boundary can neither repeat nor drop a row.
+
 In `apps/api/src/collections/`, through `packages/contracts/src/collection.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
 
 | Endpoint                                              | Permission                     | Answers                                                                                                                                                                           |

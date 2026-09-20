@@ -447,6 +447,23 @@ describe("offline outbox (offline-sync.md, BR-13)", () => {
       );
       expect((await listOutbox(db)).length).toBe(BLOCK_AT);
     });
+
+    it("surfaces a storage failure instead of losing the collection quietly", async () => {
+      await record(db, "acc-1", "100");
+      const before = await listOutbox(db);
+
+      // The store becoming unusable — an evicted or closed database, which is
+      // what a phone out of room eventually does.
+      db.close();
+
+      await expect(record(db, "acc-2", "50")).rejects.toThrow();
+
+      // Nothing half-written, and the Junior is told: the route screen shows
+      // "Could not save on this phone", never a silent success.
+      const reopened = await openFieldDb(db.name);
+      expect(await listOutbox(reopened)).toEqual(before);
+      reopened.close();
+    });
   });
 
   describe("US-051 route available offline, balances updated locally", () => {

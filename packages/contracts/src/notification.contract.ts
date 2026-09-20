@@ -30,6 +30,9 @@ export const notificationEventSchema = z.enum([
   "RECONCILIATION_MISMATCH",
   "HOLIDAY_DECLARED",
   "HOLIDAY_REMOVED",
+  "NEW_CUSTOMER",
+  "HANDOVER_ACKNOWLEDGED",
+  "ACCOUNT_OVERDUE",
 ]);
 
 export const notificationSchema = z.object({

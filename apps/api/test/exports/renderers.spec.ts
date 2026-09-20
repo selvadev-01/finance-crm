@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 
 import type { ExportDocument } from '../../src/exports/export-document.js';
+import { renderCsv } from '../../src/exports/csv-renderer.js';
 import { renderPdf } from '../../src/exports/pdf-renderer.js';
 import { renderXlsx } from '../../src/exports/xlsx-renderer.js';
 
@@ -185,5 +186,72 @@ describe('pdf renderer (M12 export)', () => {
     });
     const bytes = await renderPdf(tamil);
     expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+});
+
+describe('CSV (US-087)', () => {
+  const text = (doc: ExportDocument) => renderCsv(doc).toString('utf8');
+
+  it('writes the title, the facts and each section in turn, with the same dash for what could not be read', () => {
+    const csv = text(document(2));
+
+    expect(csv.startsWith('﻿')).toBe(true);
+    const lines = csv.replace(/^﻿/, '').trim().split('\r\n');
+    expect(lines[0]).toBe('Line-wise report');
+    expect(lines[1]).toBe('Period,2026-09-01 to 2026-09-19');
+    // Sections follow one another, each under its own title, separated by a
+    // blank line: a CSV has no sheets.
+    expect(lines).toContain('Today');
+    expect(lines).toContain('Expected,10000.00');
+    // S-07: a figure that could not be read is a dash, never a zero.
+    expect(lines).toContain('Collected,—');
+    expect(lines).toContain('Lines');
+    expect(lines.some((line) => line.startsWith('Line,Date,'))).toBe(true);
+  });
+
+  it('quotes what RFC 4180 needs quoting, and defuses a field a spreadsheet would run as a formula', () => {
+    const csv = text(
+      document(0, {
+        sections: [
+          {
+            kind: 'table',
+            title: 'Customers',
+            columns: [
+              { header: 'Customer', kind: 'text' },
+              { header: 'Note', kind: 'text' },
+              { header: 'Variance', kind: 'money' },
+            ],
+            rows: [
+              ['Kumar, S.', 'Said "later"', '-20.00'],
+              ['=1+1', 'line one\nline two', '0.00'],
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(csv).toContain('"Kumar, S.","Said ""later""",-20.00');
+    // A name that looks like a formula is prefixed so nothing runs on open;
+    // a negative amount is left alone, so it still reads as a number.
+    // Prefixed, and quoted only where RFC 4180 asks for it — which this is not.
+    expect(csv).toContain("'=1+1,");
+    expect(csv).toContain('"line one\nline two"');
+  });
+
+  it('says an empty table is empty rather than printing a bare header', () => {
+    const csv = text(
+      document(0, {
+        sections: [
+          {
+            kind: 'table',
+            title: 'Overdue accounts',
+            columns: [{ header: 'Customer', kind: 'text' }],
+            rows: [],
+            empty: 'Nobody is overdue.',
+          },
+        ],
+      }),
+    );
+    expect(csv).toContain('Nobody is overdue.');
   });
 });

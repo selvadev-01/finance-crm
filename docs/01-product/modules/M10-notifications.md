@@ -139,7 +139,16 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
   | `RECONCILIATION_MISMATCH`                 | `ALERT`       | Admins and Super Admins, one per run; links to the audit log                                              | US-095                             |
   | `HOLIDAY_DECLARED`, `HOLIDAY_REMOVED`     | `WARNING`     | Seniors and Juniors assigned today to the active lines the holiday covers (a sector's, or every line)     | US-093 (M06)                       |
 
-  `NO_PAYMENT_COLLECTION`, `HANDOVER_SUBMITTED`, `HANDOVER_DISPUTED`, `DAY_REOPENED` and `RECONCILIATION_MISMATCH` were added to the enum (migration `notification_events`); `HOLIDAY_DECLARED` and `HOLIDAY_REMOVED` on 2026-09-17 (migration `holiday_events`). A holiday notice links Seniors to `/settings/holidays` and Juniors to `/route`. Not raised: new customer (M04), day closed with no discrepancy, handover acknowledged to the sender.
+  `NO_PAYMENT_COLLECTION`, `HANDOVER_SUBMITTED`, `HANDOVER_DISPUTED`, `DAY_REOPENED` and `RECONCILIATION_MISMATCH` were added to the enum (migration `notification_events`); `HOLIDAY_DECLARED` and `HOLIDAY_REMOVED` on 2026-09-17 (migration `holiday_events`); `NEW_CUSTOMER` and `HANDOVER_ACKNOWLEDGED` on 2026-09-20 (migration `customer_handover_events`). A holiday notice links Seniors to `/settings/holidays` and Juniors to `/route`.
+
+  | `NEW_CUSTOMER` | `INFORMATION` | Senior of the line the customer joins | onboarding (US-020, M04) |
+  | `HANDOVER_ACKNOWLEDGED` | `SUCCESS`, or `WARNING` when the count differs | the sender, never the receiver who acted | acknowledgement (US-062) |
+
+  | `ACCOUNT_OVERDUE` | `WARNING` | Senior of the line — one summary per line per run, not one per account | the nightly overdue job (M14, BR-05) |
+
+  **Decided 2026-09-20 with the business:** an overdue account is a `WARNING`, not an `ALERT` — going overdue is expected on a slow account, and the loud events stay the low and no-payment visits of a single day. The notice links to the overdue report filtered to that line (US-087), which is where the list belongs.
+
+  **Still not raised, both by decision:** a day closed with no discrepancy (the events cover discrepancies only), and anything about staff being created, suspended or removed — the audit log already records who did what, and a notification would tell other Admins about routine administration (decided 2026-09-20).
 
 - **Delivery is an outbox drained every minute**, not a job per notification: the outbox rows are the transactional record, and the `dispatch-notifications` job (M14) calls `PushDispatchService.dispatch` per organization. It claims due `PENDING` rows with `FOR UPDATE SKIP LOCKED`, counts the attempt and leases the row for five minutes, sends through the subscription's provider, then records `SENT`; `PENDING` with the next delay (1 min, 5 min, 30 min, 2 h); or `FAILED` with the error. A `gone` answer, or a fifth failure, deactivates the subscription and expires its other pending rows. Push adds up to a minute of latency to the in-app row, which is immediate.
 - **Providers.** `packages/notifications`: `WebPushProvider` (web-push 3.6.7; 404/410 gone, 429/5xx/network retry, other 4xx failed) and `FcmProvider` (firebase-admin 14.4.0; unregistered/invalid token gone, unavailable/quota/internal retry), each with an injectable transport; `outcome()` holds the retry table once. A provider that is selected but not configured answers `retry`. Configuration refuses to start without the keys of the selected provider.

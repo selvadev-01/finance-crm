@@ -107,6 +107,110 @@ describe('StaffAdminService (US-092)', () => {
     return { context, service, target, assign, unsynced, organization, line };
   }
 
+  describe('soft delete (US-092)', () => {
+    it('keeps the record and its history, signs them out, and hides them from the directory', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, target } = await world(tx);
+        // `target()` leaves them signed in on two devices.
+        const junior = await target();
+
+        const result = await service.softDelete(context, junior.id, today);
+
+        expect(result).toMatchObject({
+          staffProfileId: junior.id,
+          sessionsRevoked: 2,
+        });
+        // The row stays: collections and audit entries name this person.
+        const row = await tx.staffProfile.findUniqueOrThrow({
+          where: { id: junior.id },
+        });
+        expect(row.deletedAt).not.toBeNull();
+        expect(
+          await tx.session.count({ where: { userId: junior.userId } }),
+        ).toBe(0);
+        // Gone from every lookup: a second delete cannot find them.
+        await expect(
+          service.softDelete(context, junior.id, today),
+        ).rejects.toMatchObject({ code: 'STAFF_NOT_FOUND' });
+        expect(
+          await tx.auditLog.findFirst({
+            where: { entityId: junior.id, action: 'DELETE' },
+          }),
+        ).not.toBeNull();
+      });
+    });
+
+    it('is blocked while they hold an open line assignment — no acknowledgement escape', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, target, assign } = await world(tx);
+        const junior = await target();
+        await assign(junior.id, 'JUNIOR');
+
+        await expect(
+          service.softDelete(context, junior.id, today),
+        ).rejects.toMatchObject({ code: 'STAFF_ON_DUTY' });
+        expect(
+          (
+            await tx.staffProfile.findUniqueOrThrow({
+              where: { id: junior.id },
+            })
+          ).deletedAt,
+        ).toBeNull();
+      });
+    });
+
+    it('is blocked while cash they handed over is still unacknowledged', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, target, line } = await world(tx);
+        const junior = await target();
+        const receiver = await target();
+        const day = await tx.dayClose.create({
+          data: {
+            lineId: line.id,
+            businessDate: new Date('2026-01-05'),
+            expectedTotal: '500.00',
+            collectedTotal: '500.00',
+            cashReceivedTotal: '0.00',
+            discrepancy: '-500.00',
+            // A closed day carries when it was closed (constraint).
+            closedAt: new Date('2026-01-05T18:00:00Z'),
+            status: 'CLOSED',
+          },
+        });
+        await tx.cashHandover.create({
+          data: {
+            dayCloseId: day.id,
+            hop: 'JUNIOR_TO_SENIOR',
+            fromUserId: junior.userId,
+            toUserId: receiver.userId,
+            declaredAmount: '500.00',
+            systemAmount: '500.00',
+            discrepancy: '0.00',
+            status: 'PENDING',
+            // The database checks the counts add up to what was declared.
+            denominations: {
+              create: [{ denomination: 500, count: 1, subtotal: '500.00' }],
+            },
+          },
+        });
+
+        await expect(
+          service.softDelete(context, junior.id, today),
+        ).rejects.toMatchObject({ code: 'STAFF_HAS_UNACKNOWLEDGED_CASH' });
+      });
+    });
+
+    it('refuses deleting yourself', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service } = await world(tx);
+
+        await expect(
+          service.softDelete(context, context.staffProfileId, today),
+        ).rejects.toMatchObject({ code: 'CANNOT_DELETE_SELF' });
+      });
+    });
+  });
+
   describe('creating a staff member', () => {
     it('writes the user, its credential and the profile, with a temporary password that signs in once', async () => {
       await withRollback(prisma, async (tx) => {

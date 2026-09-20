@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   CreateStaffRequest,
   StaffCreated,
+  StaffDeletion,
   StaffDetail,
   StaffDuty,
   StaffStatusChange,
@@ -404,6 +405,80 @@ export class StaffAdminService {
         sessionsRevoked: revoked.count,
         openAssignment: losingAccess ? duty.openAssignment : null,
         unsyncedWork: losingAccess ? duty.unsyncedWork : null,
+      };
+    });
+  }
+
+  /**
+   * US-092 soft delete, Super Admin only (`staff.delete`). The row stays and
+   * `deletedAt` is set: their collections, handovers and audit entries name
+   * them, and history that loses its actor is not history. They disappear
+   * from every list and can never sign in again.
+   *
+   * **Blocked, not warned** (M01): while they hold an open line assignment,
+   * while cash they sent or should receive is unacknowledged, or while their
+   * phone still holds collections nobody has received. A suspension is the
+   * reversible action; this one is not, so there is no "do it anyway".
+   */
+  async softDelete(
+    context: RequestContext,
+    staffProfileId: string,
+    today: CalendarDate = toBusinessDate(new Date()),
+  ): Promise<StaffDeletion> {
+    const target = await this.findTarget(context, staffProfileId);
+    await this.assertMayActOn(context, target);
+    if (target.id === context.staffProfileId) {
+      throw new DomainError(
+        'CANNOT_DELETE_SELF',
+        'You cannot delete your own staff record',
+      );
+    }
+
+    return this.database.transaction(async (tx) => {
+      const duty = await this.duty(tx, target.id, today);
+      assertOffDuty(target.name, duty);
+      const cash = await tx.cashHandover.count({
+        where: {
+          status: 'PENDING',
+          OR: [{ fromUserId: target.userId }, { toUserId: target.userId }],
+        },
+      });
+      if (cash > 0) {
+        throw new DomainError(
+          'STAFF_HAS_UNACKNOWLEDGED_CASH',
+          `${target.name} has ${cash === 1 ? 'a handover' : `${cash} handovers`} still waiting to be acknowledged. Settle the cash first.`,
+          [
+            {
+              field: 'staffProfileId',
+              issue: 'has cash that has not been acknowledged',
+            },
+          ],
+        );
+      }
+
+      const deletedAt = new Date();
+      await tx.staffProfile.update({
+        where: { id: target.id },
+        data: { deletedAt },
+      });
+      const revoked = await tx.session.deleteMany({
+        where: { userId: target.userId },
+      });
+      await this.audit.record(context, {
+        action: 'DELETE',
+        entityTable: 'staff_profile',
+        entityId: target.id,
+        before: { status: target.status, deletedAt: null },
+        after: {
+          deletedAt: deletedAt.toISOString(),
+          sessionsRevoked: revoked.count,
+        },
+      });
+      return {
+        staffProfileId: target.id,
+        name: target.name,
+        deletedAt: deletedAt.toISOString(),
+        sessionsRevoked: revoked.count,
       };
     });
   }

@@ -288,6 +288,86 @@ export function ChangeRoleDialog({
  * `acknowledgeOnDuty` offered. The confirm button is never the first control
  * in the dialog.
  */
+/**
+ * US-092 · remove someone who has left for good. Super Admin only, and the
+ * API refuses while they hold a line, have cash unacknowledged, or have
+ * collections still on their phone — there is no "do it anyway" here.
+ */
+export function DeleteStaffDialog({
+  staff,
+  onClose,
+  onDeleted,
+}: {
+  staff: StaffDetail;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [pending, setPending] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string[] | null>(null);
+
+  async function confirm() {
+    setPending(true);
+    setProblem(null);
+    const result = await apiWrite(staffContract.deleteStaff, {
+      params: { staffProfileId: staff.staffProfileId },
+    });
+    setPending(false);
+    if (!result.ok) {
+      if (result.details.length > 0) {
+        return setBlocked(result.details.map((detail) => detail.issue));
+      }
+      return setProblem(result.form ?? "They were not removed.");
+    }
+    toast({
+      title: `${staff.name} removed`,
+      description: "Their collections and history are kept.",
+    });
+    onDeleted();
+  }
+
+  const close = () => {
+    if (!pending) onClose();
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={close}
+      title={`Remove ${staff.name}?`}
+      description="They are signed out everywhere and disappear from the team. Their collections, handovers and audit entries are kept, and this cannot be undone."
+    >
+      {blocked ? (
+        <FormMessage tone="critical">
+          <span className="flex flex-col gap-1">
+            <span>{staff.name} cannot be removed yet:</span>
+            <span className="flex flex-col gap-1 pl-4">
+              {blocked.map((issue) => (
+                <span key={issue}>· {issue}</span>
+              ))}
+            </span>
+          </span>
+        </FormMessage>
+      ) : null}
+      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
+      <DialogActions>
+        <Button tone="ghost" onClick={close} disabled={pending}>
+          {blocked ? "Close" : "Cancel"}
+        </Button>
+        {blocked ? null : (
+          <Button
+            tone="danger"
+            onClick={() => void confirm()}
+            disabled={pending}
+          >
+            {pending ? "Removing…" : "Remove"}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export function ChangeStatusDialog({
   staff,
   status,
@@ -354,7 +434,11 @@ export function ChangeStatusDialog({
             onClick={() => void confirm(true)}
             disabled={pending}
           >
-            {pending ? "Saving…" : `${STATUS_LABEL[status]} anyway`}
+            {pending
+              ? "Saving…"
+              : status === "INACTIVE"
+                ? "Mark as left anyway"
+                : `${STATUS_LABEL[status]} anyway`}
           </Button>
         </DialogActions>
       </Dialog>
@@ -367,13 +451,15 @@ export function ChangeStatusDialog({
       onClose={close}
       title={
         losingAccess
-          ? `${status === "SUSPENDED" ? "Suspend" : "Deactivate"} ${staff.name}?`
+          ? `${status === "SUSPENDED" ? "Suspend" : "Mark"} ${staff.name}${status === "SUSPENDED" ? "?" : " as left?"}`
           : `Reactivate ${staff.name}?`
       }
       description={
-        losingAccess
-          ? `They are signed out on every device straight away and cannot sign in again until someone reactivates them. Their mobile number is ${formatMobile(staff.phone)}.`
-          : "They can sign in again with the password they already have. Reset it if they have forgotten it."
+        !losingAccess
+          ? "They can sign in again with the password they already have. Reset it if they have forgotten it."
+          : status === "SUSPENDED"
+            ? `Signed out on every device straight away, and they cannot sign in until someone reactivates them. A suspension is temporary — use "Mark as left" when they have gone for good. Their mobile number is ${formatMobile(staff.phone)}.`
+            : `They have left the business: signed out on every device straight away, and they cannot sign in again unless someone reactivates them. Their record, collections and history are kept. Their mobile number is ${formatMobile(staff.phone)}.`
       }
     >
       {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
@@ -388,9 +474,11 @@ export function ChangeStatusDialog({
         >
           {pending
             ? "Saving…"
-            : losingAccess
-              ? `${STATUS_LABEL[status]} and sign out`
-              : "Reactivate"}
+            : !losingAccess
+              ? "Reactivate"
+              : status === "SUSPENDED"
+                ? "Suspend and sign out"
+                : "Mark as left and sign out"}
         </Button>
       </DialogActions>
     </Dialog>

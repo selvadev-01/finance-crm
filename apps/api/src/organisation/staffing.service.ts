@@ -45,7 +45,14 @@ export class StaffingService {
         name: true,
         sectorId: true,
         assignments: {
-          where: inEffectOn(today),
+          // Only staff who can actually work the line today (decided
+          // 2026-09-20): a suspended or departed Junior cannot sign in or
+          // collect, so counting them makes a line look staffed when nobody
+          // is walking it. The assignment itself stays on record (US-015).
+          where: {
+            ...inEffectOn(today),
+            staffProfile: { status: 'ACTIVE', deletedAt: null },
+          },
           select: {
             assignmentRole: true,
             staffProfileId: true,

@@ -72,6 +72,8 @@ Cash for the day follows `collection.collectedByUserId`, not current staffing (o
 
 ## Events
 
+> **As built: no event bus exists** (decided 2026-09-15, [M13](M13-audit.md#as-built)). The events below name what _would_ be published; nothing publishes or consumes them. What they were for is covered directly: the audit log records every change with its actor, dashboards read state from the database, and a notification is raised only where [M10](M10-notifications.md#categories-and-events) catalogues one and a service calls `EventNotices`.
+
 **Emitted**
 
 | Event                               | Consumed by                                                          |
@@ -136,7 +138,9 @@ Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit ent
 
 **"Current" is date-aware** (M02): a row opened "effective tomorrow" does not change anyone's scope until tomorrow.
 
-**Staffing views:** `GET /api/staffing` (US-014, `staff.list`) and `GET /api/lines/:lineId/assignments?on=` (US-015, `assignment.viewHistory`), both scoped by line.
+**The staffing count is who can work today** (decided 2026-09-20): a suspended or soft-deleted staff member keeps their assignment — US-015 still answers for that day — but leaves `juniorCount` and the Senior slot, because counting them makes a line look staffed when nobody is walking it.
+
+**Staffing views:** `GET /api/staffing` (US-014, `staff.list`) and `GET /api/lines/:lineId/assignments?on=` (US-015, `assignment.viewHistory`), both scoped by line. **The console asks the date question (2026-09-20):** the line page carries a **Responsible on** date, kept in the URL (`?on=`) so the answer can be sent to whoever asked, and the section retitles itself “Responsible on 15 Mar 2026”. A day nobody held the line says so rather than showing an empty table. This is the question asked when a discrepancy surfaces months later, and today’s Senior is often not the answer.
 
 **Screens:**
 

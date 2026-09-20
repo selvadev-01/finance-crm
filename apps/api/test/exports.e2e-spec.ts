@@ -207,13 +207,28 @@ describe('M12 export (e2e)', () => {
     expect(json(anonymous.body as Buffer).code).toBe('UNAUTHENTICATED');
   });
 
+  it('downloads the same report as CSV, headed so the file explains itself (US-087)', async () => {
+    const response = await download(
+      'ADMIN',
+      '/api/exports/reports/line-wise?format=csv',
+    ).expect(200);
+    expect(response.headers['content-type']).toContain('text/csv');
+    expect(response.headers['content-disposition']).toContain('.csv"');
+    const text = (response.body as Buffer).toString('utf8');
+    // The byte-order mark keeps rupee signs and Tamil names intact in Excel.
+    expect(text.startsWith('﻿')).toBe(true);
+    expect(text).toContain('Line-wise report');
+    expect(text).toContain('Period');
+  });
+
   it('refuses a missing or unknown format, and a view’s own bad input, with its JSON error', async () => {
     const missing = await download(
       'ADMIN',
       '/api/exports/reports/line-wise',
     ).expect(400);
     expect(json(missing.body as Buffer).code).toBe('VALIDATION_FAILED');
-    await download('ADMIN', '/api/exports/reports/line-wise?format=csv').expect(
+    // csv joined xlsx and pdf on 2026-09-20 (US-087); this is still unknown.
+    await download('ADMIN', '/api/exports/reports/line-wise?format=doc').expect(
       400,
     );
     // S-16's own rule: the list needs its dates.

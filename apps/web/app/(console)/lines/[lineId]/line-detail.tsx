@@ -11,8 +11,12 @@ import {
   Button,
   buttonClass,
   DataView,
+  FilterBar,
+  FilterField,
   formatBusinessDate,
+  Input,
   ListFooter,
+  NoMatches,
   NothingYet,
   PageHeader,
   Section,
@@ -21,7 +25,7 @@ import {
   StatGrid,
 } from "@repo/ui";
 import Link from "next/link";
-import { useState } from "react";
+import { type ChangeEvent, useState } from "react";
 
 import { identityColumn, valueColumn } from "../../../../components/columns";
 import { ListFallback } from "../../../../components/list-state";
@@ -31,6 +35,7 @@ import { ActivityBadge } from "../../../../components/status-badge";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation, ROLE_LABEL } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
+import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 import { AssignDialog } from "../../_organisation/assign-dialog";
@@ -41,11 +46,24 @@ import {
 
 type Open = "rename" | "deactivate" | "assign-senior" | "assign-junior" | null;
 
+/** The date lookup, in the URL so an answer can be sent to someone (US-015). */
+export const LINE_FILTERS = { on: "" };
+
 /** A line: today's staff and its assignment history (US-011, US-014, US-015). */
-export function LineDetail({ lineId }: { lineId: string }) {
+export function LineDetail({
+  lineId,
+  initial,
+}: {
+  lineId: string;
+  initial: Partial<typeof LINE_FILTERS>;
+}) {
   const me = useSignedIn();
   const manages = canManageOrganisation(me.role);
   const [open, setOpen] = useState<Open>(null);
+  const { filters, setFilter, reset, filtered } = useListState(
+    LINE_FILTERS,
+    initial,
+  );
 
   const line = useApiQuery(org.getLine, { params: { lineId } });
   const sector = useApiQuery(
@@ -57,9 +75,11 @@ export function LineDetail({ lineId }: { lineId: string }) {
   const staffing = useApiQuery(org.listLineStaffing, {
     query: { limit: LIST_LIMIT },
   });
+  // US-015: with a date, only the assignments in effect that day — the
+  // question asked when a discrepancy surfaces months later.
   const history = usePagedQuery(org.listAssignmentHistory, {
     params: { lineId },
-    query: { limit: LIST_LIMIT },
+    query: { limit: LIST_LIMIT, ...(filters.on ? { on: filters.on } : {}) },
   });
   // Candidates for the assign dialog, and names for lines a move leaves
   // without a Senior. Only an Admin assigns.
@@ -209,7 +229,39 @@ export function LineDetail({ lineId }: { lineId: string }) {
         </p>
       </Section>
 
-      <Section title="Assignment history">
+      <Section
+        title={
+          filters.on
+            ? `Responsible on ${formatBusinessDate(filters.on)}`
+            : "Assignment history"
+        }
+      >
+        {/* US-015: the question asked when a discrepancy surfaces months
+            later — who had this line that day. The answer is in the URL, so
+            it can be sent to whoever asked. */}
+        <FilterBar
+          summary={
+            filters.on ? formatBusinessDate(filters.on) : "Every assignment"
+          }
+          actions={
+            filtered ? (
+              <Button tone="link" onClick={reset}>
+                Show every assignment
+              </Button>
+            ) : null
+          }
+        >
+          <FilterField label="Responsible on" width="md">
+            <Input
+              type="date"
+              value={filters.on}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setFilter("on", event.target.value)
+              }
+            />
+          </FilterField>
+        </FilterBar>
+
         {history.status === "ready" && history.rows.length > 0 ? (
           <>
             <DataView
@@ -265,10 +317,20 @@ export function LineDetail({ lineId }: { lineId: string }) {
             query={history}
             columns={4}
             empty={
-              <NothingYet
-                title="No one has been assigned"
-                description="When a Senior or Junior is assigned to this line, each assignment is kept here with its dates."
-              />
+              filters.on ? (
+                <NoMatches
+                  title={`Nobody held this line on ${formatBusinessDate(filters.on)}`}
+                  description="No Senior or Junior was assigned to it that day."
+                  action={
+                    <Button onClick={reset}>Show every assignment</Button>
+                  }
+                />
+              ) : (
+                <NothingYet
+                  title="No one has been assigned"
+                  description="When a Senior or Junior is assigned to this line, each assignment is kept here with its dates."
+                />
+              )
             }
           />
         )}

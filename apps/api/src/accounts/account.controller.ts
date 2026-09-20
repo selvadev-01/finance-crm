@@ -42,6 +42,16 @@ export class AccountController {
     return this.accounts.create(context, body);
   }
 
+  /** US-030: the pre-disbursement window in which a typo can still be fixed. */
+  @RequirePermission('account.updateTerms')
+  @ContractRoute(api.updateAccountTerms)
+  updateAccountTerms(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: In<'updateAccountTerms'>,
+  ): Out<'updateAccountTerms'> {
+    return this.accounts.updateTerms(context, params.accountId, body);
+  }
+
   @RequirePermission('account.disburse')
   @ContractRoute(api.disburseAccount)
   disburseAccount(

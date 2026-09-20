@@ -480,6 +480,46 @@ describe('organisation (M03, e2e)', () => {
       });
     });
 
+    it('counts only staff who can work today: a suspended Junior keeps their assignment but leaves the count', async () => {
+      const spare = await createTestStaff(prisma, {
+        organizationId,
+        role: 'JUNIOR',
+      });
+      await prisma.lineAssignment.create({
+        data: {
+          staffProfileId: spare.staffProfileId,
+          lineId,
+          assignmentRole: 'JUNIOR',
+          effectiveFrom: new Date('2026-01-01'),
+        },
+      });
+      const countOn = async () => {
+        const response = await as('ADMIN')
+          .get('/api/staffing?limit=200')
+          .expect(200);
+        return response.body.data.find(
+          (line: { lineId: string }) => line.lineId === lineId,
+        ).juniorCount;
+      };
+      expect(await countOn()).toBe(2);
+
+      await prisma.staffProfile.update({
+        where: { id: spare.staffProfileId },
+        data: { status: 'SUSPENDED' },
+      });
+      expect(await countOn()).toBe(1);
+
+      // The assignment itself is untouched — US-015 still answers for that day.
+      const history = await as('ADMIN')
+        .get(`/api/lines/${lineId}/assignments?limit=200`)
+        .expect(200);
+      expect(
+        history.body.data.map(
+          (entry: { staffProfileId: string }) => entry.staffProfileId,
+        ),
+      ).toContain(spare.staffProfileId);
+    });
+
     it('a Senior sees only their own line; a Junior is refused', async () => {
       const senior = await as('SENIOR').get('/api/staffing').expect(200);
       expect(senior.body.data.map((l: { lineId: string }) => l.lineId)).toEqual(

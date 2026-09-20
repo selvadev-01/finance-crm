@@ -52,7 +52,11 @@ describe('scheduled job handlers (M14, US-095)', () => {
         logger,
         testNotifications(database).notices,
       ),
-      overdue: new OverdueService(database, new SettingReader(database)),
+      overdue: new OverdueService(
+        database,
+        new SettingReader(database),
+        testNotifications(database).notices,
+      ),
       purge: new IdempotencyPurgeService(database),
     };
   }
@@ -228,6 +232,16 @@ describe('scheduled job handlers (M14, US-095)', () => {
         (await tx.accountLoan.findUniqueOrThrow({ where: { id: account.id } }))
           .isOverdue,
       ).toBe(true);
+
+      // US-033: the line’s Senior hears it once, as a WARNING, with a count
+      // rather than one notice per account. A second run flags nothing, so it
+      // says nothing more.
+      const senior = await tx.notification.findMany({
+        where: { userId: w.senior.userId, eventType: 'ACCOUNT_OVERDUE' },
+      });
+      expect(senior).toHaveLength(1);
+      expect(senior[0]).toMatchObject({ category: 'WARNING' });
+      expect(senior[0]!.title).toContain('An account is');
 
       await tx.accountLoan.update({
         where: { id: account.id },

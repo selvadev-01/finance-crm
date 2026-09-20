@@ -33,6 +33,7 @@ import {
   summarise,
 } from "../../lib/offline/outbox";
 import { CollectScreen, type RecordAtDoor } from "./collect-screen";
+import { CorrectScreen } from "./correct-screen";
 import { backToRoute, parseView, useView } from "./hash-view";
 import { RouteScreen } from "./route-screen";
 import { StatusBar } from "./status-bar";
@@ -306,6 +307,8 @@ export function FieldRoute() {
             local={local}
             onRecord={onRecord}
           />
+        ) : view.name === "correct" ? (
+          <CorrectScreen connected={connected} />
         ) : view.name === "notifications" ? (
           <NotificationsScreen connected={connected} />
         ) : view.name === "handover" ? (

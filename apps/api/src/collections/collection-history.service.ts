@@ -31,7 +31,6 @@ import {
   type Page,
   type PageRequest,
   pageArgs,
-  toPage,
   toPageBy,
 } from '../platform/pagination.js';
 
@@ -147,18 +146,36 @@ export class CollectionHistoryService {
       );
     }
     const rows = await this.database.client.collection.findMany({
-      where: inScope(collectionScope(context), {
-        businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
-        ...(query.lineId ? { lineId: query.lineId } : {}),
-        ...(query.accountLoanId ? { accountLoanId: query.accountLoanId } : {}),
-        ...(query.entryType ? { entryType: query.entryType } : {}),
-        ...(query.status ? { status: query.status } : {}),
-      }),
+      where: {
+        AND: [
+          inScope(collectionScope(context), {
+            businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+            ...(query.lineId ? { lineId: query.lineId } : {}),
+            ...(query.accountLoanId
+              ? { accountLoanId: query.accountLoanId }
+              : {}),
+            ...(query.entryType ? { entryType: query.entryType } : {}),
+            ...(query.status ? { status: query.status } : {}),
+          }),
+          beforeCursor(query.cursor),
+        ],
+      },
       select: itemSelect,
-      ...pageArgs(query),
+      // US-045: newest first, by the date the money moved rather than by id.
+      // A cuid is only accidentally chronological, and a collection synced
+      // late carries yesterday's business date with today's id (BR-15). The
+      // id breaks ties, so the order is total and a page boundary can neither
+      // repeat nor drop a row.
+      orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
+      take: query.limit + 1,
     });
     const names = await this.names(rows.map((row) => row.collectedByUserId));
-    return toPage(rows, query, (row) => toItem(row, names));
+    return toPageBy(
+      rows,
+      query,
+      (row) => `${fromUtcMidnight(row.businessDate)}|${row.id}`,
+      (row) => toItem(row, names),
+    );
   }
 
   /**

@@ -79,6 +79,9 @@ const WRITE_ROUTES: Record<string, Decision> = {
   'POST /api/staff/:staffProfileId/status': {
     audits: [['staff_profile', 'UPDATE']],
   },
+  'DELETE /api/staff/:staffProfileId': {
+    audits: [['staff_profile', 'DELETE']],
+  },
   // M04, M05
   'POST /api/customers': { audits: [['customer', 'CREATE']] },
   'PATCH /api/customers/:customerId': { audits: [['customer', 'UPDATE']] },
@@ -95,6 +98,7 @@ const WRITE_ROUTES: Record<string, Decision> = {
   'POST /api/accounts/:accountId/closure': {
     audits: [['account_loan', 'UPDATE']],
   },
+  'PATCH /api/accounts/:accountId': { audits: [['account_loan', 'UPDATE']] },
   // M07
   'POST /api/collections': { audits: [['collection', 'CREATE']] },
   'POST /api/collections/:collectionId/corrections': {

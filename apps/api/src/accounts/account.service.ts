@@ -420,6 +420,107 @@ export class AccountService {
     };
   }
 
+   /**
+   * US-030: correct a **`PENDING`** account's terms, before any money has
+   * moved. After disbursement the amounts are immutable — the database says
+   * so too (`constraints_account_lifecycle`) — so this is the only window in
+   * which a typo can be fixed rather than written off.
+   *
+   * The whole plan is rebuilt from the new terms by the same code creation
+   * uses, so the schedule, first collection date and target date cannot drift
+   * from what a fresh account with these terms would have. The customer is
+   * not changed: an account on the wrong customer is a different account.
+   */
+  updateTerms(
+    context: RequestContext,
+    accountId: string,
+    input: Omit<CreateInput, 'customerId' | 'disburse'>,
+    today: CalendarDate = toBusinessDate(new Date()),
+  ): Promise<Account> {
+    return this.database.transaction(async (tx) => {
+      const before = foundInScope(
+        await tx.accountLoan.findFirst({
+          where: inScope(accountScope(context), { id: accountId }),
+          select: accountFields,
+        }),
+        'account',
+      );
+      if (before.status !== 'PENDING') {
+        throw new DomainError(
+          'ACCOUNT_NOT_PENDING',
+          `Account ${before.accountCode} is ${before.status.toLowerCase()}; terms can only be corrected before disbursement`,
+        );
+      }
+      const disbursement = parseCalendarDate(input.disbursementDate);
+      if (disbursement < today) {
+        // A past date is how a mid-term account is entered (US-030a), which
+        // needs the collected-to-date figure and posts to the ledger. That is
+        // a new account, not a correction to a pending one.
+        throw new DomainError(
+          'DISBURSEMENT_DATE_IN_PAST',
+          'A pending account cannot be moved to a past date; create a mid-term account instead',
+          [{ field: 'disbursementDate', issue: 'is before today' }],
+        );
+      }
+
+      const plan = await this.plan(
+        context,
+        { customerId: before.customerId, ...input },
+        today,
+      );
+      const A = toMoney(input.accountAmount);
+      await tx.accountSchedule.deleteMany({ where: { accountLoanId: before.id } });
+      const account = await tx.accountLoan.update({
+        where: { id: before.id },
+        data: {
+          accountAmount: A.toFixed(2),
+          investedAmount: toMoney(input.investedAmount).toFixed(2),
+          profitAmount: A.minus(input.investedAmount).toFixed(2),
+          dailyAmount: toMoney(input.dailyAmount).toFixed(2),
+          termDays: input.termDays,
+          disbursementDate: toUtcMidnight(disbursement),
+          firstCollectionDate: toUtcMidnight(plan.firstCollectionDate),
+          targetCompletionDate: toUtcMidnight(plan.targetCompletionDate),
+          outstandingAmount: plan.outstanding.toFixed(2),
+          schedules: {
+            createMany: {
+              data: plan.slots.map((slot) => ({
+                sequence: slot.sequence,
+                dueDate: toUtcMidnight(slot.dueDate),
+                expectedAmount: slot.expectedAmount.toFixed(2),
+                status: slot.status,
+                createdByUserId: context.userId,
+              })),
+            },
+          },
+        },
+        select: accountFields,
+      });
+
+      await this.audit.record(context, {
+        action: 'UPDATE',
+        entityTable: 'account_loan',
+        entityId: account.id,
+        before: {
+          accountAmount: money(before.accountAmount),
+          investedAmount: money(before.investedAmount),
+          dailyAmount: money(before.dailyAmount),
+          termDays: before.termDays,
+          disbursementDate: fromUtcMidnight(before.disbursementDate),
+        },
+        after: {
+          accountAmount: money(account.accountAmount),
+          investedAmount: money(account.investedAmount),
+          dailyAmount: money(account.dailyAmount),
+          termDays: account.termDays,
+          disbursementDate: input.disbursementDate,
+          slots: plan.slots.length,
+        },
+      });
+      return toAccount(account, context);
+    });
+  }
+
   /**
    * US-035: stop collecting on an account, with a mandatory reason. Super
    * Admin only (`account.close`) — writing off destroys receivable value, and

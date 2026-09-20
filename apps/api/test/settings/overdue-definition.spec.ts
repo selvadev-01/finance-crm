@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { testNotifications } from '../notifications/notices.js';
 import { parseCalendarDate, toUtcMidnight } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -57,7 +58,11 @@ describe('one definition of overdue (BR-05, US-094)', () => {
       { error: vi.fn() } as unknown as PinoLogger,
       new SettingReader(database),
     );
-    const overdue = new OverdueService(database, new SettingReader(database));
+    const overdue = new OverdueService(
+      database,
+      new SettingReader(database),
+      testNotifications(database).notices,
+    );
     const system: SystemContext = {
       organizationId: w.organizationId,
       runId: `run_${randomUUID()}`,

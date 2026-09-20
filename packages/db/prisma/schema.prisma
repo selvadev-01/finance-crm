@@ -260,6 +260,13 @@ enum NotificationEvent {
   /// Added 2026-09-17 for US-093 (migration holiday_events).
   HOLIDAY_DECLARED
   HOLIDAY_REMOVED
+  /// Added 2026-09-20 (migration customer_handover_events): the two M10
+  /// catalogued events nothing raised — US-020 and US-062.
+  NEW_CUSTOMER
+  HANDOVER_ACKNOWLEDGED
+  /// Added 2026-09-20 (migration account_overdue_event): BR-05 overdue, to
+  /// the line's Senior as a WARNING.
+  ACCOUNT_OVERDUE
 }
 
 enum PushProvider {

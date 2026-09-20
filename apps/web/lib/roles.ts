@@ -70,6 +70,18 @@ export function canEditStaff(
   return canManageOrganisation(me.role) && RANK[target.role] >= RANK[me.role];
 }
 
+/**
+ * US-092 soft delete: Admin and above (decided 2026-09-20), never yourself,
+ * and never someone senior — the same rank rule as editing. The API decides;
+ * this only keeps the button off screens where it would always be refused.
+ */
+export function canDeleteStaff(
+  me: { role: Role; staffProfileId: string },
+  target: { role: Role; staffProfileId: string },
+): boolean {
+  return canEditStaff(me, target) && me.staffProfileId !== target.staffProfileId;
+}
+
 export function canChangeStatusOf(
   me: { role: Role; staffProfileId: string },
   target: { role: Role; staffProfileId: string },

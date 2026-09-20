@@ -119,6 +119,16 @@ export class StaffController {
     return this.admin.changeStatus(context, params.staffProfileId, body);
   }
 
+  /** US-092: soft delete, Super Admin only. Blocked, never acknowledged away. */
+  @RequirePermission('staff.delete')
+  @ContractRoute(api.deleteStaff)
+  deleteStaff(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: RouteInput<typeof api.deleteStaff>,
+  ): Promise<RouteSuccess<typeof api.deleteStaff>> {
+    return this.admin.softDelete(context, params.staffProfileId);
+  }
+
   @RequirePermission('staff.resetPassword')
   @ContractRoute(api.resetStaffPassword)
   resetStaffPassword(

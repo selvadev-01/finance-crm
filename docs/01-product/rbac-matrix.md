@@ -152,6 +152,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Update staff details      |      ✓      |   ✓   |    —     |    —     |
 | **Change staff role**     |      ✓      |   —   |    —     |    —     |
 | Suspend staff             |      ✓      |   ✓   |    —     |    —     |
+| Delete staff (soft)       |      ✓      |   ✓   |    —     |    —     |
 | Reset another's password  |      ✓      |   ✓   |    —     |    —     |
 | **View audit log**        |      ✓      |   ✓   |    —     |    —     |
 | View an account's history |      ✓      |   ✓   |    —     |    —     |

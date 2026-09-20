@@ -154,6 +154,14 @@ Genuine conflicts are rare, because collections are **append-only and additive**
 
 ---
 
+## A correction needs signal, a collection does not
+
+Recording money at the door works with no network at all (US-050); **asking for it to be corrected does not** (US-044, 2026-09-20). A correction is a request to a person: a Senior sees it, decides it, and only then does an account move (BR-14). Queued on a phone it would be an approval nobody knows is waiting, and the Junior would believe the figure was already fixed.
+
+So `/route#correct` says plainly that it needs signal, and says in the same breath that collections still save without it — the one sentence that keeps the distinction from reading as a failure.
+
+---
+
 ## Service worker scope
 
 Scoped to the Junior's routes only. The admin console is not burdened with offline machinery it never uses, and a service worker bug cannot affect Admin screens.

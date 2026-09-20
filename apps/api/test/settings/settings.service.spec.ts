@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { testNotifications } from '../notifications/notices.js';
 import {
   addCalendarDays,
   fromUtcMidnight,
@@ -211,6 +212,7 @@ describe('SettingsService (US-094)', () => {
         const overdue = new OverdueService(
           database,
           new SettingReader(database),
+          testNotifications(database).notices,
         );
         const system: SystemContext = {
           organizationId: organization.id,

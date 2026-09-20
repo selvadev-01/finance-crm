@@ -135,6 +135,8 @@ Which line a customer was on, and when, is now a table: `customer_line_period` (
 
 **It exists for offline sync, not for reporting.** A Junior collects at the door with no signal and the phone may not sync for hours ([offline sync](../../02-architecture/offline-sync.md)). If the customer were transferred in between, judging permission by today’s line would refuse money already taken and strand it in the outbox, leaving paper as the only fallback. The collection path (`collectableAccountScope`) instead asks which line the customer was on **on that collection’s business date**, and attributes the collection to that line — not to the line they are on now. On the transfer day both periods cover the date, so either line’s Junior may sync it and the caller’s own line is used.
 
+**Onboarding tells the line’s Senior (US-020, 2026-09-20).** `EventNotices.customerOnboarded` raises an `INFORMATION` notice inside the creating transaction — no customer, no notice — naming who onboarded them and linking to the profile. The Admin who did it is not told of their own action.
+
 **Decided 2026-09-13:**
 
 - **Customer codes are issued by the API** (`CUS-00001`, …) from the Postgres sequence `customer_code_seq`. A create that rolls back leaves a gap, which is harmless.
@@ -152,7 +154,7 @@ Which line a customer was on, and when, is now a table: `customer_line_period` (
 - `/customers/:id` (S-09) shows the totals above the tabs, the assigned Senior and Junior in the details, and a Collections tab with the whole history beside the Accounts tab (US-022). It also carries a Transfer action for Admin+ (US-023), stating that the new line collects from today and past collections do not move, and shows a line history once there has been a transfer.
 - `/customers/:id/edit` (US-021): the record as saved, validated with the contract's schema; reached from an Edit action on the profile, shown to Admin+.
 
-**Not built:** the trigram index for name search, soft delete, the `customer.created` notification, and assigning a customer to a particular Junior (no model for it; a Junior sees their whole line, decided 2026-09-13).
+**Not built:** the trigram index for name search, soft delete and assigning a customer to a particular Junior (no model for it; a Junior sees their whole line, decided 2026-09-13).
 
 ---
 
