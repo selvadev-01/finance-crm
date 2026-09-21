@@ -79,7 +79,9 @@ export function canDeleteStaff(
   me: { role: Role; staffProfileId: string },
   target: { role: Role; staffProfileId: string },
 ): boolean {
-  return canEditStaff(me, target) && me.staffProfileId !== target.staffProfileId;
+  return (
+    canEditStaff(me, target) && me.staffProfileId !== target.staffProfileId
+  );
 }
 
 export function canChangeStatusOf(

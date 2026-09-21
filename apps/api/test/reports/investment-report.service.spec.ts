@@ -227,7 +227,9 @@ describe('InvestmentReportService (US-085)', () => {
         { from: MONDAY, to: MONDAY, lineId: w.lineC.id },
         THURSDAY_EVENING,
       );
-      const lineAfter = after.lines!.find((line) => line.lineId === w.lineC.id)!;
+      const lineAfter = after.lines!.find(
+        (line) => line.lineId === w.lineC.id,
+      )!;
 
       // The ₹100 that really arrived is still returned, and the profit it
       // earned is still earned: only what was given up leaves the figures.

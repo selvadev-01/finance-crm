@@ -47,6 +47,16 @@ export function OrganizationSignIn({ slug }: { slug: string }) {
             ? "Finding your business…"
             : "Use the email and password your administrator gave you."
       }
+      footer={
+        lookup.status === "not-found" ? undefined : (
+          <Link
+            href="/forgot-password"
+            className="font-medium text-accent underline"
+          >
+            Forgotten your password?
+          </Link>
+        )
+      }
     >
       {lookup.status === "not-found" ? (
         <FormMessage tone="critical">

@@ -77,29 +77,36 @@ test("the layout switches from the account menu and back from More", async ({
   ).toBeVisible();
 });
 
+/**
+ * Never in "More" for anyone: each is a tab inside Settings, reached through
+ * the one Settings item. Notifications is not here either — it is the bell.
+ */
+const SETTINGS_PARTS = [
+  "Business settings",
+  "Holidays",
+  "Audit log",
+  "Refused attempts",
+  "Notifications",
+];
+
 const EXPECTED: Record<
   ConsoleRole,
   { dashboardTab: string; inMore: string[]; notInMore: string[] }
 > = {
   SUPER_ADMIN: {
     dashboardTab: "Overview",
-    inMore: ["Sectors", "Audit log", "Business settings"],
-    notInMore: [],
+    inMore: ["Sectors", "Team", "Settings"],
+    notInMore: SETTINGS_PARTS,
   },
   ADMIN: {
     dashboardTab: "Today",
-    inMore: ["Sectors", "Audit log", "Refused attempts"],
-    notInMore: ["Business settings"],
+    inMore: ["Sectors", "Team", "Settings"],
+    notInMore: SETTINGS_PARTS,
   },
   SENIOR: {
     dashboardTab: "My line",
-    inMore: ["Reports", "Lines", "Team", "Holidays"],
-    notInMore: [
-      "Sectors",
-      "Audit log",
-      "Refused attempts",
-      "Business settings",
-    ],
+    inMore: ["Reports", "Lines", "Team", "Settings"],
+    notInMore: ["Sectors", ...SETTINGS_PARTS],
   },
 };
 

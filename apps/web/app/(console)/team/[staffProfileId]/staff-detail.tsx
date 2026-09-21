@@ -149,8 +149,9 @@ export function StaffDetailView({
                     Mark as left
                   </Button>
                 ) : null}
-                {/* US-092: removal is Super Admin only and cannot be undone,
-                    so it sits last and never where Enter finds it. */}
+                {/* US-092: removal is Admin and above (decided 2026-09-20,
+                    never on anyone senior) and cannot be undone, so it sits
+                    last and never where Enter finds it. */}
                 {canDeleteStaff(me, record) ? (
                   <Button tone="danger" onClick={() => setOpen("delete")}>
                     Delete

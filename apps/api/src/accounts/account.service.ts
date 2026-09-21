@@ -79,6 +79,21 @@ export function formatAccountCode(
   return `ACC-${year}-${String(value).padStart(5, '0')}`;
 }
 
+/**
+ * US-024a: what the global search box matches on an account — any part of the
+ * account code, or any part of the customer's name, in either case. The code
+ * carries a year (`ACC-2026-00231`), so there is no single number to match
+ * exactly the way `CUS-00417` has: `contains` finds it typed whole, without
+ * the year, or as its bare number. The customer relation is filtered inside
+ * the account's own `accountScope`, so it widens nothing.
+ */
+export function accountSearchTerms(q: string): Prisma.AccountLoanWhereInput[] {
+  return [
+    { accountCode: { contains: q, mode: 'insensitive' } },
+    { customer: { name: { contains: q, mode: 'insensitive' } } },
+  ];
+}
+
 /** Decimal columns as the plain two-place strings the contract carries. */
 const money = (value: Prisma.Decimal) => value.toFixed(2);
 
@@ -361,6 +376,7 @@ export class AccountService {
   async list(
     context: RequestContext,
     page: PageRequest & {
+      q?: string | undefined;
       customerId?: string | undefined;
       lineId?: string | undefined;
       status?: Account['status'] | undefined;
@@ -368,6 +384,7 @@ export class AccountService {
   ): Promise<Page<Account>> {
     const rows = await this.database.client.accountLoan.findMany({
       where: inScope(accountScope(context), {
+        ...(page.q ? { OR: accountSearchTerms(page.q) } : {}),
         ...(page.customerId ? { customerId: page.customerId } : {}),
         ...(page.lineId ? { lineId: page.lineId } : {}),
         ...(page.status ? { status: page.status } : {}),
@@ -420,7 +437,7 @@ export class AccountService {
     };
   }
 
-   /**
+  /**
    * US-030: correct a **`PENDING`** account's terms, before any money has
    * moved. After disbursement the amounts are immutable — the database says
    * so too (`constraints_account_lifecycle`) — so this is the only window in
@@ -469,7 +486,9 @@ export class AccountService {
         today,
       );
       const A = toMoney(input.accountAmount);
-      await tx.accountSchedule.deleteMany({ where: { accountLoanId: before.id } });
+      await tx.accountSchedule.deleteMany({
+        where: { accountLoanId: before.id },
+      });
       const account = await tx.accountLoan.update({
         where: { id: before.id },
         data: {

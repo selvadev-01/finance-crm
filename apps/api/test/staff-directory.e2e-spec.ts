@@ -231,4 +231,94 @@ describe('staff directory (S-14, e2e)', () => {
       expect(response.body.message).toBe(missing.body.message);
     }
   });
+
+  /** The team half of the console's global search (US-024a). */
+  describe('searching staff (US-024a)', () => {
+    const search = async (who: string, q: string) =>
+      ids(
+        (
+          await as(who)
+            .get(`/api/staff?limit=200&q=${encodeURIComponent(q)}`)
+            .expect(200)
+        ).body,
+      );
+
+    /**
+     * A tagged test address is about 95 characters — past the 80 the contract
+     * allows, as a real one never would be. The local part is unique to this
+     * run and well inside the cap, so it is what these tests search on.
+     */
+    const emailFragment = (email: string) => email.split('@')[0]!;
+
+    it('finds a person by part of the staff code, the email, the phone or the name, in any case', async () => {
+      const target = staff.juniorA!;
+      const profile = await prisma.staffProfile.findUniqueOrThrow({
+        where: { id: target.staffProfileId },
+        select: { staffCode: true, phone: true },
+      });
+      // A staff code carries a random suffix, so nothing here is an exact
+      // match — the fragments below are each unique to this run.
+      for (const q of [
+        profile.staffCode,
+        profile.staffCode.toUpperCase(),
+        profile.staffCode.slice(-8),
+        emailFragment(target.email),
+        emailFragment(target.email).toUpperCase(),
+        profile.phone!.slice(-6),
+      ]) {
+        expect(await search('admin', q), q).toContain(target.staffProfileId);
+      }
+      // The name every test person shares still matches this one among them.
+      expect(await search('admin', 'test staff')).toContain(
+        target.staffProfileId,
+      );
+    });
+
+    it('a fragment matching nobody finds nobody, rather than the whole team', async () => {
+      expect(await search('admin', 'ST-no-such-run-tag')).toEqual([]);
+    });
+
+    it('search stays within scope: a Senior never finds staff off their line, and nobody finds another organization’s', async () => {
+      const offLine = await prisma.staffProfile.findUniqueOrThrow({
+        where: { id: staff.seniorB!.staffProfileId },
+        select: { staffCode: true },
+      });
+      expect(await search('seniorA', offLine.staffCode)).not.toContain(
+        staff.seniorB!.staffProfileId,
+      );
+      expect(
+        await search('seniorA', emailFragment(staff.seniorB!.email)),
+      ).not.toContain(staff.seniorB!.staffProfileId);
+      // The Senior's own line is still searchable.
+      expect(
+        await search('seniorA', emailFragment(staff.juniorA!.email)),
+      ).toContain(staff.juniorA!.staffProfileId);
+
+      const outsider = await prisma.staffProfile.findUniqueOrThrow({
+        where: { id: staff.outsider!.staffProfileId },
+        select: { staffCode: true },
+      });
+      expect(await search('admin', outsider.staffCode)).toEqual([]);
+    });
+
+    it('a soft-deleted person is not found, by any of the fields', async () => {
+      const gone = await prisma.staffProfile.findUniqueOrThrow({
+        where: { id: staff.deleted!.staffProfileId },
+        select: { staffCode: true },
+      });
+      expect(await search('admin', gone.staffCode)).toEqual([]);
+      expect(
+        await search('admin', emailFragment(staff.deleted!.email)),
+      ).toEqual([]);
+    });
+
+    it('an over-long search is refused naming the field', async () => {
+      const response = await as('admin')
+        .get(`/api/staff?q=${'a'.repeat(81)}`)
+        .expect(400);
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'q' })]),
+      );
+    });
+  });
 });

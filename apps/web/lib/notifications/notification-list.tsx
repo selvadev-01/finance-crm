@@ -60,10 +60,17 @@ export function NotificationList({
   notifications,
   linkable,
   onChanged,
+  onFollowLink,
 }: {
   notifications: NotificationView[];
   linkable: boolean;
   onChanged: () => void;
+  /**
+   * Called when a deep link is followed, so the surface the list is in can get
+   * out of the way: the console's bell panel closes, rather than leaving the
+   * subject to be read through a hole in a popover.
+   */
+  onFollowLink?: () => void;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -140,7 +147,10 @@ export function NotificationList({
                       <Link
                         href={notification.link.url}
                         className={cn(rowClass, "hover:bg-surface-sunken/70")}
-                        onClick={() => void markRead(notification)}
+                        onClick={() => {
+                          void markRead(notification);
+                          onFollowLink?.();
+                        }}
                       >
                         {content}
                       </Link>

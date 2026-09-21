@@ -145,7 +145,7 @@ Nothing here is a knob that does nothing:
 
 ### Console
 
-S-28 at `/settings`, and "Business settings" in the System nav for the Super Admin alone. Each setting shows its class as a badge, what changing it does, and — when it is locked — why, in place of the button. Changing a locked-but-still-editable setting (the currency, before the first account) warns before it is saved, and "Reset to default" is a confirmed action that never precedes "Change" in the DOM.
+S-28 at `/settings/business` — the **Business** tab of the Settings group, shown to the Super Admin alone. (It was at `/settings` until 2026-09-21, when Settings became one sidebar item whose parts are tabs; `/settings` now holds nothing and opens the first tab the reader's role may see, which for a Super Admin is this one and for everyone else is Holidays. The tabs are links, so each part keeps its own URL and its own filters.) Each setting shows its class as a badge, what changing it does, and — when it is locked — why, in place of the button. Changing a locked-but-still-editable setting (the currency, before the first account) warns before it is saved, and "Reset to default" is a confirmed action that never precedes "Change" in the DOM.
 
 ### What is not built
 

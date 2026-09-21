@@ -1,25 +1,16 @@
 import {
   AddressBook,
-  Bell,
-  CalendarBlank,
   ChartBar,
-  ClipboardText,
   MapTrifold,
   Money,
   Path,
   Receipt,
-  ShieldWarning,
   SlidersHorizontal,
   SquaresFour,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 
-import {
-  canManageOrganisation,
-  type Role,
-  seesReports,
-  seesSettings,
-} from "./roles";
+import { canManageOrganisation, type Role, seesReports } from "./roles";
 
 export interface NavItem {
   href: string;
@@ -89,38 +80,17 @@ export const NAV: NavGroup[] = [
   {
     title: "System",
     items: [
-      {
-        href: "/notifications",
-        label: "Notifications",
-        icon: Bell,
-        shownTo: everyone,
-      },
-      // M06: every role reads the holidays; only Admins change them (US-093).
-      {
-        href: "/settings/holidays",
-        label: "Holidays",
-        icon: CalendarBlank,
-        shownTo: everyone,
-      },
-      {
-        href: "/settings/audit",
-        label: "Audit log",
-        icon: ClipboardText,
-        shownTo: canManageOrganisation,
-      },
-      // M13: the other half — what was tried and turned away (ADR-0014).
-      {
-        href: "/settings/security",
-        label: "Refused attempts",
-        icon: ShieldWarning,
-        shownTo: canManageOrganisation,
-      },
-      // M15: the business's own settings, the Super Admin's alone (US-094).
+      /**
+       * One item for the whole Settings group; its parts — business settings,
+       * holidays, notifications, the audit log and the refused attempts — are
+       * tabs within it (`settings-tabs.ts`). Which tabs a role sees, and which
+       * one `/settings` opens on, is decided there.
+       */
       {
         href: "/settings",
-        label: "Business settings",
+        label: "Settings",
         icon: SlidersHorizontal,
-        shownTo: seesSettings,
+        shownTo: everyone,
       },
     ],
   },

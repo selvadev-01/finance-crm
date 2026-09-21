@@ -7,13 +7,15 @@ import {
   DownloadSimple,
   List,
   SignOut,
+  UserCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Me } from "@repo/contracts";
-import { AppShell, Button, Menu } from "@repo/ui";
+import { AppShell, Button, Menu, Popover } from "@repo/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
+import { GlobalSearch } from "../../components/global-search";
 import { authClient } from "../../lib/auth-client";
 import { navFor } from "../../lib/console-nav";
 import {
@@ -23,6 +25,7 @@ import {
 } from "../../lib/device-layout";
 import { useCanInstall } from "../../lib/install-prompt";
 import { currentHref } from "../../lib/nav";
+import { NotificationPanel } from "../../lib/notifications/notification-panel";
 import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 import { ROLE_LABEL } from "../../lib/roles";
 import { LANDING, SignedInContext, useMe } from "../../lib/use-me";
@@ -152,6 +155,7 @@ function ComputerConsole({
 }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const [dialog, setDialog] = useState<"switch" | "install" | null>(null);
   const canInstall = useCanInstall();
 
@@ -174,9 +178,6 @@ function ComputerConsole({
             icon={<Icon aria-hidden size={18} />}
             label={item.label}
             state={isCurrent(item.href) ? "current" : "idle"}
-            count={
-              item.href === "/notifications" ? (unread ?? undefined) : undefined
-            }
           >
             <Link href={item.href} />
           </AppShell.NavItem>
@@ -234,18 +235,36 @@ function ComputerConsole({
             <List aria-hidden size={20} />
           </Button>
           <AppShell.SidebarToggle />
-          <span className="truncate text-label text-ink-muted">
+          <span className="hidden truncate text-label text-ink-muted sm:block">
             {section?.label ?? "Rasi"}
           </span>
 
+          <GlobalSearch role={me.role} />
+
           <div className="ml-auto flex items-center gap-2.5">
-            <AppShell.TopbarAction
-              label="Notifications"
-              icon={<Bell aria-hidden />}
-              count={unread ?? undefined}
-            >
-              <Link href="/notifications" />
-            </AppShell.TopbarAction>
+            {/*
+             * The bell opens the centre itself, rather than a page (S-21):
+             * a notification is read on the way to its subject, and a page in
+             * between is a stop for nothing. Radix mounts the panel only while
+             * it is open, so nothing is fetched until the bell is pressed.
+             */}
+            <Popover.Root open={bellOpen} onOpenChange={setBellOpen}>
+              <AppShell.TopbarAction
+                label="Notifications"
+                icon={<Bell aria-hidden />}
+                count={unread ?? undefined}
+              >
+                <Popover.Trigger />
+              </AppShell.TopbarAction>
+              <Popover.Content
+                align="end"
+                aria-label="Notifications"
+                className="flex w-[min(26rem,calc(100vw-1.5rem))] flex-col gap-[var(--stack-gap)] p-4"
+              >
+                <h2 className="text-heading text-ink">Notifications</h2>
+                <NotificationPanel onNavigate={() => setBellOpen(false)} />
+              </Popover.Content>
+            </Popover.Root>
 
             <Menu.Root>
               <Menu.Trigger asChild>
@@ -284,6 +303,12 @@ function ComputerConsole({
                   <span>{ROLE_LABEL[me.role]}</span>
                 </Menu.Label>
                 <Menu.Separator />
+                <Menu.Item asChild>
+                  <Link href="/profile">
+                    <UserCircle aria-hidden size={16} />
+                    My profile
+                  </Link>
+                </Menu.Item>
                 <Menu.Item onSelect={() => setDialog("switch")}>
                   <Desktop aria-hidden size={16} />
                   Layout: computer

@@ -29,10 +29,6 @@ describe("the phone layout's navigation", () => {
       "/lines",
       "/sectors",
       "/team",
-      "/notifications",
-      "/settings/holidays",
-      "/settings/audit",
-      "/settings/security",
       "/settings",
     ]);
   });
@@ -42,17 +38,22 @@ describe("the phone layout's navigation", () => {
       mobileNav("SENIOR").more.flatMap((group) => group.items),
     );
     expect(more).not.toContain("/sectors");
-    expect(more).not.toContain("/settings/audit");
-    expect(more).not.toContain("/settings/security");
-    expect(more).not.toContain("/settings");
     expect(more).toContain("/reports");
   });
 
-  it("offers business settings to the Super Admin alone", () => {
-    const adminMore = hrefs(
-      mobileNav("ADMIN").more.flatMap((group) => group.items),
+  it("gives every console role one Settings item, its parts being tabs", () => {
+    for (const role of ["SUPER_ADMIN", "ADMIN", "SENIOR"] as const) {
+      const more = hrefs(mobileNav(role).more.flatMap((group) => group.items));
+      expect(more.filter((href) => href.startsWith("/settings"))).toEqual([
+        "/settings",
+      ]);
+    }
+  });
+
+  it("no longer offers a notifications page — the bell is the whole surface", () => {
+    const more = hrefs(
+      mobileNav("SUPER_ADMIN").more.flatMap((group) => group.items),
     );
-    expect(adminMore).not.toContain("/settings");
-    expect(adminMore).toContain("/settings/audit");
+    expect(more).not.toContain("/notifications");
   });
 });

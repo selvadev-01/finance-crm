@@ -28,10 +28,15 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'customers',
   'dashboard',
   'design-system',
+  'forgot-password',
   'home',
   'lines',
+  // Kept although the page went to the bell (2026-09-21): a business called
+  // "Notifications" would still be confusing at `/notifications/sign-in`.
   'notifications',
+  'profile',
   'reports',
+  'reset-password',
   'route',
   'sectors',
   'serwist',

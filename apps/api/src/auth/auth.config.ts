@@ -5,6 +5,12 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { loadConfig } from '../platform/config/config.js';
 import { completePasswordChange, passwordChange } from './password-change.js';
 import {
+  completePasswordReset,
+  passwordReset,
+  RESET_LINK_MINUTES,
+  sendPasswordReset,
+} from './password-reset.js';
+import {
   SESSION_EXPIRES_IN_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
 } from './session-policy.js';
@@ -27,6 +33,10 @@ const isProduction = config.NODE_ENV === 'production';
 
 signInAudit.write = (attempt) => writeSignInAudit(prisma, attempt);
 passwordChange.complete = (userId) => completePasswordChange(prisma, userId);
+passwordReset.send = async (request) => {
+  await sendPasswordReset(prisma, request);
+};
+passwordReset.complete = (userId) => completePasswordReset(prisma, userId);
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
@@ -49,6 +59,33 @@ export const auth = betterAuth({
     // creation (US-092) creates the user and credential server-side.
     disableSignUp: true,
     minPasswordLength: 10,
+
+    // US-003 self-service reset, offered to all four roles (decided
+    // 2026-09-20). Better Auth answers the same neutral message whether or not
+    // the address exists; `sendPasswordReset` keeps it that way by queueing
+    // nothing for a suspended, deleted or non-staff account.
+    //
+    // Rate limiting is Better Auth's own: it ships a rule of three requests a
+    // minute for /request-password-reset, active when rate limiting is on —
+    // which, left at the default, means production only, per process. The same
+    // caveat as the sign-up limiter (M01).
+    sendResetPassword: async ({ user, url }) => {
+      await passwordReset.send({
+        userId: user.id,
+        name: user.name,
+        url,
+        emailEnabled: config.EMAIL_PROVIDER === 'SMTP',
+      });
+    },
+    resetPasswordTokenExpiresIn: RESET_LINK_MINUTES * 60,
+
+    // Every device is signed out, as an Admin reset does. The audit entry is
+    // written by `onPasswordReset`, which runs first and so can still count
+    // the sessions.
+    onPasswordReset: async ({ user }) => {
+      await passwordReset.complete(user.id);
+    },
+    revokeSessionsOnPasswordReset: true,
   },
 
   // US-001: only ACTIVE staff sign in, and every attempt is audited.

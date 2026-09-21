@@ -17,6 +17,7 @@ export {
 export { Checkbox, Choice, type ChoiceProps, Switch } from "./choice";
 export { cn } from "./cn";
 export { Combobox, type ComboboxOption, type ComboboxProps } from "./combobox";
+export { CommandPalette, type CommandPaletteProps } from "./command-palette";
 export { DeltaChip } from "./delta-chip";
 export { HealthCard } from "./health-card";
 export { Meter, RadialMeter } from "./meter";
@@ -60,7 +61,7 @@ export { Popover } from "./popover";
 export { PortalContainerContext, usePortalContainer } from "./portal-container";
 export { Select, type SelectProps } from "./select";
 export { Slot } from "./slot";
-export { Tabs } from "./tabs";
+export { Tabs, tabLinkClass, tabListClass } from "./tabs";
 export { Textarea, type TextareaProps } from "./textarea";
 export { Field, type FieldProps } from "./field";
 export { FormMessage, type FormMessageProps } from "./form-message";

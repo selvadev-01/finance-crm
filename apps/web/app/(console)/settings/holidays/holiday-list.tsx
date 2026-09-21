@@ -23,7 +23,6 @@ import { useState } from "react";
 
 import { displayColumn, valueColumn } from "../../../../components/columns";
 import { ListFallback } from "../../../../components/list-state";
-import { PageTrail } from "../../../../components/page-trail";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
@@ -83,9 +82,6 @@ export function HolidayList({
   return (
     <>
       <PageHeader
-        trail={
-          <PageTrail steps={[{ label: "Settings" }, { label: "Holidays" }]} />
-        }
         title="Holidays"
         description="No collections are due on these days. Schedules skip them, like Sundays."
         actions={addHoliday}

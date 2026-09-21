@@ -75,6 +75,23 @@ function toAssignment(row: AssignmentRow) {
   };
 }
 
+/**
+ * US-024a: what the global search box matches on a staff member — any part of
+ * the name, staff code, email or phone, in any case. Nothing is matched
+ * exactly: a staff code is a prefix plus a random suffix (`SEN-9F3A21B4`), so
+ * a whole-code match would mean typing the UUID slice. The name and email sit
+ * on the Better Auth `user` relation, filtered inside the profile's own
+ * `staffScope`, so it widens nothing.
+ */
+export function staffSearchTerms(q: string): Prisma.StaffProfileWhereInput[] {
+  return [
+    { user: { name: { contains: q, mode: 'insensitive' } } },
+    { user: { email: { contains: q, mode: 'insensitive' } } },
+    { staffCode: { contains: q, mode: 'insensitive' } },
+    { phone: { contains: q, mode: 'insensitive' } },
+  ];
+}
+
 function toSummary(row: StaffRow): StaffSummary {
   const current = row.assignments[0];
   return {
@@ -103,6 +120,7 @@ export class StaffDirectoryService {
   async list(
     context: RequestContext,
     page: PageRequest & {
+      q?: string | undefined;
       role?: StaffSummary['role'] | undefined;
       status?: StaffSummary['status'] | undefined;
     },
@@ -110,6 +128,7 @@ export class StaffDirectoryService {
   ): Promise<Page<StaffSummary>> {
     const rows = await this.database.client.staffProfile.findMany({
       where: inScope(staffScope(context, today), {
+        ...(page.q ? { OR: staffSearchTerms(page.q) } : {}),
         ...(page.role ? { role: page.role } : {}),
         ...(page.status ? { status: page.status } : {}),
       }),

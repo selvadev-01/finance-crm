@@ -8,14 +8,28 @@ const NAMES: Record<ConsoleRole, string> = {
   SENIOR: "Karthik R",
 };
 
+/** One canned answer, or a function of the URL when the query matters. */
+export type ApiAnswer = { status?: number; json: unknown };
+export type ApiAnswers = Record<string, ApiAnswer | ((url: URL) => ApiAnswer)>;
+
 /**
- * Answers every `/api/…` request in the browser: `/api/me` as `role`, and
- * everything else `404`, which each page shows as its not-found state. The
- * console's frame — what these tests are about — needs only `/api/me`.
+ * Answers every `/api/…` request in the browser: `/api/me` as `role`, then
+ * anything in `answers` by pathname, and everything else `404`, which each
+ * page shows as its not-found state.
+ *
+ * The console's frame needs only `/api/me`; a page with data of its own passes
+ * `answers`. **These are fixtures, not the API** — what the screen does with a
+ * shape is proven here, that the API produces that shape is proven over HTTP
+ * in `apps/api/test`.
  */
-export async function signedInAs(page: Page, role: ConsoleRole): Promise<void> {
+export async function signedInAs(
+  page: Page,
+  role: ConsoleRole,
+  answers: ApiAnswers = {},
+): Promise<void> {
   await page.route("**/api/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const url = new URL(route.request().url());
+    const path = url.pathname;
     if (path === "/api/me") {
       await route.fulfill({
         json: {
@@ -34,6 +48,15 @@ export async function signedInAs(page: Page, role: ConsoleRole): Promise<void> {
       });
       return;
     }
+
+    const answer = answers[path];
+    if (answer) {
+      const { status, json } =
+        typeof answer === "function" ? answer(url) : answer;
+      await route.fulfill({ status: status ?? 200, json });
+      return;
+    }
+
     await route.fulfill({
       status: 404,
       json: { code: "NOT_FOUND", message: "Not found in the layout tests." },

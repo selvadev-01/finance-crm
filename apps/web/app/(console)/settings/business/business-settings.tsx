@@ -19,9 +19,8 @@ import {
 } from "@repo/ui";
 import { useState } from "react";
 
-import { PageTrail } from "../../../components/page-trail";
-import { LoadFailed } from "../../../components/query-state";
-import { useApiQuery } from "../../../lib/use-api-query";
+import { LoadFailed } from "../../../../components/query-state";
+import { useApiQuery } from "../../../../lib/use-api-query";
 import { ChangeSettingDialog, ResetSettingDialog } from "./setting-dialogs";
 
 /**
@@ -67,7 +66,6 @@ export function BusinessSettingsScreen() {
 
   const header = (
     <PageHeader
-      trail={<PageTrail steps={[{ label: "Settings" }]} />}
       title="Business settings"
       description="The values the business runs on. Only a Super Admin sees or changes them, and every change is written to the audit log."
     />

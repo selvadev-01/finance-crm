@@ -116,9 +116,11 @@ Nothing else is created: no sector, line or setting. Ledger accounts appear on f
 
 **`GET /api/organizations/:slug`** returns `{ slug, name }`, or `404 ORGANIZATION_NOT_FOUND`; a malformed slug is `400`. It backs the business's sign-in link, **`/<slug>/sign-in`**, which names the business above the ordinary form. After sign-in, that page checks `GET /api/me` (which now includes `organization: { name, slug }`) and signs out an account belonging to another business, telling it to use its own link. This keeps people on the right page; it is not access control. The organization always comes from the session's staff profile (M02), and plain `/sign-in` still works for everyone.
 
+Both screens are checked in a real browser by `apps/offline-e2e/layout-tests/sign-up-and-change-password.spec.ts`, which **writes nothing**: a real sign-up would leave an organisation that can never be deleted, so the API is answered inside the browser. The success case fakes `201`, because the contract client refuses a status the route does not declare — a `200` there fails exactly as a wrong API would.
+
 ## As built — admin password reset (US-003)
 
-**Decided 2026-09-13: Admin-initiated reset only.** There was no email provider, so self-service "forgot password" waited until one was chosen. SMTP email now exists (M10, 2026-09-15); self-service reset through it is still unbuilt and needs its own decision, since field staff often have no inbox.
+**Decided 2026-09-13: Admin-initiated reset only.** There was no email provider, so self-service "forgot password" waited until one was chosen. SMTP email arrived with M10 (2026-09-15) and the self-service half is now built too — [below](#as-built--self-service-password-reset-us-003-2026-09-20). The two live side by side: the Admin reset is the answer for field staff whose email address is an office one nobody reads.
 
 `POST /api/staff/:staffProfileId/password-reset` (permission `staff.resetPassword`) — in `apps/api/src/identity/`:
 
@@ -136,6 +138,25 @@ While `mustChangePassword` is set, the temporary password signs in but **every R
 | `NO_PASSWORD_CREDENTIAL`    | `422`  | The user has no password to replace         | No                  |
 
 Forcing a reset on the owner is how an Admin would take the owner's account, so that refusal is a `security_event`, not only a `403` — added 2026-09-19 after a security review found this route recording neither of its first two refusals.
+
+## As built — self-service password reset (US-003, 2026-09-20)
+
+**Decided 2026-09-20: offered to all four roles.** A Junior's address is often a placeholder an Admin typed at onboarding; the link then never arrives and they ask an Admin, exactly as before. Restricting the link by role would have bought nothing — the screen says the same thing either way — and would have left a Senior locked out at six in the morning with no route but the office.
+
+The token is **Better Auth's**, not a Rasi table: `POST /api/auth/request-password-reset` writes a one-time value into `verification` and `POST /api/auth/reset-password` consumes it. Rasi supplies the two ends, in `apps/api/src/auth/password-reset.ts`:
+
+1. **`sendResetPassword`** queues the email in `email_outbox` with kind `PASSWORD_RESET` (migration `password_reset_email`), for the `dispatch-emails` job to send. **Only an ACTIVE, undeleted staff member is sent a link** — a suspended account, a soft-deleted one or a user with no staff profile is silently passed over. With `EMAIL_PROVIDER=NONE` nothing is queued.
+2. **`onPasswordReset`** writes the `UPDATE` audit entry — `passwordReset: 'SELF_SERVICE'` and the number of sessions about to go — and clears `mustChangePassword` if it was set: the person has just chosen a password themselves, which is what the flag was waiting for. `revokeSessionsOnPasswordReset` then signs every device out, as an Admin reset does.
+
+**The answer never says whether the account exists.** Better Auth returns the same message and mitigates the timing difference; queueing nothing for a suspended or deleted staff member keeps it that way. Otherwise the screen would hand a stranger a way to test addresses against the staff list.
+
+**The link lasts 30 minutes** (`RESET_LINK_MINUTES`) and works once. Rate limiting is Better Auth's own rule of three requests a minute for that path, which — left at the default — is **active in production only and counted per process**, the same caveat as the sign-up limiter above.
+
+Screens, in `apps/web/app/(auth)/`: **`/forgot-password`** (email, then the neutral confirmation, which also tells a Junior to ask an Admin if nothing arrives) and **`/reset-password`** (new password and confirmation, reached from the email by way of Better Auth's callback, which appends `?token=`). A spent or expired link arrives with no token and gets "that link no longer works" and a way to ask for another. Both sign-in screens carry a **Forgotten your password?** link. The reset screen confirms its own success — "set, and every device has been signed out" with a link onward — rather than sending a flag to `/sign-in`, which stays prerendered for a Junior opening it on a weak signal.
+
+Proven in `apps/api/test/auth/password-reset.spec.ts` (Tier 1, the queued row and both audit shapes) and in `apps/offline-e2e/layout-tests/password-reset.spec.ts` (real Chrome, both screens at 390 and 1280). The browser suite **writes nothing**: the screens are public, so it never signs in, and Better Auth's two calls are answered inside the browser — which is also the only way to hold a single-use token still.
+
+**Proven end to end on 2026-09-21:** a reset requested for a real Super Admin account queued the `PASSWORD_RESET` row, `dispatch-emails` claimed it, and Nodemailer delivered it through Gmail SMTP on the first attempt — `email_outbox` `SENT`, no error. Better Auth's token, this file's two halves, the outbox, the pg-boss job and the SMTP transport all ran against real infrastructure.
 
 **Who am I — `GET /api/me`** (`profile.viewOwn`, every role) returns `userId`, `staffProfileId`, `name`, `email`, `role`, `currentLineId` and `organization` (`name`, `slug`). The web client calls it on every signed-in page. `401` sends the user to `/sign-in`, and `403 PASSWORD_CHANGE_REQUIRED` sends them to `/change-password`. Otherwise the client forwards to the role's landing: `/dashboard` in the console for Super Admin, Admin and Senior, and `/route` for Junior. The client only follows the API's answer and decides nothing itself.
 
@@ -193,6 +214,19 @@ In `apps/api/src/identity/staff-admin.service.ts`, on the Team read model above.
 **`INACTIVE` is “Mark as left” in the console (2026-09-20).** The staff page offers Suspend (temporary) and Mark as left (they have gone for good) separately, and Reactivate from either. Each dialog names its own consequence, and the departure one says the record, collections and history are kept. The on-duty and unsynced-collection guards are the endpoint’s, unchanged.
 
 **Notifications are not raised.** M01's `staff.created`, `staff.suspended` and `staff.role_changed` events have no consumer besides M13, which is served by the audit entry; adding notices is an M10 decision, not an implicit one.
+
+---
+
+## As built — my profile (S-32, 2026-09-21)
+
+`/profile` in the console, for every console role, from the account menu (and on a phone from the account block at the top of "More"). It is the one screen a staff member has about themselves.
+
+- **What it reads.** `/api/me` for the name, email, role and organisation, and `GET /api/staff/:staffProfileId` with their own id for the staff code, the mobile, the line they work today and the date they joined. **No route was added for it.**
+- **A Senior between assignments is outside their own scope.** `staffScope` matches a Senior only to the staff on their current line, so with no current line their own staff row answers `404`. The page then shows the `/api/me` fields and stops, rather than putting a refusal on a page about the reader. This is the scoping rule working, not a gap: the row genuinely is out of scope, and the page is built to need it only for the extra detail.
+- **The only thing changed here is the password**, through Better Auth's own `changePassword` with `revokeOtherSessions: true` — the same call the forced change at `/change-password` makes (US-003), with the first field labelled for a password in use rather than a temporary one, and the reader left where they were. Name, mobile, role and assignment are staff administration and stay on S-14, where the rank and self-action rules apply.
+- **"This device"** repeats the account menu's layout and install actions (ADR-0016). Nothing about the device is on the account.
+
+Checked in a browser in `apps/offline-e2e/layout-tests/settings-and-profile.spec.ts`: the details and the line link, the route from the account menu, the reduced page for a Senior out of their own scope, and 360px from the phone layout's "More". The suite writes nothing.
 
 ---
 

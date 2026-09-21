@@ -206,7 +206,8 @@ export const accountContract = {
   updateAccountTerms: route({
     method: "PATCH",
     path: "/api/accounts/:accountId",
-    summary: "Correct a PENDING account’s terms before it is disbursed (US-030)",
+    summary:
+      "Correct a PENDING account’s terms before it is disbursed (US-030)",
     pathParams: accountParams,
     /**
      * The whole set of terms, checked exactly as at creation (BR-01). The
@@ -247,8 +248,19 @@ export const accountContract = {
   listAccounts: route({
     method: "GET",
     path: "/api/accounts",
-    summary: "Accounts visible to the caller",
+    summary: "Accounts visible to the caller, optionally searched (US-024a)",
     query: pageQuerySchema.extend({
+      /**
+       * Global search (US-024a): any part of the account code — whole
+       * (`ACC-2026-00231`), without the year (`00231`) or just its number
+       * (`231`) — or any part of the customer's name, in any case.
+       */
+      q: z
+        .string()
+        .trim()
+        .max(80)
+        .optional()
+        .transform((value) => (value ? value : undefined)),
       customerId: idSchema.optional(),
       lineId: idSchema.optional(),
       status: accountStatusSchema.optional(),

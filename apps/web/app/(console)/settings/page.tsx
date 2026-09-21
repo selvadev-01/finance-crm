@@ -1,16 +1,32 @@
-import type { Metadata } from "next";
+"use client";
 
-import { BusinessSettingsScreen } from "./business-settings";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export const metadata: Metadata = { title: "Business settings · Rasi" };
+import { firstSettingsTab } from "../../../lib/settings-tabs";
+import { useSignedIn } from "../../../lib/use-me";
 
 /**
- * S-28 business settings (US-094). Super Admin only (M15); the API refuses
- * every other role at both routes, and the screen shows that refusal rather
- * than pretending the page does not exist.
+ * `/settings` holds nothing of its own — it is the group, and the group's
+ * parts are its tabs. It sends the reader to the first tab their role may
+ * open: business settings for a Super Admin (US-094), holidays for everyone
+ * else (US-093).
  *
- * No URL state: the page is one list of settings, with no filter and no tab.
+ * The role only exists in the browser, so this is a client redirect. There is
+ * no server session to read: every console page fetches `/api/me` itself.
  */
 export default function SettingsPage() {
-  return <BusinessSettingsScreen />;
+  const me = useSignedIn();
+  const router = useRouter();
+  const destination = firstSettingsTab(me.role);
+
+  useEffect(() => {
+    router.replace(destination);
+  }, [router, destination]);
+
+  return (
+    <p className="sr-only" role="status">
+      Opening settings
+    </p>
+  );
 }

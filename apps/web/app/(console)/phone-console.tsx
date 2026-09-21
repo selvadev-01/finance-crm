@@ -8,6 +8,7 @@ import {
   DotsThreeOutline,
   DownloadSimple,
   SignOut,
+  UserCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Me } from "@repo/contracts";
 import { AppShell, Button, Dialog, MobileShell } from "@repo/ui";
@@ -15,9 +16,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
+import { GlobalSearch } from "../../components/global-search";
 import { mobileNav } from "../../lib/console-nav";
 import { useCanInstall } from "../../lib/install-prompt";
 import { currentHref } from "../../lib/nav";
+import { NotificationPanel } from "../../lib/notifications/notification-panel";
 import { ROLE_LABEL } from "../../lib/roles";
 import { LayoutDialog } from "./layout-chooser";
 
@@ -43,6 +46,7 @@ export function PhoneConsole({
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const [dialog, setDialog] = useState<"switch" | "install" | null>(null);
   const canInstall = useCanInstall();
 
@@ -88,12 +92,23 @@ export function PhoneConsole({
         <span className="min-w-0 flex-1 truncate text-heading text-ink">
           {area}
         </span>
+        <GlobalSearch role={me.role} trigger="icon" />
+        {/*
+         * The bell opens the centre itself (S-21). On a phone that is a sheet
+         * rather than the computer layout's popover: it rises under the thumb
+         * and has the width to read a notification in.
+         */}
         <AppShell.TopbarAction
           label="Notifications"
           icon={<Bell aria-hidden />}
           count={unread ?? undefined}
         >
-          <Link href="/notifications" />
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={bellOpen}
+            onClick={() => setBellOpen(true)}
+          />
         </AppShell.TopbarAction>
       </MobileShell.AppBar>
 
@@ -137,20 +152,27 @@ export function PhoneConsole({
           onClose={() => setMoreOpen(false)}
           title="More"
         >
-          <div className="flex items-center gap-3 rounded-surface border border-border bg-surface p-3">
+          {/* The account block is the way to the profile — there is no
+              account menu in the phone layout. */}
+          <Link
+            href="/profile"
+            onClick={() => setMoreOpen(false)}
+            className="flex min-h-14 items-center gap-3 rounded-surface border border-border bg-surface p-3 transition-colors hover:bg-surface-sunken"
+          >
             <span
               aria-hidden
               className="grid size-10 shrink-0 place-items-center rounded-pill bg-accent-subtle text-label font-semibold text-accent"
             >
               {initials}
             </span>
-            <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-heading text-ink">{me.name}</span>
               <span className="text-caption text-ink-muted">
-                {ROLE_LABEL[me.role]}
+                {ROLE_LABEL[me.role]} · My profile
               </span>
             </span>
-          </div>
+            <UserCircle aria-hidden size={20} className="text-ink-subtle" />
+          </Link>
 
           <nav aria-label="More" className="flex flex-col gap-4">
             {more.map((group) => (
@@ -178,15 +200,6 @@ export function PhoneConsole({
                             <Icon size={20} />
                           </span>
                           <span className="flex-1">{item.label}</span>
-                          {item.href === "/notifications" && unread ? (
-                            <span
-                              data-numeric
-                              className="rounded-pill bg-critical px-1.5 text-2xs leading-4 font-semibold text-ink-inverse"
-                            >
-                              {unread}
-                              <span className="sr-only"> unread</span>
-                            </span>
-                          ) : null}
                           <CaretRight
                             aria-hidden
                             size={16}
@@ -231,6 +244,17 @@ export function PhoneConsole({
               Sign out
             </Button>
           </div>
+        </Dialog>
+      ) : null}
+
+      {bellOpen ? (
+        <Dialog
+          open
+          placement="sheet"
+          onClose={() => setBellOpen(false)}
+          title="Notifications"
+        >
+          <NotificationPanel onNavigate={() => setBellOpen(false)} />
         </Dialog>
       ) : null}
 

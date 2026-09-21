@@ -63,6 +63,12 @@ export function ResetPasswordDialog({
         title={`Temporary password for ${name}`}
         description="Give it to them in person or by phone. It is shown only now. They choose a new password when they next sign in."
       >
+        {/* `text-lg` is off Rasi's type scale, and stays deliberately: the
+            nearest token, `text-title`, wraps a 12-character password onto
+            two lines in this dialog at 360px, which is wrong for something
+            read aloud down a phone. Measured by the legibility test in
+            `apps/offline-e2e/layout-tests/reset-password-dialog.spec.ts`;
+            the scale has no size between body and title to use instead. */}
         <p
           className="rounded-control border border-border bg-surface-sunken px-3 py-3 text-center font-mono text-lg tracking-wider text-ink select-all"
           aria-label="Temporary password"

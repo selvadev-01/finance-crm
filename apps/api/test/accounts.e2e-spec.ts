@@ -32,6 +32,7 @@ describe('accounts (M05, US-030, e2e)', () => {
   let prisma: PrismaClient;
   let organizationId: string;
   let lineA: string;
+  let lineB: string;
   let customerOnA: string;
   let customerOnB: string;
   const cookies = {} as Record<StaffRole, string>;
@@ -63,7 +64,7 @@ describe('accounts (M05, US-030, e2e)', () => {
     const org = await createTestOrganization(prisma, ['Line A', 'Line B']);
     organizationId = org.organization.id;
     lineA = org.lines[0]!.id;
-    const lineB = org.lines[1]!.id;
+    lineB = org.lines[1]!.id;
 
     for (const role of ['SUPER_ADMIN', 'ADMIN', 'SENIOR', 'JUNIOR'] as const) {
       staff[role] = await createTestStaff(prisma, { organizationId, role });
@@ -472,6 +473,100 @@ describe('accounts (M05, US-030, e2e)', () => {
           })
         ).status,
       ).toBe('ACTIVE');
+    });
+  });
+
+  /**
+   * The accounts half of the console's global search (US-024a). Every account
+   * here is PENDING — searching reads, so nothing needs disbursing.
+   */
+  describe('searching accounts (US-024a)', () => {
+    let mine: { id: string; accountCode: string };
+    let elsewhere: { id: string; accountCode: string };
+    const customerName = `Meenakshi ${testCode('SRCH')}`;
+
+    const search = async (role: StaffRole, q: string) =>
+      (
+        await as(role)
+          .get(`/api/accounts?limit=200&q=${encodeURIComponent(q)}`)
+          .expect(200)
+      ).body.data.map((row: { id: string }) => row.id) as string[];
+
+    beforeAll(async () => {
+      // The sector comes off an existing customer rather than the outer setup,
+      // so this block stays self-contained.
+      const { sectorId } = await prisma.customer.findUniqueOrThrow({
+        where: { id: customerOnA },
+        select: { sectorId: true },
+      });
+      const customer = (lineId: string, name: string) =>
+        prisma.customer.create({
+          data: {
+            organizationId,
+            customerCode: testCode('CUS'),
+            name,
+            mobile: '+919800000011',
+            address: 'Market Road',
+            sectorId,
+            lineId,
+            references: { create: [{ name: 'Ref', mobile: '+919800000012' }] },
+            linePeriods: openLinePeriod(lineId),
+          },
+        });
+      const onA = await customer(lineA, customerName);
+      const onB = await customer(lineB, `${customerName} Elsewhere`);
+
+      const create = async (customerId: string) =>
+        (
+          await as('ADMIN')
+            .post('/api/accounts', terms({ customerId }))
+            .expect(201)
+        ).body as { id: string; accountCode: string };
+      mine = await create(onA.id);
+      elsewhere = await create(onB.id);
+    });
+
+    it('finds an account by its code whole, without the ACC prefix, in either case, and by part of the customer’s name', async () => {
+      const withoutPrefix = mine.accountCode.replace(/^ACC-/, '');
+      for (const q of [
+        mine.accountCode,
+        withoutPrefix,
+        mine.accountCode.toLowerCase(),
+        'meenakshi',
+      ]) {
+        expect(await search('ADMIN', q), q).toContain(mine.id);
+      }
+      // A whole code identifies one account and nothing else.
+      expect(await search('ADMIN', mine.accountCode)).not.toContain(
+        elsewhere.id,
+      );
+    });
+
+    it('a code that matches nothing finds nothing, rather than every account', async () => {
+      expect(await search('ADMIN', 'ACC-1900-00001')).toEqual([]);
+    });
+
+    it('search stays within scope: a Senior or Junior never finds another line’s account, even by exact code', async () => {
+      for (const role of ['SENIOR', 'JUNIOR'] as const) {
+        expect(await search(role, elsewhere.accountCode)).not.toContain(
+          elsewhere.id,
+        );
+        expect(await search(role, 'meenakshi')).not.toContain(elsewhere.id);
+        // Their own line's account is still found by the same query.
+        expect(await search(role, 'meenakshi')).toContain(mine.id);
+      }
+      expect(await search('SUPER_ADMIN', elsewhere.accountCode)).toContain(
+        elsewhere.id,
+      );
+    });
+
+    it('an over-long search is refused naming the field', async () => {
+      const response = await as('ADMIN')
+        .get(`/api/accounts?q=${'a'.repeat(81)}`)
+        .expect(400);
+      expect(response.body.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'q' })]),
+      );
     });
   });
 });

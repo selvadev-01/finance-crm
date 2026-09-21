@@ -167,6 +167,17 @@ export const staffContract = {
     summary:
       "Staff visible to the caller, with the line each works today (S-14)",
     query: pageQuerySchema.extend({
+      /**
+       * Global search (US-024a): any part of the name, the staff code, the
+       * email or the phone, in any case. Staff codes carry a random suffix,
+       * so there is nothing exact to match on.
+       */
+      q: z
+        .string()
+        .trim()
+        .max(80)
+        .optional()
+        .transform((value) => (value ? value : undefined)),
       role: roleSchema.optional(),
       status: statusSchema.optional(),
     }),
@@ -256,7 +267,8 @@ export const staffContract = {
   deleteStaff: route({
     method: "DELETE",
     path: "/api/staff/:staffProfileId",
-    summary: "Soft-delete a staff member who has left, keeping their history (US-092)",
+    summary:
+      "Soft-delete a staff member who has left, keeping their history (US-092)",
     pathParams: z.object({ staffProfileId: idSchema }),
     responses: {
       200: staffDeletionSchema,

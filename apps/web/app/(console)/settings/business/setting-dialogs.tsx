@@ -14,8 +14,8 @@ import {
 } from "@repo/ui";
 import { useState } from "react";
 
-import { apiWrite } from "../../../lib/api-write";
-import { applyWriteFailure } from "../../../lib/form-errors";
+import { apiWrite } from "../../../../lib/api-write";
+import { applyWriteFailure } from "../../../../lib/form-errors";
 
 /**
  * Change one setting (US-094). The ranges are the API's — one registry, one

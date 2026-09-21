@@ -31,17 +31,21 @@ One Next.js deployment, routed by role at sign-in. A Junior signing in never see
 | Reports       |      ✓      |   ✓   |  Limited  |      —      |
 | Settings      |      ✓      |   —   |     —     |      —      |
 
-**As built, the console sidebar is grouped** by what a person is doing (ADR-0013). Only the areas whose screens exist are listed; Settings joins when it is built.
+**As built, the console sidebar is grouped** by what a person is doing (ADR-0013). Only the areas whose screens exist are listed.
 
-| Group   | Items                                                                     |
-| ------- | ------------------------------------------------------------------------- |
-| Operate | Dashboard, Collections, Cash, Reports                                     |
-| Records | Customers, Lines, Sectors (Admin and above), Team                         |
-| System  | Notifications, Holidays, Audit log and Refused attempts (Admin and above) |
+| Group   | Items                                             |
+| ------- | ------------------------------------------------- |
+| Operate | Dashboard, Collections, Cash, Reports             |
+| Records | Customers, Lines, Sectors (Admin and above), Team |
+| System  | Settings                                          |
+
+**System is one item** (2026-09-21). Its parts — business settings, holidays, notifications, the audit log and the refused attempts — are tabs inside it, not five sidebar entries, for the same reason Reports is one item: a sidebar entry per settings page grows the navigation faster than the product. Notifications left the sidebar altogether; the bell is the whole surface (see [Notifications](#notifications)).
 
 **Reports** (US-084) is one sidebar item for every console role — Super Admin, Admin and Senior — and it opens `/reports`, an index of the reports that exist, rather than a particular report. There are five reports specified and each is a different question, so a sidebar entry per report would grow the navigation faster than the product; the index is the one page each report story adds itself to. A Senior's "Limited" is enforced in the API, not by hiding the item: their report covers their own line (M12).
 
-The top bar shows the current area, the bell and the account menu (name, role, sign out). The page itself carries its breadcrumb trail above the title (see [drill-down](#drill-down-follows-the-rollup-chain)).
+The top bar shows the current area, the bell and the account menu (name, role, **My profile**, layout, install, sign out). The page itself carries its breadcrumb trail above the title (see [drill-down](#drill-down-follows-the-rollup-chain)).
+
+**`/profile` is not an area** and has no sidebar item. It is about the reader — their record, their password, this device — not about the business, so it is reached from the account menu, and on a phone from the account block at the top of "More".
 
 **Hidden, not disabled.** A Senior does not see a greyed-out Sectors link — it is absent. A disabled control invites the question "how do I get access", which is not a conversation the product should start.
 
@@ -98,14 +102,17 @@ Team
 ├─ Staff list
 ├─ Staff detail → assignment history
 └─ Assignments
-Notifications
 Reports
 ├─ Line-wise · Investment · Collection · Overdue · Discrepancy
-Settings                     Super Admin only
-├─ Business settings
+Settings                     one item; its parts are tabs
+├─ Business settings         Super Admin only
 ├─ Holidays
-├─ Audit log
-└─ Refused attempts
+├─ Notifications             this device, and your categories
+├─ Audit log                 Admin and above
+└─ Refused attempts          Admin and above
+
+Notifications                the bell, not a page
+My profile                   the account menu, not a sidebar item
 ```
 
 **Maximum three levels deep.** Anything deeper becomes a filter or a tab, not another level.
@@ -139,6 +146,12 @@ A bell with an unread count in the console header; in the Junior's status bar.
 
 Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNING` / `SUCCESS` / `INFORMATION` (§24). Each deep-links to its subject — a low-collection alert opens that collection, not a filtered list.
 
+**The bell opens the centre itself, not a page** (2026-09-21). In the console it is a popover on a computer and a sheet on a phone; there is no `/notifications` route and no sidebar item. A notification is read on the way to its subject, so a page between the bell and the collection is a stop for nothing — and following a link closes the panel behind it, rather than leaving a page to come back to and leave again. The panel is mounted only while open, so the list is fetched when the bell is pressed; the unread count alone is polled.
+
+**What to be notified about is a setting, not part of the centre**: this device's push switch and the reader's categories are the `/settings/notifications` tab. They are changed once and then left alone, which is not what a panel opened twenty times a day is for.
+
+The Junior is unchanged: their status-bar bell still opens `/route#notifications`, one of the four views of the one cached page.
+
 ---
 
 ## URLs
@@ -151,7 +164,9 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 /collections          /collections/:id      /collections/pending-approval
 /team                 /team/:id
 /reports              /reports/line-wise    /reports/investment    /reports/collection    /reports/overdue    /reports/discrepancy    (the rest join as they are built)
-/settings             /settings/holidays    /settings/audit    /settings/security
+/settings             opens the first tab the role may see
+/settings/business    /settings/holidays    /settings/notifications    /settings/audit    /settings/security
+/profile              the reader's own record, password and device
 
 /route                            Junior home (S-01)
 /route#collect/:customerId        entry (S-02), every account of that customer
@@ -187,7 +202,9 @@ The page's server component reads them (`readListParams`), and the list keeps th
 | `/cash`                | `line`, `date` (the day close to open)                                      |
 | `/settings/audit`      | `action`, `entityTable`, `entityId`, `actorUserId`, `from`, `to`            |
 | `/settings/security`   | `kind`, `code`, `actorUserId`, `from`, `to` — refused attempts (ADR-0014)   |
-| `/settings`            | None. One list of settings — no filter, no tab (US-094)                     |
+| `/settings/business`   | None. One list of settings — no filter of its own (US-094)                  |
+| `/settings`            | None. It holds nothing: it opens the first tab the role may see             |
+| `/profile`             | None                                                                        |
 
 Paging is not in the URL. "Show more" follows the API's cursor, and a reload starts again from the first page.
 

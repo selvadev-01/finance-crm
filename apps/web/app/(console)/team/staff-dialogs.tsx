@@ -151,6 +151,9 @@ function TemporaryPasswordDialog({
       title={`Temporary password for ${name}`}
       description="Give it to them in person or by phone. It is shown only now. They choose a new password when they first sign in."
     >
+      {/* `text-lg` is off Rasi's type scale, and stays — see the same block
+          in `[staffProfileId]/reset-password-dialog.tsx` for why, and the
+          measurement behind it. */}
       <p
         className="rounded-control border border-border bg-surface-sunken px-3 py-3 text-center font-mono text-lg tracking-wider text-ink select-all"
         aria-label="Temporary password"
