@@ -110,22 +110,30 @@ By name, mobile or customer code, scoped by role. Postgres trigram index on name
 
 In `apps/api/src/customers/`, served through `packages/contracts/src/customer.contract.ts` ([ADR-0011](../../02-architecture/adr/0011-in-house-api-contract.md)). Status is in the [backlog](../../06-delivery/backlog.md).
 
-| Endpoint                                        | Permission            | Refusals                                                                                   |
-| ----------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `GET /api/customers`                            | `customer.view`       | `400` over-long `q` (scoped by `customerScope`; `?q=`, `?lineId=`, `?mobile=`, `?status=`) |
-| `GET /api/customers/:customerId`                | `customer.view`       | `404` (out of scope identical to missing). Includes references                             |
-| `POST /api/customers`                           | `customer.create`     | `400` (no reference, bad mobile), `404` line, `422 LINE_INACTIVE`, `409 DUPLICATE_MOBILE`  |
-| `PATCH /api/customers/:customerId`              | `customer.update`     | `400` (no reference, bad mobile), `404`, `409 DUPLICATE_MOBILE`, `422 UNKNOWN_REFERENCE`   |
-| `POST /api/customers/:customerId/line-transfer` | `customer.changeLine` | `404` customer or line, `422 LINE_INACTIVE`, `422 SAME_LINE`                               |
-| `GET /api/customers/:customerId/line-transfers` | `customer.view`       | `404`. Every line this customer has been on, newest first                                  |
-| `GET /api/customers/:customerId/overview`       | `customer.view`       | `404`. Customer 360’s totals and today’s Senior and Juniors                                |
-| `GET /api/customers/:customerId/collections`    | `collection.view`     | `400` bad cursor, `404`. The customer’s whole history, newest first (M07)                  |
+| Endpoint                                        | Permission            | Refusals                                                                                        |
+| ----------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `GET /api/customers`                            | `customer.view`       | `400` over-long `q` (scoped by `customerScope`; `?q=`, `?lineId=`, `?mobile=`, `?status=`)      |
+| `GET /api/customers/:customerId`                | `customer.view`       | `404` (out of scope identical to missing). Includes references                                  |
+| `POST /api/customers`                           | `customer.create`     | `400` (no reference, bad mobile), `404` line, `422 LINE_INACTIVE`, `409 DUPLICATE_MOBILE`       |
+| `PATCH /api/customers/:customerId`              | `customer.update`     | `400` (no reference, bad mobile), `404`, `409 DUPLICATE_MOBILE`, `422 UNKNOWN_REFERENCE`        |
+| `POST /api/customers/:customerId/line-transfer` | `customer.changeLine` | `404` customer or line, `422 LINE_INACTIVE`, `422 SAME_LINE`                                    |
+| `GET /api/customers/:customerId/line-transfers` | `customer.view`       | `404`. Every line this customer has been on, newest first                                       |
+| `GET /api/customers/:customerId/overview`       | `customer.view`       | `404`. Customer 360’s totals and today’s Senior and Juniors                                     |
+| `GET /api/lines/:lineId/customer-portfolio`     | `customer.view`       | `404` outside the line scope. The line's customers in visiting order with what each owes (J-09) |
+| `GET /api/customers/:customerId/collections`    | `collection.view`     | `400` bad cursor, `404`. The customer’s whole history, newest first (M07)                       |
 
 **Editing (US-021, 2026-09-20)** sends the whole editable record: name, mobiles, address, notes, status and 1–5 references. "Manage references" is part of the edit, not a separate route: a reference sent with its `id` is updated, one without is added, and one left out is removed. An `id` that is not this customer's reference is `422 UNKNOWN_REFERENCE`, so an edit can never reach another customer's row. The duplicate-mobile warning applies only when the mobile changes, and never counts the customer itself. **The line is not editable** — moving a customer is a transfer (US-023, BR-15). The audit entry records the editable fields before and after.
 
 **Search (US-024, 2026-09-20)** is `?q=` on the list: any part of the name, case-insensitive (`ILIKE`), or exactly a customer code — whole or as its number, `417` finding `CUS-00417` — or exactly a mobile in any form onboarding accepts. It runs inside `customerScope`, so a Senior or Junior can never find another line’s customer, even by its exact code. **The trigram index on the name is not built:** `pg_trgm` is available on the server but the `rasi` role has no `CREATE` on the database, so installing it needs a superuser once, as the `pgboss` schema did. The query needs no change when it arrives; at ~1,000 customers a sequential scan is well under a millisecond, so this waits until it is measured to matter.
 
 **Customer 360 (US-022, 2026-09-20).** `GET /api/customers/:customerId/overview` returns the counts of active, completed and other accounts, the **outstanding summed across active accounts**, the lifetime collected across every account, and the line’s current Senior and Juniors — "current" meaning in effect on today’s business date, not merely open (M03). Nothing is stored on the customer: the totals are summed at read time, because a customer may hold several accounts (BR-01a) and a stored total would be a cache of a sum of caches.
+
+**Customer portfolio (2026-09-22), for every role.**
+
+- **The overview** also gives the overdue active accounts, the missed days (MISSED slots on active accounts, BR-09), the last business date money was collected, and the invested and profit totals across all accounts. Invested and profit are `null` for a Junior (RBAC matrix, money visibility). Profit is P = A − I per account (BR-01), so the console calls it "Profit on these accounts", never "earned".
+- **`GET /api/lines/:lineId/customer-portfolio`** lists a line's customers in visiting order (US-040): each one's outstanding, active and completed accounts, overdue, missed days, due today and paid today, plus the line's outstanding, active accounts, overdue customers and the last seven days' collections. It has no invested or profit fields, because it is the one shape a Junior may read. It uses a fixed number of queries whatever the line's size.
+- **Console:** Customer 360 opens on its Portfolio tab.
+- **Junior:** the field app has a Customers tab (`#customers`) and a customer's portfolio (`#customer/<id>`).
 
 The collection history is M07’s, served at `GET /api/customers/:customerId/collections`: one customer’s rows across every account, newest first, cursor-paged on (business date, id). **It is not date-bounded** as S-16 is — that limit exists for an organization-wide list, and 360 shows the whole of one customer’s history. Scope is still `collectionScope`, so a Junior sees their own entries and a Senior their line’s.
 

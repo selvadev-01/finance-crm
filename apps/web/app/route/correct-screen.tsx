@@ -1,26 +1,34 @@
 "use client";
 
-import { CloudSlash } from "@phosphor-icons/react/dist/ssr";
+import {
+  CheckCircle,
+  CloudSlash,
+  Info,
+  RadioButton,
+  Circle,
+} from "@phosphor-icons/react/dist/ssr";
 import { type CollectionListItem, collectionContract } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
   Button,
+  cn,
   Field,
   FormMessage,
   formatCurrency,
   Input,
+  Skeleton,
   Textarea,
 } from "@repo/ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../../lib/api-client";
 import { apiWrite } from "../../lib/api-write";
-import { BackToRoute } from "./sync-marks";
+import { Banner, cardClass, FieldPage, Section } from "./app-chrome";
 
 /**
- * US-044 on the Junior's phone — ask for a collection to be corrected. A
- * collection is never edited (BR-14): this requests an ADJUSTMENT, and
- * someone other than the requester decides it.
+ * J-06 · Ask for a correction (US-044 on the Junior's phone). A collection is
+ * never edited (BR-14): this requests an ADJUSTMENT, and someone other than
+ * the requester decides it.
  *
  * **Needs signal**, unlike recording one: the request goes to a Senior who
  * acts on it, and a correction queued on a phone would be an approval nobody
@@ -57,91 +65,139 @@ export function CorrectScreen({ connected }: { connected: boolean }) {
     return () => window.clearTimeout(timer);
   }, [load, connected]);
 
-  if (!connected && entries === null) {
-    return (
-      <section className="flex flex-col gap-4">
-        <BackToRoute />
-        <FormMessage tone="warning">
-          <span className="flex items-center gap-2">
-            <CloudSlash aria-hidden size={18} />
-            No signal. A correction needs to reach your Senior, so it cannot
-            wait on the phone — your collections still save without signal.
-          </span>
-        </FormMessage>
-      </section>
-    );
-  }
-
-  if (sent) {
-    return (
-      <section className="flex flex-col gap-4">
-        <BackToRoute />
-        <FormMessage tone="info">{sent}</FormMessage>
-      </section>
-    );
-  }
-
-  if (chosen) {
-    return (
-      <RequestForm
-        entry={chosen}
-        onCancel={() => setChosen(null)}
-        onSent={(message) => {
-          setChosen(null);
-          setSent(message);
-        }}
-      />
-    );
-  }
-
   return (
-    <section className="flex flex-col gap-4">
-      <BackToRoute />
-      <h1 className="text-lg font-semibold text-ink">Ask for a correction</h1>
-      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      {entries !== null && entries.length === 0 ? (
-        <p className="text-sm text-ink-muted">
-          You have recorded nothing today. Only today&rsquo;s collections can be
-          corrected from the phone; ask your Senior about an older one.
-        </p>
-      ) : null}
-      <ul className="flex flex-col divide-y divide-border rounded-surface border border-border bg-surface-raised">
-        {(entries ?? []).map((entry) => (
-          <li key={entry.id}>
-            <button
-              type="button"
-              onClick={() => setChosen(entry)}
-              className="flex min-h-touch w-full items-center gap-3 px-4 py-3 text-left"
+    <FieldPage back title="Ask for a correction" testId="correct">
+      {!connected && entries === null ? (
+        <Banner tone="warning" icon={<CloudSlash size={20} weight="regular" />}>
+          No signal. A correction needs to reach your Senior, so it cannot wait
+          on the phone — your collections still save without signal.
+        </Banner>
+      ) : (
+        <>
+          <p className="flex items-start gap-3 rounded-surface border border-border bg-surface-sunken px-4 py-3 text-sm text-ink">
+            <Info
+              aria-hidden
+              size={20}
+              weight="regular"
+              className="shrink-0 text-ink-muted"
+            />
+            The collection stays as it is. Your Senior approves the difference,
+            and only then does the account change.
+          </p>
+          {sent ? (
+            <p
+              role="status"
+              className="flex items-start gap-3 rounded-surface border border-positive-border bg-positive-subtle px-4 py-3 text-sm font-medium text-ink"
             >
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium text-ink">
-                  {entry.customerName}
-                </span>
-                <span className="text-xs text-ink-muted">
-                  {entry.accountCode}
-                </span>
-              </span>
-              <span
-                className="shrink-0 text-lg font-semibold text-ink"
-                data-numeric
+              <CheckCircle
+                aria-hidden
+                size={20}
+                weight="fill"
+                className="shrink-0 text-positive"
+              />
+              {sent}
+            </p>
+          ) : null}
+          {problem ? (
+            <FormMessage tone="critical">{problem}</FormMessage>
+          ) : null}
+          {entries === null && !problem ? (
+            <div
+              role="status"
+              aria-label="Loading today’s collections"
+              className="flex flex-col gap-2"
+            >
+              <Skeleton className="h-16 rounded-overlay" />
+              <Skeleton className="h-16 rounded-overlay" />
+            </div>
+          ) : null}
+          {entries !== null && entries.length === 0 ? (
+            <p className={cn(cardClass, "p-4 text-base text-ink-muted")}>
+              You have recorded nothing today that has reached the office. Only
+              today&rsquo;s collections can be corrected from the phone; ask
+              your Senior about an older one.
+            </p>
+          ) : null}
+          {entries && entries.length > 0 ? (
+            <Section title="Today’s collections">
+              <ul
+                aria-label="Collection to correct"
+                className="flex flex-col gap-2"
               >
-                {formatCurrency(entry.amount)}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+                {entries.map((entry) => {
+                  const selected = chosen?.id === entry.id;
+                  return (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setChosen(entry);
+                          setSent(null);
+                        }}
+                        className={cn(
+                          cardClass,
+                          "flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left",
+                          selected && "border-accent bg-accent-subtle",
+                        )}
+                      >
+                        {selected ? (
+                          <RadioButton
+                            aria-hidden
+                            size={22}
+                            weight="fill"
+                            className="shrink-0 text-accent"
+                          />
+                        ) : (
+                          <Circle
+                            aria-hidden
+                            size={22}
+                            weight="regular"
+                            className="shrink-0 text-ink-subtle"
+                          />
+                        )}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate font-semibold text-ink">
+                            {entry.customerName}
+                          </span>
+                          <span className="font-mono text-xs text-ink-muted">
+                            {entry.accountCode}
+                          </span>
+                        </span>
+                        <span
+                          className="shrink-0 text-lg font-semibold text-ink"
+                          data-numeric
+                        >
+                          {formatCurrency(entry.amount)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Section>
+          ) : null}
+          {chosen ? (
+            <RequestForm
+              key={chosen.id}
+              entry={chosen}
+              onSent={(message) => {
+                setChosen(null);
+                setSent(message);
+              }}
+            />
+          ) : null}
+        </>
+      )}
+    </FieldPage>
   );
 }
 
 function RequestForm({
   entry,
-  onCancel,
   onSent,
 }: {
   entry: CollectionListItem;
-  onCancel: () => void;
   onSent: (message: string) => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -171,21 +227,18 @@ function RequestForm({
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <BackToRoute />
-      <h1 className="text-lg font-semibold text-ink">
+    <section className={cn(cardClass, "flex flex-col gap-3 p-4")}>
+      <h2 className="text-base font-semibold text-ink" data-numeric>
         {entry.customerName} · {formatCurrency(entry.amount)}
-      </h1>
-      <p className="text-sm text-ink-muted">
-        The collection stays as it is. Your Senior approves the difference, and
-        only then does the account change (BR-14).
-      </p>
-      <Field label="What you actually collected">
+      </h2>
+      <Field label="What you actually collected (₹)">
         <Input
           inputMode="decimal"
           autoComplete="off"
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
+          className="h-14 text-right text-xl font-semibold"
+          data-numeric
         />
       </Field>
       <Field label="Why" hint="Required. Your Senior sees it.">
@@ -197,19 +250,14 @@ function RequestForm({
         />
       </Field>
       {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      <div className="flex gap-3">
-        <Button tone="ghost" onClick={onCancel} disabled={pending}>
-          Back
-        </Button>
-        <Button
-          tone="primary"
-          className="flex-1"
-          onClick={() => void send()}
-          disabled={pending || amount === "" || reason.trim() === ""}
-        >
-          {pending ? "Sending…" : "Ask to correct"}
-        </Button>
-      </div>
+      <Button
+        tone="primary"
+        className="h-14 w-full rounded-pill text-base font-semibold"
+        onClick={() => void send()}
+        disabled={pending || amount === "" || reason.trim() === ""}
+      >
+        {pending ? "Sending…" : "Ask to correct"}
+      </Button>
     </section>
   );
 }

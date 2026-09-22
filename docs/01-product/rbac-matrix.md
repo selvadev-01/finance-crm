@@ -32,7 +32,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 
 **"Current assignment" means the `line_assignment` in effect today** — `effectiveFrom ≤ today ≤ effectiveTo`, with a null `effectiveTo` open-ended, and today the business date in Asia/Kolkata. (Corrected 2026-09-13 from "`effectiveTo IS NULL`", which switched a Junior moved "effective tomorrow" to the new line a day early.) Not a field on the staff record — the assignment table is the authority (M03).
 
-> **Open question — "customer assigned to this Junior".** The data model has no customer-to-Junior assignment, and a line may have several current Juniors. **Decided 2026-09-13, for now:** a Junior's customers are every customer on their current line. That is exact while a line has one Junior at a time; if lines share Juniors, add a temporal `customer_assignment` table (which is also where route visiting order belongs) and change the single predicate that encodes this ([M02 as built](modules/M02-access-control.md#as-built)).
+> **Open question — "customer assigned to this Junior".** The data model has no customer-to-Junior assignment, and a line may have several current Juniors. **Decided 2026-09-13, for now:** a Junior's customers are every customer on their current line. That is exact while a line has one Junior at a time; if lines share Juniors, add a temporal `customer_assignment` table and change the single predicate that encodes this ([M02 as built](modules/M02-access-control.md#as-built)). **Visiting order did not wait for it** (decided 2026-09-21): it is a place per customer on its line (`customer.routePosition`), set by the line's Senior or an Admin, because a line is walked in one order whoever walks it. If lines come to share Juniors with different routes, the order moves to that table.
 
 > **Scoping applies to historical rows by the row's own attribution, not the viewer's current line.** A Senior moved from Line 3 to Line 7 sees Line 7's data — including collections recorded on Line 7 before they arrived, and _not_ including the Line 3 history they used to supervise. The line is the unit of responsibility; the person is not.
 >
@@ -108,6 +108,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Assign Senior to line   |      ✓      |   ✓   |    —     |    —     |
 | Assign / move Junior    |      ✓      |   ✓   |    —     |    —     |
 | View assignment history |      ✓      |   ✓   | own line |    —     |
+| Set visiting order      |      ✓      |   ✓   | own line |    —     |
 
 ### Money visibility (M09, M11, M12)
 

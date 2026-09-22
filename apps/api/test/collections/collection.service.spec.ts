@@ -524,6 +524,8 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           parseCalendarDate('2026-01-05'),
         );
         expect(route.day).toEqual({ kind: 'WORKING' });
+        // The field app names the line it is working (J-01, J-08).
+        expect(route.line).toEqual({ code: w.line.code, name: w.line.name });
         const group = route.customers.find((c) => c.customerId === both.id)!;
         expect(group.accounts.map((a) => a.expectedAmount).sort()).toEqual([
           '100.00',
@@ -558,6 +560,39 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
             .includedKeys,
         ).toEqual([]);
         expect(JSON.stringify(route)).not.toMatch(/invested|profit/i);
+      });
+    });
+
+    it('follows the line’s visiting order; customers not yet placed come last', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const first = await w.customer('Placed second');
+        const second = await w.customer('Placed first');
+        const unplaced = await w.customer('Not placed');
+        for (const customer of [first, second, unplaced])
+          await w.account({}, customer.id);
+        await tx.customer.update({
+          where: { id: second.id },
+          data: { routePosition: 1 },
+        });
+        await tx.customer.update({
+          where: { id: first.id },
+          data: { routePosition: 2 },
+        });
+
+        const route = await w.routes.route(
+          w.juniorContext,
+          parseCalendarDate('2026-01-05'),
+        );
+
+        const mine = route.customers.filter((customer) =>
+          [first.id, second.id, unplaced.id].includes(customer.customerId),
+        );
+        expect(mine.map((customer) => customer.name)).toEqual([
+          'Placed first',
+          'Placed second',
+          'Not placed',
+        ]);
       });
     });
 

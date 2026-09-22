@@ -34,6 +34,7 @@ function route(): RouteView {
     businessDate: TODAY,
     day: { kind: "WORKING" },
     lineId: "line-1",
+    line: { code: "LN-01", name: "Market Road" },
     customers: [
       {
         customerId: "cus-1",

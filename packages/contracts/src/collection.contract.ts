@@ -107,6 +107,11 @@ export const routeSchema = z.object({
   ]),
   /** `null` when the Junior has no line today. */
   lineId: idSchema.nullable(),
+  /**
+   * The same line as the Junior reads it — "LN-07 · Market Road" in the field
+   * app's header and profile. `null` exactly when `lineId` is.
+   */
+  line: z.object({ code: z.string(), name: z.string() }).nullable(),
   customers: z.array(
     z.object({
       customerId: idSchema,

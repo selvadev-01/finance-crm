@@ -8,10 +8,10 @@ This document says how.
 
 ## Two applications, one deployment
 
-| Surface           | Roles                      | Device             | Shell                    |
-| ----------------- | -------------------------- | ------------------ | ------------------------ |
-| **Admin console** | Super Admin, Admin, Senior | Desktop and tablet | Sidebar navigation       |
-| **Field app**     | Junior                     | Phone              | **No navigation chrome** |
+| Surface           | Roles                      | Device             | Shell                   |
+| ----------------- | -------------------------- | ------------------ | ----------------------- |
+| **Admin console** | Super Admin, Admin, Senior | Desktop and tablet | Sidebar navigation      |
+| **Field app**     | Junior                     | Phone              | **Five-tab bottom bar** |
 
 One Next.js deployment, routed by role at sign-in. A Junior signing in never sees the console shell; a Super Admin never sees the route screen.
 
@@ -53,24 +53,28 @@ Hiding is convenience only; every hidden route independently fails at the API ([
 
 ---
 
-## The Junior's app has no navigation
+## The Junior's app is a native five-tab app
 
-Four screens, and three of them are reached from the first:
+**Redesigned 2026-09-21** on the user's ask, from the approved Stitch set J-00…J-08 in the "Rasi Mobile, all roles" project ([stitch-mobile](stitch-mobile/README.md#junior-field-app-j-screens)). The first build had no navigation at all — one route screen with everything else reached from it — and the business owner found it too bare for a new collector to understand. It now reads as an installed Android app: a Material 3 top app bar on every screen, a bottom navigation bar on five tabs (four at first; Customers joined 2026-09-22), bottom sheets for confirmations and a snackbar after each door.
 
 ```
-Route (home)
-├─ Collection entry      tap a customer
-├─ Sync status           tap the unsynced badge
-└─ Notifications         tap the bell
+Route (home tab)                J-01   who to visit, progress, search
+├─ Collection entry             J-02   tap a customer; back returns here
+Customers (tab)                 J-09   the line as a portfolio, in visiting order
+└─ A customer's portfolio       J-10   accounts, a fortnight's payments; needs signal
+Collections (tab)               J-03   what was recorded today, and its sync state
+├─ Sync                         J-04   also from the sync chip on every screen
+└─ Ask for a correction         J-06   needs signal
+Cash (tab)                      J-05   count notes, hand over to the Senior; needs signal
+Profile (tab)                   J-08   who and which line, this phone, password, sign out
+Notifications                   J-07   the bell on every screen; needs signal
 ```
 
-No sidebar, no tab bar, no menu.
+> A Junior is standing at a customer's door, one-handed, in sunlight. The route still opens on launch and is where they return after every entry. The tabs are five places, not a menu: what they have to do (Route), who they collect from (Customers), what they have done (Collections), the money in their bag (Cash), and themselves and the phone (Profile). Nothing from the console — no Dashboard, Reports or Sectors — is offered.
 
-> A Junior is standing at a customer's door, one-handed, in sunlight. Navigation is a tax on the only task that matters. The route screen opens on launch and is where they return after every entry — the "back" action always goes to the route, and there is no deeper hierarchy to get lost in.
->
-> This is a deliberate departure from §25's uniform nine-item navigation. Giving a Junior a Dashboard, Reports and Sectors menu would be nine ways to not be collecting.
+**The top app bar** carries the screen's title and, on every screen, the **sync chip** and the bell. The chip answers "is my day safe" without a tap — "All sent", "3 not sent", or "Offline · 3" — and opens Sync. A screen opened over a tab (a customer, Sync, a correction, notifications) has a back arrow instead of the bottom bar.
 
-**A persistent status bar** is fixed at the top of every Junior screen: online/offline indicator and unsynced count. It is the one piece of chrome, and it is there because "is my day safe" must be answerable without tapping anything.
+**Banners** under the app bar hold on every screen until they stop being true: the sign-in has expired, the phone is full of unsent collections, the route is more than three days old.
 
 ---
 
@@ -142,7 +146,7 @@ Every detail page shows that chain as a breadcrumb trail above its title (`PageT
 
 ## Notifications
 
-A bell with an unread count in the console header; in the Junior's status bar.
+A bell with an unread count in the console header; in the Junior's top app bar.
 
 Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNING` / `SUCCESS` / `INFORMATION` (§24). Each deep-links to its subject — a low-collection alert opens that collection, not a filtered list.
 
@@ -150,7 +154,7 @@ Opening shows the role-scoped list, grouped by day, categorised `ALERT` / `WARNI
 
 **What to be notified about is a setting, not part of the centre**: this device's push switch and the reader's categories are the `/settings/notifications` tab. They are changed once and then left alone, which is not what a panel opened twenty times a day is for.
 
-The Junior is unchanged: their status-bar bell still opens `/route#notifications`, one of the four views of the one cached page.
+The Junior's bell opens `/route#notifications`, a view of the one cached page, with the push switch at its top.
 
 ---
 
@@ -168,10 +172,16 @@ The Junior is unchanged: their status-bar bell still opens `/route#notifications
 /settings/business    /settings/holidays    /settings/notifications    /settings/audit    /settings/security
 /profile              the reader's own record, password and device
 
-/route                            Junior home (S-01)
-/route#collect/:customerId        entry (S-02), every account of that customer
-/route#sync                       queue status (S-03)
-/route#handover                   hand over cash (S-06, needs signal)
+/route                            Route tab, the Junior's home (J-01, S-01)
+/route#customers                  Customers tab (J-09)
+/route#customer/:customerId       a customer's portfolio (J-10, needs signal)
+/route#collections                Collections tab (J-03)
+/route#handover                   Cash tab (J-05, S-06, needs signal)
+/route#profile                    Profile tab (J-08)
+/route#collect/:customerId        entry (J-02, S-02), every account of that customer
+/route#sync                       Sync (J-04, S-03)
+/route#correct                    ask for a correction (J-06, US-044, needs signal)
+/route#notifications              notifications (J-07, S-21, needs signal)
 
 /cash                             handovers to acknowledge, cash for the office, day close picker
 /lines/:lineId/day-closes/:date    day close (S-05)
@@ -206,11 +216,11 @@ The page's server component reads them (`readListParams`), and the list keeps th
 | `/settings`            | None. It holds nothing: it opens the first tab the role may see             |
 | `/profile`             | None                                                                        |
 
-Paging is not in the URL. "Show more" follows the API's cursor, and a reload starts again from the first page.
+Paging is not in the URL. The next page follows the API's cursor and loads by itself as the list scrolls near its end, with "Show more" kept for the keyboard; a reload starts again from the first page.
 
 **The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).
 
-**The Junior's views are hashes of one page, not separate paths** (decision 2026-09-14). The service worker caches a page by its exact URL, so `/route/collect/:id` would open offline only for customers whose page happened to be visited with signal — most customers, at the door, would get a browser error. A hash never reaches the network: every view is the one cached `/route` document, reloads included. The phone's back button returns to the route, and opening one view from another replaces rather than stacks, so the route is never more than one step back. Entry is per customer rather than per account, because a customer with several accounts confirms each on one screen (BR-01a).
+**The Junior's views are hashes of one page, not separate paths** (decision 2026-09-14). The service worker caches a page by its exact URL, so `/route/collect/:id` would open offline only for customers whose page happened to be visited with signal — most customers, at the door, would get a browser error. A hash never reaches the network: every view is the one cached `/route` document, reloads included. The tabs are hashes too. Moving between tabs replaces rather than stacks, so the phone's back button from any tab returns to the route; a screen opened over a tab is pushed, so back returns to the tab it was opened from ([hash-view.ts](../../apps/web/app/route/hash-view.ts)). Entry is per customer rather than per account, because a customer with several accounts confirms each on one screen (BR-01a).
 
 ---
 

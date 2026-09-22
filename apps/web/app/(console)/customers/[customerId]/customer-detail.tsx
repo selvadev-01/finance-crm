@@ -28,14 +28,17 @@ import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
 import { CustomerAccounts } from "../../accounts/account-parts";
 import { CustomerCollections } from "./customer-collections";
+import { PortfolioFigures, PortfolioTab } from "./customer-portfolio";
 import { TransferCustomer } from "./transfer-customer";
 
-export const CUSTOMER_TABS = { tab: "profile" };
+export const CUSTOMER_TABS = { tab: "portfolio" };
 
 /**
- * Customer 360 (S-09): the profile and the customer's accounts, one tab each,
- * with the open tab in the URL (`?tab=`). Collection history joins it with
- * M07; until then the page says so rather than showing an empty list.
+ * Customer 360 (S-09, S-09p): the portfolio — figures, each account's
+ * progress, the latest payments — then the profile, the accounts and the
+ * collection history, one tab each, with the open tab in the URL (`?tab=`).
+ * The portfolio opens first: "how is this customer doing" is why the page is
+ * opened (2026-09-22).
  */
 export function CustomerDetailView({
   customerId,
@@ -46,11 +49,13 @@ export function CustomerDetailView({
 }) {
   const me = useSignedIn();
   const { filters, setFilter } = useListState(CUSTOMER_TABS, initial);
-  // An unknown `?tab=` opens the profile rather than an empty page.
+  // An unknown `?tab=` opens the portfolio rather than an empty page.
   const tab =
-    filters.tab === "accounts" || filters.tab === "collections"
+    filters.tab === "profile" ||
+    filters.tab === "accounts" ||
+    filters.tab === "collections"
       ? filters.tab
-      : "profile";
+      : "portfolio";
   const customer = useApiQuery(customerContract.getCustomer, {
     params: { customerId },
   });
@@ -115,35 +120,20 @@ export function CustomerDetailView({
       />
 
       {overview.status === "ready" ? (
-        <StatGrid columns={3}>
-          <Stat
-            label={
-              overview.data.accounts.active === 1
-                ? "Outstanding on 1 active account"
-                : `Outstanding across ${overview.data.accounts.active} active accounts`
-            }
-          >
-            {formatCurrency(overview.data.outstandingTotal)}
-          </Stat>
-          <Stat label="Collected, all accounts">
-            {formatCurrency(overview.data.collectedTotal)}
-          </Stat>
-          <Stat label="Accounts">
-            {overview.data.accounts.active} active ·{" "}
-            {overview.data.accounts.completed} completed
-            {overview.data.accounts.other > 0
-              ? ` · ${overview.data.accounts.other} other`
-              : ""}
-          </Stat>
-        </StatGrid>
+        <PortfolioFigures overview={overview.data} />
       ) : null}
 
       <Tabs.Root value={tab} onValueChange={(tab) => setFilter("tab", tab)}>
         <Tabs.List aria-label="Customer">
+          <Tabs.Trigger value="portfolio">Portfolio</Tabs.Trigger>
           <Tabs.Trigger value="profile">Profile</Tabs.Trigger>
           <Tabs.Trigger value="accounts">Accounts</Tabs.Trigger>
           <Tabs.Trigger value="collections">Collections</Tabs.Trigger>
         </Tabs.List>
+
+        <Tabs.Content value="portfolio">
+          <PortfolioTab customerId={record.id} />
+        </Tabs.Content>
 
         <Tabs.Content value="profile">
           <Section title="Details" as="h3">

@@ -1,11 +1,14 @@
 import type { Page } from "@playwright/test";
 
 export type ConsoleRole = "SUPER_ADMIN" | "ADMIN" | "SENIOR";
+/** The Junior signs in to the field app at `/route`, not the console. */
+export type Role = ConsoleRole | "JUNIOR";
 
-const NAMES: Record<ConsoleRole, string> = {
+const NAMES: Record<Role, string> = {
   SUPER_ADMIN: "Sri Murugan",
   ADMIN: "Lakshmi K",
   SENIOR: "Karthik R",
+  JUNIOR: "Selvi M",
 };
 
 /** One canned answer, or a function of the URL when the query matters. */
@@ -24,7 +27,7 @@ export type ApiAnswers = Record<string, ApiAnswer | ((url: URL) => ApiAnswer)>;
  */
 export async function signedInAs(
   page: Page,
-  role: ConsoleRole,
+  role: Role,
   answers: ApiAnswers = {},
 ): Promise<void> {
   await page.route("**/api/**", async (route) => {

@@ -28,6 +28,7 @@ import {
 import { Button } from "./button";
 import { cn } from "./cn";
 import { flatSurfaceClass } from "./layout";
+import { LoadMoreSentinel } from "./load-more";
 
 declare module "@tanstack/react-table" {
   // Column options Rasi adds. The type parameters must match TanStack's own.
@@ -477,8 +478,12 @@ export function ListSkeleton({
 }
 
 /**
- * The foot of a list: how many are shown, and "Show more" for a cursor page
+ * The foot of a list: how many are shown, and the next cursor page
  * (api-design.md#pagination). `onMore` is absent when everything is loaded.
+ *
+ * The next page loads by itself as the reader scrolls near the end (a lazy
+ * list in the one page scroll, never a scroll box of its own); "Show more"
+ * stays for the keyboard, and for a browser without IntersectionObserver.
  */
 export function ListFooter({
   shown,
@@ -495,13 +500,18 @@ export function ListFooter({
   note?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-caption text-ink-muted">
-      <span data-numeric>{note ?? `${shown} ${noun}`}</span>
+    <div className="flex flex-col">
       {onMore ? (
-        <Button size="sm" onClick={onMore} disabled={loadingMore}>
-          {loadingMore ? "Loading…" : "Show more"}
-        </Button>
+        <LoadMoreSentinel onMore={onMore} busy={loadingMore === true} />
       ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-caption text-ink-muted">
+        <span data-numeric>{note ?? `${shown} ${noun}`}</span>
+        {onMore ? (
+          <Button size="sm" onClick={onMore} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Show more"}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

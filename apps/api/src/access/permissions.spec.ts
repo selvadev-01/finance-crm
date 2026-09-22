@@ -48,6 +48,7 @@ const ROW_PERMISSIONS: Record<string, Permission | null> = {
   'Organisation (M03) › Assign Senior to line': 'assignment.assignSenior',
   'Organisation (M03) › Assign / move Junior': 'assignment.moveJunior',
   'Organisation (M03) › View assignment history': 'assignment.viewHistory',
+  'Organisation (M03) › Set visiting order': 'line.setVisitingOrder',
   'Money visibility (M09, M11, M12) › Business totals': 'money.businessTotals',
   'Money visibility (M09, M11, M12) › Sector totals': 'money.sectorTotals',
   'Money visibility (M09, M11, M12) › Line totals': 'money.lineTotals',

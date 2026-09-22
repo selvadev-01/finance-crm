@@ -241,7 +241,13 @@ test.describe.serial("offline field app (E06)", () => {
       "PAUSED_AUTH",
     );
     await expect(page.getByTestId("unsynced-count")).toHaveText("1");
-    // Sign-out is refused while the collection is on the phone.
+    // Sign-out is refused while the collection is on the phone. It lives on
+    // the Profile tab (J-08).
+    await backToRoute(page);
+    await page
+      .getByRole("navigation", { name: "Field app" })
+      .getByRole("link", { name: "Profile" })
+      .click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(
       page.getByText("1 collection is still on this phone."),

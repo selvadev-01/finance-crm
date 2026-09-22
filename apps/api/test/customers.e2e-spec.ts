@@ -303,6 +303,11 @@ describe('customers (M04, US-020, e2e)', () => {
 
     it('moves the customer and their sector to the new line, records the period, and audits it', async () => {
       const customer = await onboard({ name: 'Moving Customer' });
+      // Placed on Line A's visiting order (US-040)…
+      await prisma.customer.update({
+        where: { id: customer.id },
+        data: { routePosition: 1 },
+      });
 
       const moved = await as('ADMIN')
         .post(`/api/customers/${customer.id}/line-transfer`, {
@@ -316,6 +321,14 @@ describe('customers (M04, US-020, e2e)', () => {
         lineName: 'Line B',
         sectorId,
       });
+      // …and waiting at the end of Line B's until someone places it there.
+      expect(
+        (
+          await prisma.customer.findUniqueOrThrow({
+            where: { id: customer.id },
+          })
+        ).routePosition,
+      ).toBeNull();
 
       const history = await as('ADMIN')
         .get(`/api/customers/${customer.id}/line-transfers`)

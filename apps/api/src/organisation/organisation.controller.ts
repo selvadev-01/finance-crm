@@ -15,6 +15,7 @@ import { AssignmentService } from './assignment.service.js';
 import { LineService } from './line.service.js';
 import { SectorService } from './sector.service.js';
 import { StaffingService } from './staffing.service.js';
+import { VisitingOrderService } from './visiting-order.service.js';
 
 type In<Route extends keyof typeof api> = RouteInput<(typeof api)[Route]>;
 type Out<Route extends keyof typeof api> = Promise<
@@ -32,6 +33,7 @@ export class OrganisationController {
     private readonly lines: LineService,
     private readonly assignments: AssignmentService,
     private readonly staffing: StaffingService,
+    private readonly visitingOrder: VisitingOrderService,
   ) {}
 
   @RequirePermission('organisation.view')
@@ -158,5 +160,23 @@ export class OrganisationController {
     @ContractInput() { params, body }: In<'assignJunior'>,
   ): Out<'assignJunior'> {
     return this.assignments.assignJunior(context, params.lineId, body);
+  }
+
+  @RequirePermission('line.setVisitingOrder')
+  @ContractRoute(api.getVisitingOrder)
+  getVisitingOrder(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: In<'getVisitingOrder'>,
+  ): Out<'getVisitingOrder'> {
+    return this.visitingOrder.get(context, params.lineId);
+  }
+
+  @RequirePermission('line.setVisitingOrder')
+  @ContractRoute(api.setVisitingOrder)
+  setVisitingOrder(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: In<'setVisitingOrder'>,
+  ): Out<'setVisitingOrder'> {
+    return this.visitingOrder.set(context, params.lineId, body.customerIds);
   }
 }

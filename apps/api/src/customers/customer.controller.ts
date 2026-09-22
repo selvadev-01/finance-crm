@@ -13,6 +13,7 @@ import {
 } from '../platform/contract/contract-route.js';
 import { CustomerOverviewService } from './customer-overview.service.js';
 import { CustomerService } from './customer.service.js';
+import { LinePortfolioService } from './line-portfolio.service.js';
 
 type In<Route extends keyof typeof api> = RouteInput<(typeof api)[Route]>;
 type Out<Route extends keyof typeof api> = Promise<
@@ -25,7 +26,18 @@ export class CustomerController {
   constructor(
     private readonly customers: CustomerService,
     private readonly overview: CustomerOverviewService,
+    private readonly portfolio: LinePortfolioService,
   ) {}
+
+  /** J-09. No invested amount or profit, so every role in scope may read it. */
+  @RequirePermission('customer.view')
+  @ContractRoute(api.getLinePortfolio)
+  getLinePortfolio(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: In<'getLinePortfolio'>,
+  ): Out<'getLinePortfolio'> {
+    return this.portfolio.get(context, params.lineId);
+  }
 
   @RequirePermission('customer.view')
   @ContractRoute(api.listCustomers)

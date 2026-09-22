@@ -117,6 +117,19 @@ export const customerOverviewSchema = z.object({
   outstandingTotal: moneyStringSchema,
   /** Collected across every account the customer has ever held. */
   collectedTotal: moneyStringSchema,
+  /** Active accounts past their target date with money still owed. */
+  overdueAccounts: z.number().int().min(0),
+  /** Slots marked MISSED on the active accounts — days nobody visited (BR-09). */
+  missedDays: z.number().int().min(0),
+  /** The last business date money was collected, on any account; null if never. */
+  lastPaidOn: calendarDateSchema.nullable(),
+  /**
+   * Summed across every account. `null` for a Junior, who never sees invested
+   * amount or profit (RBAC matrix, money visibility). Profit is P = A − I per
+   * account (BR-01), what the accounts earn in full — not what is earned so far.
+   */
+  investedTotal: moneyStringSchema.nullable(),
+  profitTotal: moneyStringSchema.nullable(),
   /** Who works this customer's line today (M03). */
   staff: z.object({
     seniorName: z.string().nullable(),
@@ -125,6 +138,45 @@ export const customerOverviewSchema = z.object({
 });
 
 const customerParams = z.object({ customerId: idSchema });
+
+/**
+ * J-09 — a line's customer portfolio, in visiting order (US-040): what each
+ * customer owes and how their accounts stand, with the line's totals. For
+ * every role in the line's scope, so it carries **no invested amount or
+ * profit** — the one shape a Junior may see.
+ */
+export const linePortfolioSchema = z.object({
+  businessDate: calendarDateSchema,
+  totals: z.object({
+    /** Across the line's active accounts. */
+    outstandingTotal: moneyStringSchema,
+    activeAccounts: z.number().int().min(0),
+    overdueCustomers: z.number().int().min(0),
+    /** Collected on the line's customers in the seven days ending today. */
+    collectedLastSevenDays: moneyStringSchema,
+  }),
+  customers: z.array(
+    z.object({
+      customerId: idSchema,
+      customerCode: z.string(),
+      name: z.string(),
+      address: z.string(),
+      mobile: z.string(),
+      /** Place on the visiting order; null until placed. */
+      position: z.number().int().min(1).nullable(),
+      outstandingTotal: moneyStringSchema,
+      activeAccounts: z.number().int().min(0),
+      completedAccounts: z.number().int().min(0),
+      overdue: z.boolean(),
+      /** MISSED slots on the active accounts (BR-09). */
+      missedDays: z.number().int().min(0),
+      /** A slot is due today on an active account. */
+      dueToday: z.boolean(),
+      /** A collection of more than nothing was recorded today. */
+      paidToday: z.boolean(),
+    }),
+  ),
+});
 
 export const customerContract = {
   listCustomers: route({
@@ -275,6 +327,19 @@ export const customerContract = {
     },
   }),
 
+  getLinePortfolio: route({
+    method: "GET",
+    path: "/api/lines/:lineId/customer-portfolio",
+    summary: "A line's customers in visiting order, with what each owes (J-09)",
+    pathParams: z.object({ lineId: idSchema }),
+    responses: {
+      200: linePortfolioSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+  }),
+
   listCustomerTransfers: route({
     method: "GET",
     path: "/api/customers/:customerId/line-transfers",
@@ -290,6 +355,7 @@ export const customerContract = {
 } as const;
 
 export type CustomerOverview = z.infer<typeof customerOverviewSchema>;
+export type LinePortfolio = z.infer<typeof linePortfolioSchema>;
 export type CustomerSummary = z.infer<typeof customerSummarySchema>;
 export type CustomerLinePeriod = z.infer<typeof customerLinePeriodSchema>;
 export type CustomerDetail = z.infer<typeof customerDetailSchema>;

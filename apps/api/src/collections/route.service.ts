@@ -47,10 +47,11 @@ export class RouteService {
     const day = toUtcMidnight(today);
 
     let dayKind: RouteView['day'] = { kind: 'WORKING' };
+    let line: { sectorId: string; code: string; name: string } | null = null;
     if (context.currentLineId) {
-      const line = await tx.line.findUnique({
+      line = await tx.line.findUnique({
         where: { id: context.currentLineId },
-        select: { sectorId: true },
+        select: { sectorId: true, code: true, name: true },
       });
       const holiday = await tx.holiday.findFirst({
         where: {
@@ -98,7 +99,10 @@ export class RouteService {
                 orderBy: { createdAt: 'desc' },
               },
             },
+            // The line's visiting order, set by its Senior or an Admin; the
+            // customers not yet placed follow, in code order (US-040).
             orderBy: [
+              { customer: { routePosition: { sort: 'asc', nulls: 'last' } } },
               { customer: { customerCode: 'asc' } },
               { accountCode: 'asc' },
             ],
@@ -148,6 +152,7 @@ export class RouteService {
       businessDate: today,
       day: dayKind,
       lineId: context.currentLineId,
+      line: line ? { code: line.code, name: line.name } : null,
       customers: [...customers.values()],
     };
   }

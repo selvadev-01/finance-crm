@@ -1,20 +1,21 @@
+"use client";
+
 import {
   CalendarX,
   CheckCircle,
+  Info,
   MapPin,
   Phone,
   Receipt,
 } from "@phosphor-icons/react/dist/ssr";
 import type { RouteView } from "@repo/contracts";
 import {
-  Badge,
   Button,
+  cn,
   Dialog,
-  DialogActions,
   Field,
   FormMessage,
   formatCurrency,
-  cn,
   Input,
   type InputProps,
   Textarea,
@@ -26,7 +27,8 @@ import {
   type LocalRoute,
   subtractMoney,
 } from "../../lib/offline/outbox";
-import { BackToRoute, RowStateMark } from "./sync-marks";
+import { cardClass, FieldPage } from "./app-chrome";
+import { ClassificationMark, RowStateMark } from "./sync-marks";
 
 type Customer = RouteView["customers"][number];
 type Account = Customer["accounts"][number];
@@ -38,21 +40,15 @@ export type RecordAtDoor = (request: {
   note: string;
 }) => Promise<string | null>;
 
-const CLASSIFICATION = {
-  CORRECT: { label: "As expected", tone: "positive" },
-  LOW: { label: "Less than expected", tone: "warning" },
-  EXTRA: { label: "More than expected", tone: "info" },
-  NO_PAYMENT: { label: "No payment", tone: "critical" },
-} as const;
-
 /**
- * S-02 · Record collection. The common case is one tap: the amount is
- * pre-filled with what is expected and the Junior confirms. Saving never waits
- * for the network — it is on the phone before this screen changes (US-050).
+ * J-02 · Record collection (S-02, US-041). The common case is one tap: the
+ * amount is pre-filled with what is expected and the Junior confirms from the
+ * sticky bar under their thumb. Saving never waits for the network — it is on
+ * the phone before this screen changes (US-050).
  *
- * A customer with several accounts gets one form per account, each confirmed
- * on its own (BR-01a). "No payment" is its own action, never a typed 0: it is
- * the Junior asserting they were there (BR-09).
+ * A customer with several accounts gets one card per account, each with its
+ * own buttons, each confirmed on its own (BR-01a). "No payment" is its own
+ * action, never a typed 0: it is the Junior asserting they were there (BR-09).
  */
 export function CollectScreen({
   customerId,
@@ -68,9 +64,29 @@ export function CollectScreen({
   );
 
   return (
-    <div className="flex flex-col gap-[var(--stack-gap)]" data-testid="collect">
-      <BackToRoute />
-
+    <FieldPage
+      back
+      title={customer?.name ?? "Customer"}
+      subtitle={
+        customer ? (
+          <span className="font-mono text-xs" data-numeric>
+            {customer.customerCode}
+          </span>
+        ) : undefined
+      }
+      actions={
+        customer ? (
+          <a
+            href={`tel:${customer.mobile}`}
+            aria-label={`Call ${customer.name}`}
+            className="flex size-12 items-center justify-center rounded-pill bg-accent-subtle text-accent"
+          >
+            <Phone aria-hidden size={22} weight="regular" />
+          </a>
+        ) : null
+      }
+      testId="collect"
+    >
       {!customer || !local ? (
         <FormMessage tone="info">
           This customer is not on today’s route on this phone. Go back and
@@ -78,33 +94,38 @@ export function CollectScreen({
         </FormMessage>
       ) : (
         <>
-          <div className="flex flex-col gap-1 border-b border-border pb-[var(--stack-gap)]">
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">
-              {customer.name}
-            </h1>
-            <p className="flex items-start gap-1.5 text-base text-ink-muted">
+          <div
+            className={cn(cardClass, "flex flex-col divide-y divide-border")}
+          >
+            <p className="flex items-start gap-3 px-4 py-3 text-base text-ink">
               <MapPin
                 aria-hidden
-                size={18}
+                size={20}
                 weight="regular"
-                className="mt-0.5 shrink-0"
+                className="mt-0.5 shrink-0 text-ink-muted"
               />
               {customer.address}
             </p>
             <a
               href={`tel:${customer.mobile}`}
-              className="flex min-h-[var(--control-height)] w-fit items-center gap-1.5 text-base font-medium text-accent"
+              className="flex min-h-touch items-center gap-3 px-4 text-base font-medium text-accent"
               data-numeric
             >
-              <Phone aria-hidden size={18} weight="regular" />
+              <Phone aria-hidden size={20} weight="regular" />
               {customer.mobile}
             </a>
           </div>
           {customer.accounts.length > 1 ? (
-            <FormMessage tone="info">
+            <p className="flex items-start gap-3 rounded-surface border border-border bg-surface-sunken px-4 py-3 text-sm font-medium text-ink">
+              <Info
+                aria-hidden
+                size={20}
+                weight="regular"
+                className="shrink-0 text-ink-muted"
+              />
               {customer.accounts.length} accounts. Record each one separately —
               never put a combined payment against one account.
-            </FormMessage>
+            </p>
           ) : null}
           {customer.accounts.map((account) => (
             <AccountForm
@@ -113,11 +134,12 @@ export function CollectScreen({
               customer={customer}
               local={local}
               onRecord={onRecord}
+              layout={customer.accounts.length > 1 ? "card" : "page"}
             />
           ))}
         </>
       )}
-    </div>
+    </FieldPage>
   );
 }
 
@@ -126,11 +148,14 @@ function AccountForm({
   customer,
   local,
   onRecord,
+  layout,
 }: {
   account: Account;
   customer: Customer;
   local: LocalRoute;
   onRecord: RecordAtDoor;
+  /** `page`: the only account, its buttons in a sticky bar at the foot. */
+  layout: "page" | "card";
 }) {
   const [amount, setAmount] = useState(account.expectedAmount);
   const [note, setNote] = useState("");
@@ -140,6 +165,10 @@ function AccountForm({
   const [saving, setSaving] = useState(false);
   const state = local.rowState[account.accountLoanId] ?? "PENDING";
   const typed = amount.replace(/[\s,₹]/g, "");
+  // A typed 0 is not confirmable (it points to No payment), so it names no amount.
+  const valid =
+    amountProblem(typed, account.outstandingAmount) === null &&
+    !/^0+(\.0+)?$/.test(typed);
 
   // Each record mints a new idempotency key, so a second tap would be a second
   // collection the server cannot tell apart. `saving` disables the buttons
@@ -175,32 +204,69 @@ function AccountForm({
     }
   }
 
+  const actions = (
+    <>
+      <Button
+        tone="primary"
+        onClick={confirm}
+        disabled={saving}
+        className="h-14 w-full rounded-pill text-lg font-semibold"
+      >
+        <CheckCircle aria-hidden size={22} weight="regular" />
+        <span data-numeric>
+          Confirm {valid ? formatCurrency(typed) : ""}
+          {layout === "card" && valid ? (
+            <span className="sr-only"> for {account.accountCode}</span>
+          ) : null}
+        </span>
+      </Button>
+      <Button
+        tone="secondary"
+        onClick={() => setConfirmingNoPayment(true)}
+        disabled={saving}
+        className="h-12 w-full rounded-pill border-critical-border text-critical shadow-none hover:bg-critical-subtle hover:text-critical"
+      >
+        <CalendarX aria-hidden size={20} weight="regular" />
+        No payment — I visited
+      </Button>
+    </>
+  );
+
   return (
     <section
       aria-labelledby={`${account.accountLoanId}-title`}
-      className="flex flex-col gap-[var(--stack-gap)] rounded-surface border border-border bg-surface-raised p-4 shadow-raised"
+      className={cn(
+        "flex flex-col gap-3",
+        layout === "card" && cn(cardClass, "p-4"),
+        layout === "page" && "flex-1",
+      )}
       data-testid={`collect-${account.accountCode}`}
     >
-      <div className="flex min-h-9 items-center justify-between gap-2 border-b border-border pb-3">
-        <h2
-          id={`${account.accountLoanId}-title`}
-          className="flex items-center gap-2 font-mono text-base font-semibold text-ink"
-          data-numeric
-        >
-          <Receipt
-            aria-hidden
-            size={20}
-            weight="regular"
-            className="shrink-0 text-ink-muted"
-          />
-          {account.accountCode}
-        </h2>
-        <RowStateMark state={state} />
-      </div>
+      <div
+        className={cn(
+          "flex flex-col gap-3",
+          layout === "page" && cn(cardClass, "p-4"),
+        )}
+      >
+        <div className="flex min-h-9 items-center justify-between gap-2">
+          <h2
+            id={`${account.accountLoanId}-title`}
+            className="flex items-center gap-2 font-mono text-base font-semibold text-ink"
+            data-numeric
+          >
+            <Receipt
+              aria-hidden
+              size={20}
+              weight="regular"
+              className="shrink-0 text-ink-muted"
+            />
+            {account.accountCode}
+          </h2>
+          <RowStateMark state={state} />
+        </div>
 
-      <div className="flex flex-col gap-2">
         <dl
-          className="grid grid-cols-3 divide-x divide-border rounded-control border border-border bg-surface-sunken py-3"
+          className="grid grid-cols-3 divide-x divide-border rounded-surface bg-surface-sunken py-3"
           data-numeric
         >
           <Figure
@@ -219,120 +285,118 @@ function AccountForm({
             {formatCurrency(account.dailyAmount)}
           </span>
         </p>
+
+        {account.collectedToday ? (
+          <p
+            className="flex flex-wrap items-center gap-2 rounded-surface border border-border bg-surface-sunken px-3 py-3 text-base text-ink"
+            data-testid="collected-today"
+          >
+            <CheckCircle
+              aria-hidden
+              size={22}
+              weight="fill"
+              className="shrink-0 text-positive"
+            />
+            Collected{" "}
+            <span className="text-xl font-semibold" data-numeric>
+              {account.collectedToday.classification === "NO_PAYMENT"
+                ? "No payment"
+                : formatCurrency(account.collectedToday.amount)}
+            </span>
+            <ClassificationMark
+              classification={account.collectedToday.classification}
+            />
+          </p>
+        ) : (
+          <>
+            <Field
+              label="Amount collected (₹)"
+              error={error ?? undefined}
+              hint={varianceHint(typed, account.expectedAmount)}
+              className={cn(
+                "[&>label]:text-base [&>label]:font-medium",
+                HINT_STRIP,
+                HINT_TONE[
+                  error
+                    ? "critical"
+                    : varianceTone(typed, account.expectedAmount)
+                ],
+              )}
+            >
+              <RupeeInput
+                inputMode="decimal"
+                autoComplete="off"
+                enterKeyHint="done"
+                value={amount}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                  setError(null);
+                }}
+              />
+            </Field>
+            <Field
+              label="Note (optional)"
+              hint="Only for something unusual."
+              className="[&>label]:text-base"
+            >
+              <Textarea
+                rows={2}
+                maxLength={500}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </Field>
+            {problem ? (
+              <FormMessage tone="critical">{problem}</FormMessage>
+            ) : null}
+            {layout === "card" ? (
+              <div className="flex flex-col gap-2">{actions}</div>
+            ) : null}
+          </>
+        )}
       </div>
 
-      {account.collectedToday ? (
-        <p
-          className="flex flex-wrap items-center gap-2 rounded-control border border-border bg-surface-sunken px-3 py-2.5 text-base text-ink"
-          data-testid="collected-today"
-        >
-          <CheckCircle
-            aria-hidden
-            size={20}
-            weight="fill"
-            className="shrink-0 text-positive"
-          />
-          Collected{" "}
-          <span className="text-xl font-semibold" data-numeric>
-            {formatCurrency(account.collectedToday.amount)}
-          </span>
-          <Badge
-            tone={CLASSIFICATION[account.collectedToday.classification].tone}
-          >
-            {CLASSIFICATION[account.collectedToday.classification].label}
-          </Badge>
-        </p>
-      ) : (
-        <>
-          <Field
-            label="Amount collected (₹)"
-            error={error ?? undefined}
-            hint={varianceHint(typed, account.expectedAmount)}
-            className={cn(
-              "[&>label]:text-base [&>label]:font-medium",
-              HINT_STRIP,
-              HINT_TONE[
-                error ? "critical" : varianceTone(typed, account.expectedAmount)
-              ],
-            )}
-          >
-            <RupeeInput
-              inputMode="decimal"
-              autoComplete="off"
-              enterKeyHint="done"
-              value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value);
-                setError(null);
-              }}
-            />
-          </Field>
-          <Field
-            label="Note (optional)"
-            hint="Only for something unusual."
-            className="[&>label]:text-base"
-          >
-            <Textarea
-              rows={2}
-              maxLength={500}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </Field>
-          {problem ? (
-            <FormMessage tone="critical">{problem}</FormMessage>
-          ) : null}
-          <div className="flex flex-col gap-3">
-            <Button
-              tone="primary"
-              onClick={confirm}
-              disabled={saving}
-              className="h-13 w-full text-lg font-semibold"
-            >
-              <CheckCircle aria-hidden size={22} weight="regular" />
-              <span data-numeric>
-                Confirm{" "}
-                {amountProblem(typed, account.outstandingAmount) === null
-                  ? formatCurrency(typed)
-                  : ""}
-              </span>
-            </Button>
-            <Button
-              tone="secondary"
-              onClick={() => setConfirmingNoPayment(true)}
-              disabled={saving}
-              className="w-full text-critical hover:text-critical"
-            >
-              <CalendarX aria-hidden size={20} weight="regular" />
-              No payment — I visited
-            </Button>
-          </div>
-        </>
-      )}
+      {layout === "page" && !account.collectedToday ? (
+        <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2 border-t border-border bg-surface-raised px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {actions}
+        </div>
+      ) : null}
 
       <Dialog
         open={confirmingNoPayment}
         onClose={() => setConfirmingNoPayment(false)}
+        placement="sheet"
         title={`Record no payment from ${customer.name}`}
         description={`${account.accountCode}: you visited today and nothing was paid.`}
       >
-        <DialogActions>
+        <p
+          className="flex items-center justify-between rounded-surface bg-surface-sunken px-4 py-3 text-base text-ink-muted"
+          data-numeric
+        >
+          Expected today
+          <span className="font-semibold text-ink">
+            {formatCurrency(account.expectedAmount)}
+          </span>
+        </p>
+        <div className="flex flex-col gap-2 pb-2">
           <Button
-            tone="secondary"
-            onClick={() => setConfirmingNoPayment(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            tone="primary"
+            tone="danger"
             onClick={() => {
               setConfirmingNoPayment(false);
               void save("0");
             }}
+            className="h-14 rounded-pill text-base font-semibold"
           >
             Record no payment
           </Button>
-        </DialogActions>
+          <Button
+            tone="ghost"
+            onClick={() => setConfirmingNoPayment(false)}
+            className="h-12 rounded-pill"
+          >
+            Cancel
+          </Button>
+        </div>
       </Dialog>
     </section>
   );
@@ -341,7 +405,7 @@ function AccountForm({
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 flex-col items-center gap-0.5 px-1 text-center">
-      <dt className="text-xs font-medium tracking-wide text-ink-muted uppercase">
+      <dt className="text-2xs font-semibold tracking-[0.08em] text-ink-muted uppercase">
         {label}
       </dt>
       <dd className="text-base font-semibold text-ink">{value}</dd>
@@ -350,23 +414,23 @@ function Figure({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The amount field with a ₹ prefix. `Field` gives its single child the id and
- * aria props, so they are passed straight on to the input — the label still
- * names the input itself.
+ * The amount field with a ₹ prefix — the largest thing on the screen, readable
+ * in sunlight. `Field` gives its single child the id and aria props, so they
+ * are passed straight on to the input: the label still names the input.
  */
 function RupeeInput({ className, ...props }: InputProps) {
   return (
     <div className="relative">
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-2xl font-semibold text-ink"
+        className="pointer-events-none absolute inset-y-0 left-5 flex items-center text-3xl font-semibold text-ink-muted"
       >
         ₹
       </span>
       <Input
         {...props}
         className={cn(
-          "h-16 pl-12 text-right text-2xl font-semibold",
+          "h-18 rounded-surface border-2 pl-14 text-right text-4xl font-semibold focus:border-accent",
           className,
         )}
         data-numeric
@@ -377,7 +441,7 @@ function RupeeInput({ className, ...props }: InputProps) {
 
 /** The hint under the amount as a tinted strip, toned by what it says. */
 const HINT_STRIP =
-  "[&>p]:flex [&>p]:min-h-10 [&>p]:items-center [&>p]:rounded-control [&>p]:border [&>p]:px-3 [&>p]:py-2 [&>p]:text-sm [&>p]:font-medium";
+  "[&>p]:flex [&>p]:min-h-10 [&>p]:items-center [&>p]:rounded-surface [&>p]:border [&>p]:px-3 [&>p]:py-2 [&>p]:text-sm [&>p]:font-medium";
 
 const HINT_TONE = {
   none: "",

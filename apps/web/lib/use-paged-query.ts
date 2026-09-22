@@ -5,10 +5,13 @@ import type {
   RouteRequest,
   RouteSuccess,
 } from "@repo/contracts";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { api } from "./api-client";
 import { type QueryState, useApiQuery } from "./use-api-query";
+
+/** How long a failed page waits before the lazy marker may ask again. */
+const RETRY_AFTER_MS = 5_000;
 
 type Page<Item> = { data: Item[]; nextCursor: string | null; hasMore: boolean };
 type ItemOf<Route extends RouteDefinition> =
@@ -61,8 +64,17 @@ export function usePagedQuery<Route extends RouteDefinition>(
   const hasMore = current ? current.hasMore : (firstPage?.hasMore ?? false);
   const cursor = current ? current.nextCursor : (firstPage?.nextCursor ?? null);
 
+  // The next page loads by itself as the reader scrolls (ListFooter's lazy
+  // marker), so two calls can land before `loadingMore` renders: the ref
+  // keeps them to one request. After a failure the marker, still in view,
+  // would ask again at once; it waits a moment instead of hammering the API.
+  const inFlight = useRef(false);
+  const failedAt = useRef(0);
+
   const loadMore = useCallback(() => {
-    if (!request || !firstPage || !cursor) return;
+    if (!request || !firstPage || !cursor || inFlight.current) return;
+    if (Date.now() - failedAt.current < RETRY_AFTER_MS) return;
+    inFlight.current = true;
     setLoadingMore(true);
     setMoreError(null);
     const next = {
@@ -72,6 +84,7 @@ export function usePagedQuery<Route extends RouteDefinition>(
     api(route, next)
       .then((result) => {
         if (!result.ok) {
+          failedAt.current = Date.now();
           setMoreError("More couldn’t be loaded just now. Try again.");
           return;
         }
@@ -86,12 +99,16 @@ export function usePagedQuery<Route extends RouteDefinition>(
           hasMore: page.hasMore,
         }));
       })
-      .catch(() =>
+      .catch(() => {
+        failedAt.current = Date.now();
         setMoreError(
           "Could not reach Rasi. Check your connection and try again.",
-        ),
-      )
-      .finally(() => setLoadingMore(false));
+        );
+      })
+      .finally(() => {
+        inFlight.current = false;
+        setLoadingMore(false);
+      });
   }, [request, firstPage, cursor, route]);
 
   const reload = useCallback(() => {

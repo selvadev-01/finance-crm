@@ -81,6 +81,22 @@ const errors = {
   404: errorSchema,
 };
 
+/**
+ * US-040: a line's current customers in visiting order. `position` is null
+ * for a customer not yet placed; those come last, in customer-code order.
+ */
+export const visitingOrderSchema = z.object({
+  customers: z.array(
+    z.object({
+      customerId: idSchema,
+      customerCode: z.string(),
+      name: z.string(),
+      address: z.string(),
+      position: z.number().int().min(1).nullable(),
+    }),
+  ),
+});
+
 export const organisationContract = {
   listSectors: route({
     method: "GET",
@@ -228,12 +244,35 @@ export const organisationContract = {
       422: errorSchema,
     },
   }),
+
+  getVisitingOrder: route({
+    method: "GET",
+    path: "/api/lines/:lineId/visiting-order",
+    summary:
+      "The line's customers in the order the Junior visits them (US-040)",
+    pathParams: lineParams,
+    responses: { 200: visitingOrderSchema, ...errors },
+  }),
+
+  setVisitingOrder: route({
+    method: "POST",
+    path: "/api/lines/:lineId/visiting-order",
+    summary:
+      "Replace the line's visiting order; every current customer, once (US-040)",
+    pathParams: lineParams,
+    body: z.object({
+      /** Every current customer of the line, first visit first. */
+      customerIds: z.array(idSchema).max(2000),
+    }),
+    responses: { 200: visitingOrderSchema, ...errors, 422: errorSchema },
+  }),
 } as const;
 
 export type Sector = z.infer<typeof sectorSchema>;
 export type Line = z.infer<typeof lineSchema>;
 export type Assignment = z.infer<typeof assignmentSchema>;
 export type LineStaffing = z.infer<typeof lineStaffingSchema>;
+export type VisitingOrder = z.infer<typeof visitingOrderSchema>;
 export type AssignmentHistoryEntry = z.infer<
   typeof assignmentHistoryEntrySchema
 >;

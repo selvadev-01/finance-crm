@@ -196,7 +196,7 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 
 `AccountSettlement` (`account-settlement.ts`) is shared with recording, so a collection and an approved correction cannot disagree about the schedule.
 
-**Not built:** missed detection, the late-sync day-close reopen, notifications (so US-044's "my Senior is notified" does not happen), the `idempotency_key` purge job, visiting order, and a correction request from the Junior's field app — the console's S-17 serves Seniors and Admins.
+**Not built:** the `idempotency_key` purge job. Since this list was written, the backlog records these as built: missed detection (US-043), the late-sync day-close reopen (US-055), the Senior's notifications, a correction request from the Junior's field app (US-044, `/route#correct`), and visiting order. The line's Senior or an Admin sets the visiting order on the line page, and the route follows it (US-040, 2026-09-21: `customer.routePosition`, `GET`/`POST /api/lines/:lineId/visiting-order`, permission `line.setVisitingOrder`).
 
 ---
 

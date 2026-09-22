@@ -477,6 +477,11 @@ model Customer {
   sectorId        String
   /// Current line. Historical attribution lives on collection (BR-15).
   lineId          String
+  /// Place on the line's visiting order (US-040), set by the line's Senior or
+  /// an Admin. Null: not yet placed — such customers come after the placed
+  /// ones, in customer-code order. Cleared when the customer changes line.
+  /// CHECK: routePosition >= 1 (migration constraints_customer_route_position).
+  routePosition   Int?
   status          CustomerStatus @default(ACTIVE)
   notes           String?
   /// Soft delete. Blocked while any ACTIVE account exists.
@@ -497,6 +502,8 @@ model Customer {
   @@index([sectorId])
   @@index([lineId])
   @@index([mobile])
+  /// One customer per place on a line's visiting order.
+  @@unique([lineId, routePosition], map: "customer_line_route_position_key", where: raw("(\"routePosition\" IS NOT NULL)"))
   @@map("customer")
 }
 

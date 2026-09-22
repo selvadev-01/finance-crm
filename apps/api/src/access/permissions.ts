@@ -56,6 +56,7 @@ export const PERMISSIONS = {
   'assignment.assignSenior': ADMINS,
   'assignment.moveJunior': ADMINS,
   'assignment.viewHistory': ADMINS_AND_SENIOR,
+  'line.setVisitingOrder': ADMINS_AND_SENIOR,
 
   // Money visibility (M09, M11, M12) — Juniors never see profit or investment.
   'money.businessTotals': ADMINS,

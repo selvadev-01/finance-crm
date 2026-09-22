@@ -419,7 +419,9 @@ export class CustomerService {
 
       const customer = await tx.customer.update({
         where: { id: before.id },
-        data: { lineId: line.id, sectorId: line.sectorId },
+        // A new line is a new route: the customer waits at its end until the
+        // line's Senior or an Admin places it (US-040).
+        data: { lineId: line.id, sectorId: line.sectorId, routePosition: null },
         select: detailFields,
       });
 

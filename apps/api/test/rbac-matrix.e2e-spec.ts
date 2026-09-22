@@ -250,6 +250,9 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'POST /api/lines/:lineId/junior-assignment': 'assignment.moveJunior',
   'GET /api/staffing': 'staff.list',
   'GET /api/lines/:lineId/assignments': 'assignment.viewHistory',
+  'GET /api/lines/:lineId/visiting-order': 'line.setVisitingOrder',
+  'GET /api/lines/:lineId/customer-portfolio': 'customer.view',
+  'POST /api/lines/:lineId/visiting-order': 'line.setVisitingOrder',
   // M11 Dashboards (US-080, US-082): business totals are Admin and Super Admin.
   'GET /api/dashboards/overview': 'money.businessTotals',
   'GET /api/dashboards/operations': 'money.businessTotals',

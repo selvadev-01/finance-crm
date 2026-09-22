@@ -55,6 +55,7 @@ export {
   StatGrid,
   type StatProps,
 } from "./layout";
+export { LoadMoreSentinel } from "./load-more";
 export { Menu } from "./menu";
 export { PageHeader, type PageHeaderProps } from "./page-header";
 export { Popover } from "./popover";

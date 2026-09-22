@@ -1,8 +1,8 @@
 "use client";
 
-import { CloudSlash } from "@phosphor-icons/react/dist/ssr";
+import { Bell, CloudSlash } from "@phosphor-icons/react/dist/ssr";
 import { notificationContract, type NotificationView } from "@repo/contracts";
-import { Button, FormMessage } from "@repo/ui";
+import { Button, cn, FormMessage } from "@repo/ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../../lib/api-client";
@@ -12,7 +12,7 @@ import {
 } from "../../lib/notifications/notification-list";
 import { PushToggle } from "../../lib/notifications/push-toggle";
 import { SW_SCOPE, SW_URL } from "../../lib/offline/client";
-import { BackToRoute } from "./sync-marks";
+import { Banner, cardClass, FieldPage } from "./app-chrome";
 
 const FIELD_WORKER = { url: SW_URL, scope: SW_SCOPE } as const;
 
@@ -53,67 +53,69 @@ export function NotificationsScreen({ connected }: { connected: boolean }) {
   }, [load, connected]);
 
   return (
-    <div
-      className="flex flex-col gap-[var(--stack-gap)]"
-      data-testid="notifications"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <BackToRoute />
-        {unread > 0 ? (
+    <FieldPage
+      back
+      title="Notifications"
+      subtitle={unread > 0 ? `${unread} unread` : undefined}
+      actions={
+        unread > 0 ? (
           <Button
             tone="ghost"
             onClick={async () => {
               await markAllRead();
               await load();
             }}
-            className="-mr-3"
+            className="rounded-pill font-semibold text-accent"
           >
             Mark all read
           </Button>
-        ) : null}
-      </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          Notifications
-        </h1>
-        {unread > 0 ? (
-          <span className="text-sm text-ink-muted" data-numeric>
-            {unread} unread
-          </span>
-        ) : null}
-      </div>
-
+        ) : (
+          false
+        )
+      }
+      testId="notifications"
+    >
       {!connected ? (
-        <FormMessage tone="info">
-          <span className="flex items-center gap-2">
-            <CloudSlash aria-hidden size={18} weight="regular" />
-            Connect to see notifications. Your collections still save on this
-            phone.
-          </span>
-        </FormMessage>
+        <Banner tone="neutral" icon={<CloudSlash size={20} weight="regular" />}>
+          Connect to see notifications. Your collections still save on this
+          phone.
+        </Banner>
       ) : null}
       {problem && connected ? (
         <FormMessage tone="critical">{problem}</FormMessage>
       ) : null}
 
-      {notifications?.length === 0 ? (
-        <p className="rounded-surface border border-border bg-surface-raised p-4 text-base text-ink-muted shadow-raised">
-          No notifications yet.
-        </p>
-      ) : null}
-      {notifications && notifications.length > 0 ? (
-        <NotificationList
-          notifications={notifications}
-          linkable={false}
-          onChanged={() => void load()}
-        />
-      ) : null}
-
       {connected ? (
-        <div className="mt-2 rounded-surface border border-border bg-surface-raised p-4 shadow-raised">
+        <div className={cn(cardClass, "p-4")}>
           <PushToggle worker={FIELD_WORKER} deviceLabel="Field phone" />
         </div>
       ) : null}
-    </div>
+
+      {notifications?.length === 0 ? (
+        <div
+          className={cn(
+            cardClass,
+            "flex flex-col items-center gap-3 px-6 py-10 text-center",
+          )}
+        >
+          <span
+            aria-hidden
+            className="flex size-16 items-center justify-center rounded-pill bg-accent-subtle text-accent"
+          >
+            <Bell size={28} weight="regular" />
+          </span>
+          <p className="text-base text-ink-muted">No notifications yet.</p>
+        </div>
+      ) : null}
+      {notifications && notifications.length > 0 ? (
+        <div className={cn(cardClass, "overflow-hidden")}>
+          <NotificationList
+            notifications={notifications}
+            linkable={false}
+            onChanged={() => void load()}
+          />
+        </div>
+      ) : null}
+    </FieldPage>
   );
 }

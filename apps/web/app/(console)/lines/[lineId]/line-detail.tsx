@@ -33,12 +33,17 @@ import { PageTrail } from "../../../../components/page-trail";
 import { LoadFailed, RecordFallback } from "../../../../components/query-state";
 import { ActivityBadge } from "../../../../components/status-badge";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
-import { canManageOrganisation, ROLE_LABEL } from "../../../../lib/roles";
+import {
+  canManageOrganisation,
+  ROLE_LABEL,
+  setsVisitingOrder,
+} from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 import { AssignDialog } from "../../_organisation/assign-dialog";
+import { VisitingOrderSection } from "./visiting-order-section";
 import {
   DeactivateDialog,
   RenameDialog,
@@ -220,6 +225,10 @@ export function LineDetail({
           </StatGrid>
         )}
       </Section>
+
+      {setsVisitingOrder(me.role) && record.isActive ? (
+        <VisitingOrderSection lineId={record.id} />
+      ) : null}
 
       <Section title="Collections and money">
         <p className="text-body text-ink-muted">

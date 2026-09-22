@@ -1,8 +1,14 @@
 "use client";
 
+import {
+  CloudArrowDown,
+  CloudSlash,
+  SignIn,
+  Warning,
+} from "@phosphor-icons/react/dist/ssr";
 import { type Me, staffContract } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
-import { FormMessage, formatCurrency } from "@repo/ui";
+import { buttonClass, formatCurrency } from "@repo/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -32,11 +38,22 @@ import {
   readRoute,
   summarise,
 } from "../../lib/offline/outbox";
+import {
+  Banner,
+  BellButton,
+  BottomNav,
+  FieldChrome,
+  Snackbar,
+  SyncChip,
+} from "./app-chrome";
 import { CollectScreen, type RecordAtDoor } from "./collect-screen";
+import { CollectionsScreen } from "./collections-screen";
 import { CorrectScreen } from "./correct-screen";
-import { backToRoute, parseView, useView } from "./hash-view";
+import { CustomerPortfolioScreen } from "./customer-portfolio-screen";
+import { CustomersScreen } from "./customers-screen";
+import { backToRoute, isTab, parseView, useView } from "./hash-view";
+import { ProfileScreen } from "./profile-screen";
 import { RouteScreen } from "./route-screen";
-import { StatusBar } from "./status-bar";
 import { SyncScreen } from "./sync-screen";
 import { HandoverScreen } from "./handover-screen";
 import { NotificationsScreen } from "./notifications-screen";
@@ -50,9 +67,10 @@ type Session =
   | { state: "signed-out" };
 
 /**
- * The Junior's field app (S-01, S-02, S-03, S-06, S-21) on the offline engine. One page,
- * its views by hash ([hash-view](./hash-view.ts)), one persistent status
- * bar, no other chrome (navigation-ia.md).
+ * The Junior's field app (J-01…J-08) on the offline engine: one page, its
+ * views by hash ([hash-view](./hash-view.ts)), with a native app's chrome —
+ * a top app bar carrying the sync chip and the bell on every screen, and a
+ * bottom navigation bar on the four tabs (navigation-ia.md).
  *
  * Nothing here waits for the network to record: a collection is saved on the
  * phone, shown at once, and sent when there is signal. Who is signed in is kept
@@ -167,31 +185,47 @@ export function FieldRoute() {
         role="status"
         aria-label="Loading your route"
       >
-        <div className="h-[calc(var(--control-height)+1rem)] border-b border-border bg-surface-raised" />
+        <div className="h-16 border-b border-border bg-surface-raised" />
         <div
-          className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] p-4"
+          className="mx-auto flex w-full max-w-md flex-col gap-3 p-4"
           aria-hidden
         >
-          <div className="h-7 w-40 animate-pulse rounded-control bg-surface-sunken" />
-          <div className="h-4 w-56 animate-pulse rounded-control bg-surface-sunken" />
+          <div className="h-40 animate-pulse rounded-overlay border border-border bg-surface-raised" />
+          <div className="h-14 animate-pulse rounded-pill bg-surface-sunken" />
           {[0, 1, 2].map((card) => (
             <div
               key={card}
-              className="h-24 animate-pulse rounded-surface border border-border bg-surface-raised"
+              className="h-20 animate-pulse rounded-overlay border border-border bg-surface-raised"
             />
           ))}
         </div>
+        <div className="fixed inset-x-0 bottom-0 h-20 border-t border-border bg-surface-raised" />
       </div>
     );
   }
   if (session.state === "signed-out") {
     return (
-      <main className="mx-auto flex max-w-md flex-col gap-4 p-4">
-        <FormMessage tone="info">
-          Sign in to see your route. Collections saved on this phone are kept
-          and sent after you sign in.
-        </FormMessage>
-        <Link href="/sign-in" className="font-medium text-accent underline">
+      <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 bg-surface p-6 text-center">
+        <span
+          aria-hidden
+          className="flex size-16 items-center justify-center rounded-overlay bg-accent text-2xl font-semibold text-accent-ink"
+        >
+          R
+        </span>
+        <h1 className="text-xl font-semibold text-ink">
+          Sign in to see your route
+        </h1>
+        <p className="text-base text-ink-muted">
+          Collections saved on this phone are kept and sent after you sign in.
+        </p>
+        <Link
+          href="/sign-in"
+          className={buttonClass(
+            "primary",
+            "h-14 w-full rounded-pill text-base font-semibold",
+          )}
+        >
+          <SignIn aria-hidden size={20} weight="regular" />
           Sign in
         </Link>
       </main>
@@ -266,40 +300,76 @@ export function FieldRoute() {
   }
 
   const me = session.me;
+  const unsynced = summary?.unsynced ?? 0;
+
+  // Held on every screen until they stop being true (offline-sync.md).
+  const banners = (
+    <>
+      {summary?.pausedForSignIn ? (
+        <Banner
+          tone="critical"
+          icon={<Warning size={20} weight="regular" />}
+          action={
+            <Link
+              href="/sign-in"
+              className={buttonClass(
+                "ghost",
+                "rounded-pill font-semibold text-critical hover:text-critical",
+              )}
+            >
+              Sign in again
+            </Link>
+          }
+        >
+          Your sign-in has expired. Your saved collections are kept and will
+          send.
+        </Banner>
+      ) : null}
+      {summary?.blocked ? (
+        <Banner tone="critical" icon={<Warning size={20} weight="regular" />}>
+          This phone is full of unsent collections. Find signal and send them
+          before recording more.
+        </Banner>
+      ) : summary?.warn ? (
+        <Banner tone="critical" icon={<Warning size={20} weight="regular" />}>
+          Many collections are waiting. Find signal to send them.
+        </Banner>
+      ) : null}
+      {!connected &&
+      view.name !== "sync" &&
+      view.name !== "handover" &&
+      view.name !== "notifications" &&
+      view.name !== "correct" ? (
+        // The screens that need signal say so in their own words.
+        <Banner tone="neutral" icon={<CloudSlash size={20} weight="regular" />}>
+          No signal. Collections save on this phone and send by themselves when
+          signal returns.
+        </Banner>
+      ) : null}
+      {local?.stale ? (
+        <Banner
+          tone="neutral"
+          icon={<CloudArrowDown size={20} weight="regular" />}
+        >
+          This route is more than three days old. Connect to refresh it.
+        </Banner>
+      ) : null}
+    </>
+  );
+
+  const chrome = {
+    actions: (
+      <>
+        <SyncChip connected={connected} unsynced={unsynced} />
+        <BellButton unread={connected ? unread : null} />
+      </>
+    ),
+    banners,
+  };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-surface">
-      <StatusBar
-        connected={connected}
-        unsynced={summary?.unsynced ?? 0}
-        unread={connected ? unread : null}
-      />
-      <main className="mx-auto flex w-full max-w-md flex-col gap-[var(--stack-gap)] px-4 pt-5 pb-10">
-        {summary?.pausedForSignIn && view.name !== "sync" ? (
-          <FormMessage tone="critical">
-            Your sign-in has expired.{" "}
-            <Link href="/sign-in" className="font-medium underline">
-              Sign in again
-            </Link>{" "}
-            — your saved collections are kept and will send.
-          </FormMessage>
-        ) : null}
-        {summary?.blocked && view.name !== "sync" ? (
-          <FormMessage tone="critical">
-            This phone is full of unsent collections. Find signal and send them
-            before recording more.
-          </FormMessage>
-        ) : summary?.warn && view.name !== "sync" ? (
-          <FormMessage tone="critical">
-            Many collections are waiting. Find signal to send them.
-          </FormMessage>
-        ) : null}
-        {local?.stale ? (
-          <FormMessage tone="info">
-            This route is more than three days old. Connect to refresh it.
-          </FormMessage>
-        ) : null}
-
+    <FieldChrome value={chrome}>
+      <div className="flex min-h-dvh flex-col bg-surface">
         {view.name === "collect" ? (
           <CollectScreen
             key={view.customerId}
@@ -311,42 +381,70 @@ export function FieldRoute() {
           <CorrectScreen connected={connected} />
         ) : view.name === "notifications" ? (
           <NotificationsScreen connected={connected} />
-        ) : view.name === "handover" ? (
-          <HandoverScreen
-            connected={connected}
-            unsent={summary?.unsynced ?? 0}
-          />
         ) : view.name === "sync" ? (
           <SyncScreen
             entries={entries}
-            summary={summary}
             lastSync={lastSync}
             businessDate={businessDate}
             connected={connected}
             sending={sending}
-            signOutBlocked={signOutBlocked}
             onSendNow={() => void send(retryAll)}
             onRetry={(entry) => void send(() => retryOne(entry.idempotencyKey))}
             onRemoveRefused={async (entry) => {
               await clearRefused(await fieldDb(), entry.idempotencyKey);
               await reload();
             }}
+          />
+        ) : view.name === "customers" ? (
+          <CustomersScreen
+            lineId={local?.route.lineId ?? me.currentLineId}
+            connected={connected}
+          />
+        ) : view.name === "customer" ? (
+          <CustomerPortfolioScreen
+            key={view.customerId}
+            customerId={view.customerId}
+            local={local}
+            connected={connected}
+            businessDate={businessDate}
+          />
+        ) : view.name === "collections" ? (
+          <CollectionsScreen
+            local={local}
+            entries={entries}
+            businessDate={businessDate}
+            unsynced={unsynced}
+            connected={connected}
+          />
+        ) : view.name === "handover" ? (
+          <HandoverScreen connected={connected} unsent={unsynced} />
+        ) : view.name === "profile" ? (
+          <ProfileScreen
+            me={me}
+            local={local}
+            connected={connected}
+            unsynced={unsynced}
+            lastSync={lastSync}
+            signOutBlocked={signOutBlocked}
             onSignOut={() => void signOut()}
           />
         ) : (
-          <>
-            {notice ? <FormMessage tone="info">{notice}</FormMessage> : null}
-            <RouteScreen
-              local={local}
-              businessDate={businessDate}
-              name={me.name}
-              connected={connected}
-              refreshing={refreshing}
-              onRefresh={() => void refresh()}
-            />
-          </>
+          <RouteScreen
+            local={local}
+            businessDate={businessDate}
+            connected={connected}
+            unsynced={unsynced}
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
+          />
         )}
-      </main>
-    </div>
+        {isTab(view) ? (
+          <BottomNav active={view.name} unsynced={unsynced} />
+        ) : null}
+        {notice && view.name === "route" ? (
+          <Snackbar onDismiss={() => setNotice(null)}>{notice}</Snackbar>
+        ) : null}
+      </div>
+    </FieldChrome>
   );
 }

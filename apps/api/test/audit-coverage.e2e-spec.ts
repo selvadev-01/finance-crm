@@ -40,6 +40,7 @@ const WRITE_ROUTES: Record<string, Decision> = {
       ['line_assignment', 'UPDATE'],
     ],
   },
+  'POST /api/lines/:lineId/visiting-order': { audits: [['line', 'UPDATE']] },
   'POST /api/lines/:lineId/junior-assignment': {
     audits: [
       ['line_assignment', 'CREATE'],

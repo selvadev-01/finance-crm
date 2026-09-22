@@ -139,6 +139,14 @@ export function seesSettings(role: Role): boolean {
   return role === "SUPER_ADMIN";
 }
 
+/**
+ * `line.setVisitingOrder` (US-040): Super Admin and Admin for any line, a
+ * Senior for their own — the API applies the line scope.
+ */
+export function setsVisitingOrder(role: Role): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN" || role === "SENIOR";
+}
+
 /** Only Seniors and Juniors work lines (M03). */
 export function worksLines(role: Role): role is "SENIOR" | "JUNIOR" {
   return role === "SENIOR" || role === "JUNIOR";

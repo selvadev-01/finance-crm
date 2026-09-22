@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { CustomerOverview } from '@repo/contracts';
 import {
   type CalendarDate,
+  fromUtcMidnight,
   toBusinessDate,
   toMoney,
   toUtcMidnight,
@@ -12,8 +13,9 @@ import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 
 /**
- * Customer 360's figures (US-022, M04). Read-only, and no money is stored on
- * the customer: the totals are summed across their accounts at read time,
+ * Customer 360's figures (US-022, M04), and the customer portfolio every role
+ * sees (J-10, S-09p, 2026-09-22). Read-only, and no money is stored on the
+ * customer: the totals are summed across their accounts at read time,
  * because a customer may hold several (BR-01a) and a stored total would be a
  * cache of a sum of caches.
  */
@@ -41,21 +43,49 @@ export class CustomerOverviewService {
 
     const accounts = await tx.accountLoan.findMany({
       where: { customerId: customer.id },
-      select: { status: true, outstandingAmount: true, collectedAmount: true },
+      select: {
+        status: true,
+        outstandingAmount: true,
+        collectedAmount: true,
+        investedAmount: true,
+        profitAmount: true,
+        isOverdue: true,
+        _count: { select: { schedules: { where: { status: 'MISSED' } } } },
+      },
+    });
+    // The last day money came in: an original collection of more than
+    // nothing that stands (a reversed one never happened; BR-14).
+    const lastPaid = await tx.collection.findFirst({
+      where: {
+        accountLoan: { customerId: customer.id },
+        entryType: 'ORIGINAL',
+        status: 'CONFIRMED',
+        amount: { gt: 0 },
+      },
+      orderBy: { businessDate: 'desc' },
+      select: { businessDate: true },
     });
 
     let outstanding = toMoney('0');
     let collected = toMoney('0');
+    let invested = toMoney('0');
+    let profit = toMoney('0');
+    let overdue = 0;
+    let missed = 0;
     const count = { active: 0, completed: 0, other: 0 };
     for (const account of accounts) {
       // Outstanding is what is still owed, so only active accounts carry it;
       // collected counts every account the customer has ever held.
       collected = collected.plus(toMoney(account.collectedAmount.toString()));
+      invested = invested.plus(toMoney(account.investedAmount.toString()));
+      profit = profit.plus(toMoney(account.profitAmount.toString()));
       if (account.status === 'ACTIVE') {
         count.active += 1;
         outstanding = outstanding.plus(
           toMoney(account.outstandingAmount.toString()),
         );
+        if (account.isOverdue) overdue += 1;
+        missed += account._count.schedules;
       } else if (account.status === 'COMPLETED') {
         count.completed += 1;
       } else {
@@ -77,10 +107,17 @@ export class CustomerOverviewService {
       },
     });
 
+    // RBAC matrix, money visibility: a Junior never sees invested or profit.
+    const hideMargin = context.role === 'JUNIOR';
     return {
       accounts: count,
       outstandingTotal: outstanding.toFixed(2),
       collectedTotal: collected.toFixed(2),
+      overdueAccounts: overdue,
+      missedDays: missed,
+      lastPaidOn: lastPaid ? fromUtcMidnight(lastPaid.businessDate) : null,
+      investedTotal: hideMargin ? null : invested.toFixed(2),
+      profitTotal: hideMargin ? null : profit.toFixed(2),
       staff: {
         seniorName:
           staffing.find((row) => row.assignmentRole === 'SENIOR')?.staffProfile
