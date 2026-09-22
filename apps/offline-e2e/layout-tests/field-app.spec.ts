@@ -48,6 +48,27 @@ const entry = {
   note: null,
 };
 const history = [
+  // Today, as the office has it: a collection the phone already lists, and a
+  // Senior's correction to yesterday's — dated today, the day it was asked.
+  {
+    ...entry,
+    id: "col-today",
+    businessDate: TODAY,
+    capturedAt: `${TODAY}T05:30:00.000Z`,
+  },
+  {
+    ...entry,
+    id: "adj-today",
+    entryType: "ADJUSTMENT",
+    status: "PENDING_APPROVAL",
+    adjustsCollectionId: "col-1",
+    businessDate: TODAY,
+    capturedAt: `${TODAY}T06:10:00.000Z`,
+    expectedAmount: "0.00",
+    amount: "10.00",
+    variance: "10.00",
+    classification: "CORRECT",
+  },
   {
     ...entry,
     id: "adj-1",
@@ -169,12 +190,13 @@ const route = {
 
 const answers: ApiAnswers = {
   "/api/route": { json: route },
-  // A search is a history read: earlier days have two entries, today none.
+  // A search is a history read: today alone (the correction screen) has none;
+  // the last month has yesterday's two entries and today's office rows.
   // Without one it is the phone's send — refused as unavailable, so it stays.
   "/api/collections": (url) =>
     !url.search
       ? { status: 503, json: { code: "UNAVAILABLE", message: "Try later." } }
-      : url.searchParams.get("to") === TODAY
+      : url.searchParams.get("from") === TODAY
         ? { json: { data: [], nextCursor: null, hasMore: false } }
         : { json: { data: history, nextCursor: null, hasMore: false } },
   "/api/devices/sync-report": {
@@ -562,6 +584,14 @@ test.describe("the Junior's field app at 360px", () => {
     await expect(correction).toContainText("Correction");
     await expect(correction).toContainText("Waiting for approval");
     await expect(correction).toContainText("−₹50.00");
+
+    // A Senior's correction asked for today still reaches the Junior; today's
+    // own collection is not repeated, as the phone lists it above.
+    const today = earlier.getByTestId("history-adj-today");
+    await expect(today).toContainText("Correction");
+    await expect(today).toContainText("Waiting for approval");
+    await expect(today).toContainText("+₹10.00");
+    await expect(earlier.getByTestId("history-col-today")).toHaveCount(0);
     await noSidewaysScroll(page, "earlier collections");
   });
 

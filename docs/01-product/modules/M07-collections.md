@@ -108,7 +108,7 @@ A correction inserts a **new** `ADJUSTMENT` row referencing the original via `ad
 
 The states above belong to the `ADJUSTMENT` row; the original stays `CONFIRMED` throughout. `REJECTED` ends a refused correction — nothing moved, and it stays in history.
 
-Approval: Senior for their own line, or Admin. **Self-approval is blocked regardless of role.**
+Approval: Senior for their own line, or Admin. **A Senior may decide a correction they requested; an Admin may not decide their own reversal** (`403 SELF_APPROVAL`, decided 2026-09-22 — a line usually has one Senior, and an Admin-only answer held the correction open). `maySelfApprove` in `collection-history.service.ts` is the one place the rule lives, read by the decision, by `canDecide` and by the line dashboard's `awaitingYou`.
 
 > Append-only removes the risk structurally rather than relying on an audit log to catch it afterwards. In a cash business, the ability to silently change a past figure _is_ the risk.
 
@@ -167,7 +167,7 @@ In `apps/api/src/collections/`, through `packages/contracts/src/collection.contr
 | `POST /api/collections/:collectionId/corrections`     | `collection.requestCorrection` | `201` a pending adjustment to `correctedAmount`; `409 CORRECTION_PENDING`; `422 NO_CHANGE`, `AMOUNT_EXCEEDS_OUTSTANDING`, `ACCOUNT_NOT_CORRECTABLE`, `NOT_AN_ORIGINAL_COLLECTION` |
 | `POST /api/collections/:collectionId/reversal`        | `collection.reverse`           | As above, to ₹0                                                                                                                                                                   |
 | `GET /api/collection-approvals`                       | `collection.approveCorrection` | S-18: corrections by decision, pending by default, each with `canDecide`                                                                                                          |
-| `POST /api/collection-approvals/:approvalId/decision` | `collection.approveCorrection` | `200` APPROVED or REJECTED; `403 SELF_APPROVAL`; `409 APPROVAL_ALREADY_DECIDED`; `422` when the outstanding no longer allows it                                                   |
+| `POST /api/collection-approvals/:approvalId/decision` | `collection.approveCorrection` | `200` APPROVED or REJECTED; `403 SELF_APPROVAL` for an Admin's own; `409 APPROVAL_ALREADY_DECIDED`; `422` when the outstanding no longer allows it                                |
 
 **One transaction per collection** (BR-18), after a `SELECT … FOR UPDATE` on the account row so collections on one account are serialised:
 

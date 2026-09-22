@@ -456,11 +456,18 @@ Scenario: Approval applies the adjustment
   And the ledger posts a corresponding transaction
   And both records remain visible in history
 
-Scenario: Self-approval is blocked
+Scenario: A Senior may decide their own request
   Given I am a Senior who requested a correction
+  When I approve or reject it myself
+  Then the decision stands as any other would
+
+Scenario: An Admin may not approve their own reversal
+  Given I am an Admin who reversed a collection
   When I attempt to approve it myself
-  Then I am refused regardless of my role
+  Then I am refused, and another Admin must decide it
 ```
+
+> Decided 2026-09-22: a Senior may decide their own correction. A line usually has one Senior, and waiting for an Admin held the correction, and the Junior's view of it, open. An Admin's own reversal still needs a second person.
 
 ### US-045 · View collection history · P1
 

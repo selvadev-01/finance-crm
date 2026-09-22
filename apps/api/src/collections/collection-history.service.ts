@@ -405,6 +405,16 @@ export function toItem(row: ItemRow, names: Names): CollectionListItem {
   };
 }
 
+/**
+ * US-044: whether the caller may decide a correction they asked for. A Senior
+ * may approve or reject their own (decided 2026-09-22) — the line's Senior is
+ * usually the only one on it, and waiting for an Admin held the day open. An
+ * Admin still may not decide their own reversal: that is the office's check.
+ */
+export function maySelfApprove(context: RequestContext): boolean {
+  return context.role === 'SENIOR';
+}
+
 function toApproval(
   context: RequestContext,
   row: ApprovalRow,
@@ -422,7 +432,7 @@ function toApproval(
     decisionNote: row.decisionNote,
     canDecide:
       row.decision === 'PENDING' &&
-      row.requestedByUserId !== context.userId &&
+      (row.requestedByUserId !== context.userId || maySelfApprove(context)) &&
       roleHasPermission(context.role, 'collection.approveCorrection'),
   };
 }

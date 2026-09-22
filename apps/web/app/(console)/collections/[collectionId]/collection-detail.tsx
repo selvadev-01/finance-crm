@@ -245,7 +245,8 @@ interface RequestDialogProps {
 
 /**
  * Request a correction (a Senior: what was actually collected) or a reversal
- * (an Admin: to ₹0). Either way it waits for someone else's approval. Each
+ * (an Admin: to ₹0). Either way it waits for approval — a Senior may decide
+ * their own, an Admin's reversal needs another Admin (US-044). Each
  * kind is its own form over its own contract body.
  */
 function RequestDialog({

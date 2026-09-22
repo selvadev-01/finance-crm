@@ -19,6 +19,7 @@ import {
   lineScope,
 } from '../access/scope.js';
 import { DayCloseService } from '../cash/day-close.service.js';
+import { maySelfApprove } from '../collections/collection-history.service.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { DomainError } from '../platform/errors/errors.js';
@@ -201,7 +202,10 @@ export class LineDashboardService {
     };
   }
 
-  /** Corrections on the line awaiting a decision; self-approval is blocked (US-044). */
+  /**
+   * Corrections on the line awaiting a decision. A Senior may decide their
+   * own, so all of them wait for a Senior; an Admin's own do not (US-044).
+   */
   private async pendingApprovals(
     tx: Tx,
     context: RequestContext,
@@ -212,6 +216,7 @@ export class LineDashboardService {
       status: 'PENDING_APPROVAL',
     });
     const total = await tx.collection.count({ where: pending });
+    if (maySelfApprove(context)) return { total, awaitingYou: total };
     const mine = await tx.collection.count({
       where: {
         AND: [

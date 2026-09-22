@@ -61,7 +61,7 @@ export function ApprovalQueue() {
           />
         }
         title="Pending approvals"
-        description="Corrections wait here until someone other than the requester approves or rejects them. Nothing moves until then."
+        description="Corrections wait here until a Senior or Admin approves or rejects them. Nothing moves until then."
       />
 
       {!allowed ? (

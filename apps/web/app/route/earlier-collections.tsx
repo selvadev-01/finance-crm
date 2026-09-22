@@ -29,6 +29,11 @@ const PAGE = 50;
  * Needs signal: history is not kept on the phone, so nothing here competes
  * with the outbox for storage. `collectionScope` limits a Junior to their own
  * entries (M02); the phone only asks.
+ *
+ * Today is asked for too, for its corrections only. A correction carries the
+ * date it was asked for, not the date of the collection it corrects (US-044),
+ * so one a Senior raised this morning on yesterday's entry is dated today —
+ * and today's own collections are already listed above, from the phone.
  */
 export function EarlierCollections({
   connected,
@@ -57,7 +62,7 @@ export function EarlierCollections({
         const result = await api(collectionContract.listCollections, {
           query: {
             from: addCalendarDays(today, -DAYS_BACK),
-            to: addCalendarDays(today, -1),
+            to: businessDate,
             limit: PAGE,
             ...(after ? { cursor: after } : {}),
           },
@@ -89,7 +94,11 @@ export function EarlierCollections({
     return () => window.clearTimeout(timer);
   }, [open, connected, rows, load]);
 
-  const days = groupByDay(rows ?? []);
+  const shown = (rows ?? []).filter(
+    (row) =>
+      row.businessDate !== businessDate || row.entryType === "ADJUSTMENT",
+  );
+  const days = groupByDay(shown);
 
   return (
     <Section title={`Earlier · last ${DAYS_BACK} days`}>
@@ -146,7 +155,7 @@ export function EarlierCollections({
                 <Skeleton className="h-12 rounded-surface" />
               </div>
             ) : null}
-            {rows !== null && rows.length === 0 ? (
+            {rows !== null && shown.length === 0 && !cursor ? (
               <p className="text-sm text-ink-muted">
                 Nothing recorded in the last {DAYS_BACK} days.
               </p>

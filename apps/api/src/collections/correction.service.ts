@@ -33,6 +33,7 @@ import { AccountSettlement } from './account-settlement.js';
 import {
   CollectionHistoryService,
   CORRECTABLE_ACCOUNT,
+  maySelfApprove,
   netOf,
 } from './collection-history.service.js';
 
@@ -269,7 +270,10 @@ export class CorrectionService {
         }),
         'approval',
       );
-      if (found.requestedByUserId === context.userId) {
+      if (
+        found.requestedByUserId === context.userId &&
+        !maySelfApprove(context)
+      ) {
         throw new AuthorizationError(
           'SELF_APPROVAL',
           'You asked for this correction, so someone else must decide it',

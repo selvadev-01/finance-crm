@@ -445,8 +445,8 @@ describe('CorrectionService (US-044, BR-14)', () => {
     });
   });
 
-  describe('Scenario: self-approval is blocked', () => {
-    it('a Senior who requested a correction cannot approve it, whatever their role; an Admin cannot approve their own reversal', async () => {
+  describe('Scenario: who may decide their own request', () => {
+    it('a Senior may approve the correction they requested, and it settles as any other', async () => {
       await withRollback(prisma, async (tx) => {
         const w = await world(tx);
         const account = await w.account();
@@ -456,21 +456,42 @@ describe('CorrectionService (US-044, BR-14)', () => {
           correctedAmount: '80',
           reason: 'x',
         });
-        expect(own.canDecide).toBe(false);
+        expect(own.canDecide).toBe(true);
         await expect(
           w.corrections.decide(w.senior, own.id, { decision: 'APPROVED' }),
-        ).rejects.toMatchObject({ code: 'SELF_APPROVAL', status: 403 });
+        ).resolves.toMatchObject({ decision: 'APPROVED' });
+      });
+    });
+
+    it('a Senior may reject the correction they requested', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const account = await w.account();
+        const original = await w.collect(account.id, '100');
+
+        const own = await w.corrections.request(w.senior, original.id, {
+          correctedAmount: '80',
+          reason: 'x',
+        });
         await expect(
           w.corrections.decide(w.senior, own.id, { decision: 'REJECTED' }),
-        ).rejects.toMatchObject({ code: 'SELF_APPROVAL' });
-        await w.corrections.decide(w.admin, own.id, { decision: 'REJECTED' });
+        ).resolves.toMatchObject({ decision: 'REJECTED' });
+      });
+    });
+
+    it('an Admin cannot approve their own reversal; a second Admin can', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const account = await w.account();
+        const original = await w.collect(account.id, '100');
 
         const reversal = await w.corrections.reverse(w.admin, original.id, {
           reason: 'x',
         });
+        expect(reversal.canDecide).toBe(false);
         await expect(
           w.corrections.decide(w.admin, reversal.id, { decision: 'APPROVED' }),
-        ).rejects.toMatchObject({ code: 'SELF_APPROVAL' });
+        ).rejects.toMatchObject({ code: 'SELF_APPROVAL', status: 403 });
         await expect(
           w.corrections.decide(w.secondAdmin, reversal.id, {
             decision: 'APPROVED',

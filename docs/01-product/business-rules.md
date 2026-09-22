@@ -227,7 +227,7 @@ The client generates a UUID v4 for each collection **at the moment of recording*
 
 A recorded collection is never updated or deleted.
 
-A correction creates a **new** collection record of type `ADJUSTMENT` referencing the original, and requires approval from a Senior (for their own line) or an Admin. A full reversal is an adjustment for the negative of the original amount.
+A correction creates a **new** collection record of type `ADJUSTMENT` referencing the original, and requires approval from a Senior (for their own line) or an Admin. A Senior may approve a correction they asked for themselves; an Admin may not approve their own reversal (decided 2026-09-22). A full reversal is an adjustment for the negative of the original amount.
 
 The customer's collected total is the sum of all records — originals plus adjustments. Both the original and the correction remain visible in history.
 

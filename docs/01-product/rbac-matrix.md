@@ -80,7 +80,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 
 > **Only Juniors record collections.** This is deliberate and stricter than Appendix A, which shows "View" for Admin and Super Admin. Recording is a statement that cash physically changed hands, and only the person at the door can make it. An Admin correcting an error does so through the approval path, which leaves both records visible — not by recording a collection they did not take.
 >
-> A Senior approves corrections on their own line but cannot request and approve the same one; self-approval is blocked regardless of role.
+> A Senior approves corrections on their own line, including ones they requested themselves (decided 2026-09-22). An Admin cannot approve their own reversal; another Admin must.
 
 ### Day close and cash (M08)
 
