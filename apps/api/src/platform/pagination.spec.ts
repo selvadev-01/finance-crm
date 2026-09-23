@@ -25,34 +25,58 @@ const name = (row: Row) => row.name;
 describe('toPage', () => {
   it('reads one row past the page to learn whether more exist', () => {
     // The caller takes limit + 1; the extra row is the answer, not data.
-    expect(toPage(rows('a', 'b', 'c'), { limit: 2 }, name)).toEqual({
+    expect(toPage(rows('a', 'b', 'c'), { limit: 2 }, name, 3)).toEqual({
       data: ['row a', 'row b'],
       nextCursor: encodeCursor('b'),
       hasMore: true,
+      total: 3,
     });
   });
 
   it('ends the list when the rows exactly fill the page', () => {
     // The boundary that matters: two rows, limit two, nothing beyond. A cursor
     // here would send the client after a page that does not exist.
-    expect(toPage(rows('a', 'b'), { limit: 2 }, name)).toEqual({
+    expect(toPage(rows('a', 'b'), { limit: 2 }, name, 2)).toEqual({
       data: ['row a', 'row b'],
       nextCursor: null,
       hasMore: false,
+      total: 2,
     });
   });
 
   it('returns an empty page without a cursor', () => {
-    expect(toPage([], { limit: 20 }, name)).toEqual({
+    expect(toPage([], { limit: 20 }, name, 0)).toEqual({
       data: [],
       nextCursor: null,
       hasMore: false,
+      total: 0,
     });
   });
 
   it('carries the cursor of the last visible row, not the row that peeked', () => {
-    const page = toPage(rows('a', 'b', 'c', 'd'), { limit: 3 }, name);
+    const page = toPage(rows('a', 'b', 'c', 'd'), { limit: 3 }, name, 4);
     expect(decodeCursor(page.nextCursor!)).toBe('c');
+  });
+
+  it('carries the total through untouched, whatever the page holds', () => {
+    // The total is the caller's count over the whole filter, not something
+    // these functions can work out: the last page of a long list still says
+    // how many rows there are, and a page in the middle of one is not the
+    // rows it happens to be carrying.
+    const last = toPage(rows('y', 'z'), { limit: 20 }, name, 1234);
+    expect(last).toMatchObject({ hasMore: false, total: 1234 });
+
+    const middle = toPageBy(
+      rows('a', 'b', 'c'),
+      { limit: 2, cursor: encodeCursor('x') },
+      (row) => row.id,
+      name,
+      1234,
+    );
+    expect(middle).toMatchObject({ hasMore: true, total: 1234 });
+
+    // An empty page of an empty list is the only honest zero.
+    expect(toPage([], { limit: 20 }, name, 0).total).toBe(0);
   });
 });
 
@@ -70,11 +94,13 @@ describe('toPageBy', () => {
       { limit: 2 },
       (row) => `${row.due}|${row.id}`,
       (row) => row.id,
+      3,
     );
     expect(page).toEqual({
       data: ['a', 'b'],
       nextCursor: encodeCursor('2026-01-05|b'),
       hasMore: true,
+      total: 3,
     });
     // Two rows share the due date, so the id is what separates the pages.
     expect(decodeCursor(page.nextCursor!)).toBe('2026-01-05|b');
@@ -82,8 +108,8 @@ describe('toPageBy', () => {
 
   it('is what toPage is, keyed by the id', () => {
     const some = rows('a', 'b', 'c');
-    expect(toPage(some, { limit: 2 }, name)).toEqual(
-      toPageBy(some, { limit: 2 }, (row) => row.id, name),
+    expect(toPage(some, { limit: 2 }, name, 3)).toEqual(
+      toPageBy(some, { limit: 2 }, (row) => row.id, name, 3),
     );
   });
 });

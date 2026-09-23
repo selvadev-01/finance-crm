@@ -134,12 +134,19 @@ export class OverdueReportService {
       query,
     );
 
-    const rows = await tx.accountLoan.findMany({
-      where: { AND: [where, keysetWhere(query)] },
-      select: accountSelect,
-      orderBy: orderFor(query.sort),
-      take: query.limit + 1,
-    });
+    // The same `where` as the rows, keyset aside: how many accounts are
+    // overdue under these filters, not how many are left after the cursor.
+    // `overdueWhere` carries `accountScope` and the in-scope line ids, so the
+    // count can never reach an account the caller may not see (M02).
+    const [rows, total] = await Promise.all([
+      tx.accountLoan.findMany({
+        where: { AND: [where, keysetWhere(query)] },
+        select: accountSelect,
+        orderBy: orderFor(query.sort),
+        take: query.limit + 1,
+      }),
+      tx.accountLoan.count({ where }),
+    ]);
 
     const figure = <T>(group: string, read: () => Promise<T>) =>
       figureOrNull(this.logger, context, group, read);
@@ -179,6 +186,7 @@ export class OverdueReportService {
           arrears: arrearsOf(arrears?.get(row.id), today),
         };
       },
+      total,
     );
     return { ...page, asOf: today, generatedAt: now.toISOString(), summary };
   }

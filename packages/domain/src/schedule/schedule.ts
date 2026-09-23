@@ -1,19 +1,18 @@
 import { Decimal } from "decimal.js";
 
 import type { CalendarDate } from "../calendar/calendar-date.js";
-import {
-  addWorkingDays,
-  type HolidaySet,
-  workingDayRange,
-} from "../calendar/working-days.js";
+import type { HolidaySet } from "../calendar/working-days.js";
 import { type MoneyInput, toMoney, toPaise } from "../money/money.js";
+import { type CollectionFrequency, collectionDueDates } from "./frequency.js";
 
 /**
  * Schedule generation (M05, BR-04, BR-06, BR-07).
  *
  * One function serves both the initial schedule and every regenerated tail,
- * because they are the same calculation: lay `min(D, remaining)` on
- * consecutive working days until the balance is used up.
+ * because they are the same calculation: lay `min(D, remaining)` on the dates
+ * the account's `frequency` gives (`collectionDueDates`) until the balance is
+ * used up. Only the dates differ between a daily, weekly and monthly account —
+ * the amounts are the same calculation at every cadence.
  *
  * - **Initial:** `outstanding = A`, `after = disbursementDate`, `firstSequence = 1`.
  * - **Regenerated tail (BR-06):** `outstanding` is the current balance, `after`
@@ -37,10 +36,20 @@ export interface ScheduleSlot {
 export interface ScheduleInput {
   /** The balance the schedule must clear. `≤ 0` means nothing is left to schedule. */
   outstanding: MoneyInput;
-  /** `D`. Must be `> 0`. */
+  /**
+   * `D`, the instalment amount. Must be `> 0`. Named for the daily account
+   * that is still the common case; it is one instalment at whatever
+   * `frequency` says, not necessarily one day's money.
+   */
   dailyAmount: MoneyInput;
   /** Day 0 — slots start on the next working day after it (BR-03). */
   after: CalendarDate;
+  /**
+   * How often an instalment falls due. **Required, with no default**: a tail
+   * regenerated at the wrong cadence would put a weekly customer back on a
+   * daily route silently, so every caller has to say which it is.
+   */
+  frequency: CollectionFrequency;
   /** Resolved for the account's sector: business-wide plus that sector's own. */
   holidays: HolidaySet;
 }
@@ -69,7 +78,7 @@ export function scheduleSlotCount(
 export function generateSchedule(
   input: ScheduleInput & { firstSequence: number },
 ): ScheduleSlot[] {
-  const { after, holidays, firstSequence } = input;
+  const { after, holidays, frequency, firstSequence } = input;
   if (!Number.isSafeInteger(firstSequence) || firstSequence < 1) {
     throw new RangeError(
       `firstSequence must be an integer ≥ 1, got ${firstSequence}`,
@@ -79,7 +88,7 @@ export function generateSchedule(
   const daily = toPositiveDaily(input.dailyAmount);
 
   const count = scheduleSlotCount(outstanding, daily);
-  const dueDates = workingDayRange(after, count, holidays);
+  const dueDates = collectionDueDates(after, count, frequency, holidays);
 
   let remaining = outstanding;
   return dueDates.map((dueDate, index) => {
@@ -101,9 +110,11 @@ export function targetCompletionDate(
   input: ScheduleInput,
 ): CalendarDate | null {
   const count = scheduleSlotCount(input.outstanding, input.dailyAmount);
-  return count === 0
-    ? null
-    : addWorkingDays(input.after, count, input.holidays);
+  return (
+    collectionDueDates(input.after, count, input.frequency, input.holidays).at(
+      -1,
+    ) ?? null
+  );
 }
 
 /**

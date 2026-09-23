@@ -29,7 +29,10 @@ export {
   FilterBar,
   FilterField,
   ListFooter,
+  ListPager,
+  type ListPagerProps,
   ListSkeleton,
+  PAGE_SIZES,
 } from "./data-view";
 export {
   Dialog,
@@ -80,6 +83,6 @@ export {
 } from "./form";
 export { Input, type InputProps } from "./input";
 export { NoMatches, NothingYet, NotPermitted } from "./empty-state";
-export { formatBusinessDate, formatCurrency } from "./format";
+export { formatBusinessDate, formatCount, formatCurrency } from "./format";
 export { toast, Toaster, type ToastInput } from "./toast";
 export { Tooltip, type TooltipProps } from "./tooltip";

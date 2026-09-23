@@ -65,24 +65,31 @@ export class AuditLogService {
       );
     }
 
+    // One `where` for the page and for how many entries match it: the
+    // organization bounds both, so another business's entries are neither
+    // listed nor counted.
+    const where: Prisma.AuditLogWhereInput = {
+      organizationId: context.organizationId,
+      ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
+      ...(query.entityTable ? { entityTable: query.entityTable } : {}),
+      ...(query.entityId ? { entityId: query.entityId } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.from || query.to ? { createdAt } : {}),
+    };
     // Newest first. The cursor is the last row's id; (createdAt, id) is a
     // total order, so a page never repeats or skips a row.
-    const rows = await tx.auditLog.findMany({
-      where: {
-        organizationId: context.organizationId,
-        ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
-        ...(query.entityTable ? { entityTable: query.entityTable } : {}),
-        ...(query.entityId ? { entityId: query.entityId } : {}),
-        ...(query.action ? { action: query.action } : {}),
-        ...(query.from || query.to ? { createdAt } : {}),
-      },
-      select: auditRowSelect,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: query.limit + 1,
-      ...(query.cursor
-        ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
-        : {}),
-    });
+    const [rows, total] = await Promise.all([
+      tx.auditLog.findMany({
+        where,
+        select: auditRowSelect,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: query.limit + 1,
+        ...(query.cursor
+          ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
+          : {}),
+      }),
+      tx.auditLog.count({ where }),
+    ]);
     const hasMore = rows.length > query.limit;
     const visible = hasMore ? rows.slice(0, query.limit) : rows;
     const names = await userNames(
@@ -94,6 +101,7 @@ export class AuditLogService {
       nextCursor:
         hasMore && visible.length > 0 ? encodeCursor(visible.at(-1)!.id) : null,
       hasMore,
+      total,
     };
   }
 }

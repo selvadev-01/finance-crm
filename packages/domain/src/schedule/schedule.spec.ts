@@ -34,6 +34,7 @@ describe("BR-04 worked example — exact fit", () => {
     outstanding: "10000",
     dailyAmount: "100",
     after: DISBURSED,
+    frequency: "DAILY" as const,
     holidays: NONE,
     firstSequence: 1,
   });
@@ -62,6 +63,7 @@ describe("BR-04 worked example — uneven final instalment (US-031)", () => {
     outstanding: "10000",
     dailyAmount: "150",
     after: DISBURSED,
+    frequency: "DAILY" as const,
     holidays: NONE,
     firstSequence: 1,
   });
@@ -91,6 +93,7 @@ describe("BR-04 correction — the slot count comes from the balance, not the te
       outstanding: "10000",
       dailyAmount: "150",
       after: DISBURSED,
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 1,
     });
@@ -110,6 +113,7 @@ describe("US-030 schedule preview", () => {
     outstanding: "10000",
     dailyAmount: "100",
     after: DISBURSED,
+    frequency: "DAILY" as const,
     holidays,
     firstSequence: 1,
   });
@@ -138,6 +142,7 @@ describe("US-030 schedule preview", () => {
         outstanding: "10000",
         dailyAmount: "100",
         after: DISBURSED,
+        frequency: "DAILY" as const,
         holidays,
       }),
     ).toBe("2026-05-04");
@@ -153,6 +158,7 @@ describe("BR-06 worked examples — regenerating the tail after day 51", () => {
       outstanding,
       dailyAmount: "100",
       after: day(51),
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 52,
     }),
@@ -160,6 +166,7 @@ describe("BR-06 worked examples — regenerating the tail after day 51", () => {
       outstanding,
       dailyAmount: "100",
       after: day(51),
+      frequency: "DAILY" as const,
       holidays: NONE,
     }),
   });
@@ -170,6 +177,7 @@ describe("BR-06 worked examples — regenerating the tail after day 51", () => {
         outstanding: "10000",
         dailyAmount: "100",
         after: DISBURSED,
+        frequency: "DAILY" as const,
         holidays: NONE,
       }),
     ).toBe(originalTarget);
@@ -221,6 +229,7 @@ describe("BR-06 worked examples — regenerating the tail after day 51", () => {
         outstanding: "4760",
         dailyAmount: "100",
         after: day(52),
+        frequency: "DAILY" as const,
         holidays: NONE,
       }),
     ).toBe(originalTarget);
@@ -233,6 +242,7 @@ describe("BR-06 worked examples — regenerating the tail after day 51", () => {
         outstanding: "4400",
         dailyAmount: "100",
         after: day(55),
+        frequency: "DAILY" as const,
         holidays: NONE,
       }),
     ).toBe(day(99));
@@ -246,12 +256,14 @@ describe("US-030a — a mid-term account schedules identically to a day-one acco
       outstanding: "5300",
       dailyAmount: "100",
       after: anchor,
+      frequency: "DAILY" as const,
       holidays: NONE,
     };
     const dayOne = {
       outstanding: new Decimal("10000").minus("4700"),
       dailyAmount: new Decimal("100"),
       after: anchor,
+      frequency: "DAILY" as const,
       holidays: NONE,
     };
     expect(generateSchedule({ ...midTerm, firstSequence: 48 })).toEqual(
@@ -265,6 +277,7 @@ describe("US-030a — a mid-term account schedules identically to a day-one acco
       outstanding: new Decimal("10000").minus("4580"),
       dailyAmount: "100",
       after: d("2026-08-14"),
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 1,
     });
@@ -282,9 +295,14 @@ describe("a holiday inside the schedule", () => {
       after: d("2026-01-13"),
       firstSequence: 1,
     };
-    const without = generateSchedule({ ...base, holidays: NONE });
+    const without = generateSchedule({
+      ...base,
+      frequency: "DAILY",
+      holidays: NONE,
+    });
     const withHoliday = generateSchedule({
       ...base,
+      frequency: "DAILY" as const,
       holidays: new Set([d("2026-01-15")]),
     });
     expect(without.map((slot) => slot.dueDate)).toEqual([
@@ -313,6 +331,7 @@ describe("nothing outstanding", () => {
         outstanding,
         dailyAmount: "100",
         after: DISBURSED,
+        frequency: "DAILY" as const,
         holidays: NONE,
       };
       expect(generateSchedule({ ...input, firstSequence: 1 })).toEqual([]);
@@ -328,6 +347,7 @@ describe("paise-level amounts", () => {
       outstanding: "100.01",
       dailyAmount: "100",
       after: DISBURSED,
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 1,
     });
@@ -339,6 +359,7 @@ describe("paise-level amounts", () => {
       outstanding: "1000",
       dailyAmount: "33.33",
       after: DISBURSED,
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 1,
     });
@@ -352,6 +373,7 @@ describe("paise-level amounts", () => {
       outstanding: "10000",
       dailyAmount: "150",
       after: DISBURSED,
+      frequency: "DAILY" as const,
       holidays: NONE,
       firstSequence: 1,
     });
@@ -382,6 +404,7 @@ describe("invalid input is refused, not coerced", () => {
     outstanding: "10000",
     dailyAmount: "100",
     after: DISBURSED,
+    frequency: "DAILY" as const,
     holidays: NONE,
     firstSequence: 1,
   };
@@ -407,5 +430,72 @@ describe("invalid input is refused, not coerced", () => {
     expect(() => generateSchedule({ ...valid, firstSequence })).toThrow(
       /firstSequence/,
     );
+  });
+});
+
+describe("BR-04 at a weekly cadence — ₹10,000 at ₹500 a week", () => {
+  // Disbursed Wednesday 23 September 2026. N is 20 weeks, and 500 × 20 = 10,000
+  // clears it exactly, so the maths is BR-04's unchanged: only the dates move.
+  const slots = generateSchedule({
+    outstanding: "10000",
+    dailyAmount: "500",
+    after: d("2026-09-23"),
+    frequency: "WEEKLY",
+    holidays: NONE,
+    firstSequence: 1,
+  });
+
+  it("has ceil(10,000 ÷ 500) = 20 slots of ₹500", () => {
+    expect(slots).toHaveLength(20);
+    expect(sum(slots).toString()).toBe("10000");
+    expect(new Set(amounts(slots))).toEqual(new Set(["500"]));
+  });
+
+  it("collects every Wednesday, starting a week after day 0", () => {
+    expect(slots.slice(0, 3).map((slot) => slot.dueDate)).toEqual([
+      "2026-09-30",
+      "2026-10-07",
+      "2026-10-14",
+    ]);
+    expect(slots.every((slot) => dayOfWeek(slot.dueDate) === 3)).toBe(true);
+  });
+
+  it("ends on the twentieth Wednesday, which is the target completion date", () => {
+    expect(slots.at(-1)?.dueDate).toBe("2027-02-10");
+    expect(
+      targetCompletionDate({
+        outstanding: "10000",
+        dailyAmount: "500",
+        after: d("2026-09-23"),
+        frequency: "WEEKLY",
+        holidays: NONE,
+      }),
+    ).toBe("2027-02-10");
+  });
+});
+
+describe("BR-07's uneven last slot is the same at every cadence", () => {
+  // ₹10,000 at ₹3,000 a month: three full instalments and ₹1,000 left.
+  const slots = generateSchedule({
+    outstanding: "10000",
+    dailyAmount: "3000",
+    after: d("2026-09-23"),
+    frequency: "MONTHLY",
+    holidays: NONE,
+    firstSequence: 1,
+  });
+
+  it("expects the remainder on the last month, so the slots sum to exactly A", () => {
+    expect(amounts(slots)).toEqual(["3000", "3000", "3000", "1000"]);
+    expect(sum(slots).toString()).toBe("10000");
+  });
+
+  it("falls on the 23rd of each month after day 0", () => {
+    expect(slots.map((slot) => slot.dueDate)).toEqual([
+      "2026-10-23",
+      "2026-11-23",
+      "2026-12-23",
+      "2027-01-23",
+    ]);
   });
 });

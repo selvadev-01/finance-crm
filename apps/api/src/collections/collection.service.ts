@@ -185,6 +185,7 @@ export class CollectionService {
           accountAmount: true,
           profitAmount: true,
           dailyAmount: true,
+          collectionFrequency: true,
           collectedAmount: true,
           outstandingAmount: true,
           disbursementDate: true,

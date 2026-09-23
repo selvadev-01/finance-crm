@@ -56,7 +56,7 @@ export async function signedInAs(
     if (answer) {
       const { status, json } =
         typeof answer === "function" ? answer(url) : answer;
-      await route.fulfill({ status: status ?? 200, json });
+      await route.fulfill({ status: status ?? 200, json: withTotal(json) });
       return;
     }
 
@@ -65,6 +65,22 @@ export async function signedInAs(
       json: { code: "NOT_FOUND", message: "Not found in the layout tests." },
     });
   });
+}
+
+/**
+ * Every list the API answers carries a `total` (api-design.md#pagination), and
+ * the contract refuses a page without one. A fixture that says what it holds
+ * and how many more there are has already said its total, so it is filled in
+ * here rather than repeated in every spec: one page of rows totals those rows.
+ * A fixture that means something else — a first page of many — says `total`
+ * itself, and that is left alone.
+ */
+function withTotal(json: unknown): unknown {
+  if (json === null || typeof json !== "object") return json;
+  const body = json as Record<string, unknown>;
+  if (!Array.isArray(body.data) || !("hasMore" in body)) return json;
+  if ("total" in body) return json;
+  return { ...body, total: body.data.length };
 }
 
 /** The layout saved on this device before the page loads, as a returning visit. */

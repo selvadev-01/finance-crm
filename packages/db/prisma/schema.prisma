@@ -150,6 +150,14 @@ enum CustomerStatus {
   BLACKLISTED
 }
 
+/// How often an account's instalments fall due (BR-04). DAILY is the original
+/// behaviour and the default: one instalment on every working day.
+enum CollectionFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
 enum AccountStatus {
   PENDING
   ACTIVE
@@ -577,10 +585,14 @@ model AccountLoan {
   investedAmount Decimal @db.Decimal(14, 2)
   /// P — derived (BR-01). A check constraint enforces P = A - I.
   profitAmount   Decimal @db.Decimal(14, 2)
-  /// D
+  /// D — one instalment, at collectionFrequency. Not necessarily one day's money.
   dailyAmount    Decimal @db.Decimal(14, 2)
-  /// N
+  /// N — the number of instalments, counted in units of collectionFrequency
+  /// (days, weeks or months). BR-01's D * N >= A holds at every cadence.
   termDays       Int     @default(100)
+  /// How often an instalment falls due (BR-04). Immutable after disbursement,
+  /// with the other terms.
+  collectionFrequency CollectionFrequency @default(DAILY)
 
   /// Day 0, and not itself a collection day (BR-03).
   disbursementDate     DateTime  @db.Date

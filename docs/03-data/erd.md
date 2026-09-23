@@ -124,8 +124,9 @@ erDiagram
         decimal accountAmount "A"
         decimal investedAmount "I"
         decimal profitAmount "P = A - I, derived"
-        decimal dailyAmount "D"
-        int termDays "N, default 100"
+        decimal dailyAmount "D, one instalment"
+        int termDays "N instalments, in units of the frequency"
+        enum collectionFrequency "DAILY | WEEKLY | MONTHLY, default DAILY"
         date disbursementDate
         date firstCollectionDate
         date targetCompletionDate "recomputed"

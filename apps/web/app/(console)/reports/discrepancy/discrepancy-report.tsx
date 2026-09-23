@@ -15,7 +15,6 @@ import {
   formatBusinessDate,
   formatCurrency,
   FormMessage,
-  ListFooter,
   NothingYet,
   PageHeader,
   Select,
@@ -33,6 +32,7 @@ import {
 import { ExportMenu } from "../../../../components/export-menu";
 import { Discrepancy, signedCurrency } from "../../../../components/money";
 import { PageTrail } from "../../../../components/page-trail";
+import { Pager } from "../../../../components/pager";
 import { StatusBadge } from "../../../../components/status-badge";
 import { formatTimestamp } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
@@ -107,7 +107,8 @@ export function DiscrepancyReport({
   };
   const report = usePagedQuery(
     reportContract.getDiscrepancy,
-    allowed && validRange ? { query: { limit: LIST_LIMIT, ...query } } : null,
+    allowed && validRange ? { query } : null,
+    { url: true },
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -136,20 +137,10 @@ export function DiscrepancyReport({
           getRowId={(row) =>
             `${row.lineId}-${row.businessDate}-${row.collectedByUserId}`
           }
-          complete={!report.hasMore}
+          complete={report.pageCount <= 1}
           columns={columnsFor(manages)}
-          footer={
-            <ListFooter
-              shown={report.rows.length}
-              noun={report.rows.length === 1 ? "day" : "days"}
-              onMore={report.loadMore}
-              loadingMore={report.loadingMore}
-            />
-          }
+          footer={<Pager list={report} noun="days" nounSingular="day" />}
         />
-        {report.moreError ? (
-          <FormMessage tone="critical">{report.moreError}</FormMessage>
-        ) : null}
       </>
     );
   } else if (report.status === "ready") {

@@ -12,7 +12,9 @@ Rules are referenced by ID (`BR-01`…) from every other document. Rules marked 
 
 ### BR-01 — Account fields and derivation
 
-At creation an Admin enters **Account Amount** (`A`), **Invested Amount** (`I`), **Daily Amount** (`D`), **Term Days** (`N`, default 100) and a **Disbursement Date**.
+At creation an Admin enters **Account Amount** (`A`), **Invested Amount** (`I`), **Instalment Amount** (`D`), **Term** (`N`, default 100), a **Collection Frequency** (BR-04) and a **Disbursement Date**.
+
+`D` and `N` are read in the frequency's own unit — a daily account's ₹100 a day for 100 days, a weekly account's ₹500 a week for 20 weeks — and the form labels them so. `N` counts **instalments**, not calendar days, which is what keeps every rule below identical at all three frequencies.
 
 **Profit is derived and never entered:** `P = A − I`.
 
@@ -22,7 +24,7 @@ Validation:
 | ---------------------------------- | -------------------------------------------------------------- |
 | `A > 0`, `I > 0`, `D > 0`, `N > 0` | —                                                              |
 | `I < A`                            | Profit cannot be zero or negative                              |
-| `D ≤ A`                            | A single day cannot exceed the whole account                   |
+| `D ≤ A`                            | One instalment cannot exceed the whole account                 |
 | `D × N ≥ A`                        | The schedule must be able to clear the account within its term |
 
 If `D × N > A` the account simply completes before day `N`; this is legal and common. The form shows the implied term so the Admin sees it before saving.
@@ -55,7 +57,7 @@ A **collection day** is any date that is not a Sunday and not a declared holiday
 
 - **Sundays** are excluded permanently (PDF §13).
 - **Holidays** are configurable per sector, because local festival closures differ across regions. A national holiday is entered with business-wide scope.
-- Holidays declared _after_ a schedule is generated shift the remaining schedule forward; already-collected days are never touched.
+- Holidays declared _after_ a schedule is generated shift the remaining schedule forward; already-collected days are never touched. **How far it shifts follows the account's frequency (BR-04):** a daily schedule is an unbroken run, so losing a day pushes every slot after it, and removing the holiday pulls them back. A weekly or monthly schedule has weeks or months of gap around each visit, so a holiday costs one visit its date and nothing else — and removing the holiday does not pull that visit back, because its anchor never moved and the customer has already been told the new date.
 
 > The PDF mentions only Sundays. Holidays are added because a daily-collection business in India does not collect on major festival days, and without them every such day would raise a false "Missed" alert across every line at once.
 
@@ -69,9 +71,27 @@ A **collection day** is any date that is not a Sunday and not a declared holiday
 
 ### BR-04 — Schedule generation
 
-At creation the system materialises schedule slots on consecutive working days, starting from the first collection day (BR-03).
+At creation the system materialises schedule slots on the dates the account's **collection frequency** gives, starting after day 0 (BR-03).
 
 **The number of slots is `ceil(A ÷ D)`** — derived from the balance, not from `N`. Each slot expects `min(D, remaining)`, which makes the last slot absorb the remainder and the schedule sum to exactly `A`.
+
+#### The three collection frequencies
+
+An account is collected `DAILY`, `WEEKLY` or `MONTHLY`. **Daily is the default and the common case.** The frequency decides **where the slots fall and nothing else**: `D` is one instalment and `N` the number of instalments at whatever cadence is chosen, so BR-01's `D × N ≥ A`, BR-07's `min(D, remaining)` and BR-18's profit apportionment are the same calculation at every frequency. `N` is therefore counted in units of the cadence — days, weeks or months — and the form labels it accordingly.
+
+| Frequency | Slot `i` falls                                                   | First slot           |
+| --------- | ---------------------------------------------------------------- | -------------------- |
+| `DAILY`   | the `i`-th working day after day 0                               | the next working day |
+| `WEEKLY`  | `7 × i` calendar days after day 0                                | a week after day 0   |
+| `MONTHLY` | `i` calendar months after day 0, clamped to the month's last day | a month after day 0  |
+
+**Every anchor is measured from day 0**, one whole period per instalment, which is what makes BR-03's daily rule generalise and what keeps a regenerated tail (BR-06) right: `after` is the date the money moved, so a weekly customer's next visit is a week later, not tomorrow.
+
+A weekly or monthly anchor that lands on a Sunday or a declared holiday **moves forward to the next working day (BR-02), while the anchors after it are still measured from day 0** — so the cadence never drifts. A customer collected on Wednesdays stays on Wednesdays: a holiday moves one visit to the Thursday and the visit after it is Wednesday again. Month-end clamping works the same way, from day 0 rather than by stepping: a monthly account disbursed on 31 December falls on 31 January, 28 February, 31 March and 30 April, and February borrowing a day never costs March one.
+
+> **Worked example (weekly):** `A = 10,000`, `D = 500`, `N = 20 weeks`, disbursed Wednesday 23 September. Slots = `ceil(10,000 ÷ 500) = 20`, each ₹500. The first is Wednesday 30 September and each later one is seven days after the last. If 7 October is declared a holiday, that visit is Thursday 8 October and the next is still Wednesday 14 October.
+
+The frequency is **immutable after disbursement**, like `A` and `I` — changing it would move every remaining visit on an account the customer has already been told the dates for. A database trigger enforces it.
 
 > **Worked example (exact fit):** `A = 10,000`, `D = 100`. Slots = `ceil(10,000 ÷ 100) = 100`. Slots 1–99 expect ₹100, slot 100 expects ₹100. Sum = ₹10,000. ✓
 >

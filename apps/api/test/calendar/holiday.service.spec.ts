@@ -360,6 +360,7 @@ describe('HolidayService (US-093, US-034)', () => {
           investedAmount: '850.00',
           dailyAmount: '100',
           termDays: 10,
+          collectionFrequency: 'DAILY',
           disbursementDate: '2026-01-14',
           disburse: false,
         },

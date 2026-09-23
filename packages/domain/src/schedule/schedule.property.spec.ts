@@ -51,6 +51,7 @@ const account = fc
     outstanding: paiseToMoney(a.outstandingPaise),
     dailyAmount: paiseToMoney(a.dailyPaise),
     after: a.after,
+    frequency: "DAILY" as const,
     holidays: new Set(
       a.holidayOffsets.map((offset) => addCalendarDays(a.after, offset)),
     ) as HolidaySet,

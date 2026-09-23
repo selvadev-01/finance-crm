@@ -68,6 +68,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
       investedAmount: '8500',
       dailyAmount: '100',
       termDays: 100,
+      collectionFrequency: 'DAILY' as const,
       disbursementDate: SATURDAY,
       disburse: false,
       ...overrides,
@@ -139,6 +140,93 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           ),
         ).toEqual(new Set(['150.00']));
         expect(preview.slots[66]!.expectedAmount).toBe('100.00');
+      });
+    });
+  });
+
+  describe('Scenario: a weekly and a monthly account (BR-04)', () => {
+    // Saturday 3 January 2026. N counts instalments at the chosen cadence, so
+    // ₹500 × 20 weeks clears ₹10,000 exactly, as ₹100 × 100 days does.
+    const weekly = {
+      dailyAmount: '500',
+      termDays: 20,
+      collectionFrequency: 'WEEKLY' as const,
+    };
+
+    it('collects a weekly account once a week on the same weekday, starting a week after day 0', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const preview = await service.preview(context, terms(weekly), SATURDAY);
+
+        expect(preview.slotCount).toBe(20);
+        expect(preview.firstCollectionDate).toBe('2026-01-10');
+        expect(preview.slots.slice(0, 3).map((slot) => slot.dueDate)).toEqual([
+          '2026-01-10',
+          '2026-01-17',
+          '2026-01-24',
+        ]);
+        expect(
+          preview.slots.every(
+            (slot) => dayOfWeek(parseCalendarDate(slot.dueDate)) === 6,
+          ),
+        ).toBe(true);
+        expect(sum(preview.slots.map((slot) => slot.expectedAmount))).toBe(
+          1_000_000n,
+        );
+      });
+    });
+
+    it('collects a monthly account on the same day of each month', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const preview = await service.preview(
+          context,
+          terms({
+            dailyAmount: '2500',
+            termDays: 4,
+            collectionFrequency: 'MONTHLY' as const,
+          }),
+          SATURDAY,
+        );
+        expect(preview.slots.map((slot) => slot.dueDate)).toEqual([
+          '2026-02-03',
+          '2026-03-03',
+          '2026-04-03',
+          '2026-05-04', // Sunday 3 May → Monday 4 May (BR-02)
+        ]);
+      });
+    });
+
+    it('stores the frequency, and the schedule it was generated at', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const account = await service.create(context, terms(weekly), SATURDAY);
+
+        expect(account.collectionFrequency).toBe('WEEKLY');
+        expect(account.termDays).toBe(20);
+        expect(account.targetCompletionDate).toBe('2026-05-23');
+        const slots = await tx.accountSchedule.findMany({
+          where: { accountLoanId: account.id },
+          orderBy: { sequence: 'asc' },
+        });
+        expect(slots).toHaveLength(20);
+        // Seven calendar days between consecutive visits, with no drift.
+        expect(
+          slots.every(
+            (slot, index) =>
+              index === 0 ||
+              slot.dueDate.getTime() - slots[index - 1]!.dueDate.getTime() ===
+                7 * 86_400_000,
+          ),
+        ).toBe(true);
+      });
+    });
+
+    it('defaults to DAILY, so terms entered without a cadence behave as before', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service, terms } = await world(tx);
+        const account = await service.create(context, terms(), SATURDAY);
+        expect(account.collectionFrequency).toBe('DAILY');
       });
     });
   });
@@ -395,6 +483,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
             investedAmount: '10200',
             dailyAmount: '150',
             termDays: 100,
+            collectionFrequency: 'DAILY',
             disbursementDate: SATURDAY,
           },
           SATURDAY,
@@ -449,6 +538,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
               investedAmount: '10200',
               dailyAmount: '150',
               termDays: 100,
+              collectionFrequency: 'DAILY',
               disbursementDate: SATURDAY,
             },
             SATURDAY,
@@ -471,6 +561,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
               investedAmount: '8500',
               dailyAmount: '100',
               termDays: 100,
+              collectionFrequency: 'DAILY',
               disbursementDate: '2026-01-02',
             },
             SATURDAY,
@@ -498,6 +589,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
               investedAmount: '8500',
               dailyAmount: '100',
               termDays: 100,
+              collectionFrequency: 'DAILY',
               disbursementDate: SATURDAY,
             },
             SATURDAY,

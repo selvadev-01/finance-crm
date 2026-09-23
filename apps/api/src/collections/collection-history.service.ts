@@ -145,36 +145,38 @@ export class CollectionHistoryService {
         ],
       );
     }
-    const rows = await this.database.client.collection.findMany({
-      where: {
-        AND: [
-          inScope(collectionScope(context), {
-            businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
-            ...(query.lineId ? { lineId: query.lineId } : {}),
-            ...(query.accountLoanId
-              ? { accountLoanId: query.accountLoanId }
-              : {}),
-            ...(query.entryType ? { entryType: query.entryType } : {}),
-            ...(query.status ? { status: query.status } : {}),
-          }),
-          beforeCursor(query.cursor),
-        ],
-      },
-      select: itemSelect,
-      // US-045: newest first, by the date the money moved rather than by id.
-      // A cuid is only accidentally chronological, and a collection synced
-      // late carries yesterday's business date with today's id (BR-15). The
-      // id breaks ties, so the order is total and a page boundary can neither
-      // repeat nor drop a row.
-      orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
-      take: query.limit + 1,
+    // The filter without the keyset: the page adds `beforeCursor`, the total
+    // does not — it is how many rows the request matches, not how many are
+    // left. Both read the same scope predicate, so the count can never reach
+    // a collection the caller may not see (M02).
+    const where = inScope(collectionScope(context), {
+      businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+      ...(query.lineId ? { lineId: query.lineId } : {}),
+      ...(query.accountLoanId ? { accountLoanId: query.accountLoanId } : {}),
+      ...(query.entryType ? { entryType: query.entryType } : {}),
+      ...(query.status ? { status: query.status } : {}),
     });
+    const [rows, total] = await Promise.all([
+      this.database.client.collection.findMany({
+        where: { AND: [where, beforeCursor(query.cursor)] },
+        select: itemSelect,
+        // US-045: newest first, by the date the money moved rather than by id.
+        // A cuid is only accidentally chronological, and a collection synced
+        // late carries yesterday's business date with today's id (BR-15). The
+        // id breaks ties, so the order is total and a page boundary can neither
+        // repeat nor drop a row.
+        orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
+        take: query.limit + 1,
+      }),
+      this.database.client.collection.count({ where }),
+    ]);
     const names = await this.names(rows.map((row) => row.collectedByUserId));
     return toPageBy(
       rows,
       query,
       (row) => `${fromUtcMidnight(row.businessDate)}|${row.id}`,
       (row) => toItem(row, names),
+      total,
     );
   }
 
@@ -199,27 +201,29 @@ export class CollectionHistoryService {
       }),
       'customer',
     );
-    const rows = await this.database.client.collection.findMany({
-      where: {
-        AND: [
-          inScope(collectionScope(context), {
-            accountLoan: { customerId: customer.id },
-          }),
-          beforeCursor(page.cursor),
-        ],
-      },
-      select: itemSelect,
-      // Newest first, with the id breaking ties so the order is total and a
-      // page boundary can neither repeat nor drop a row.
-      orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
-      take: page.limit + 1,
+    // As in `list`: the total counts what this customer's history holds for
+    // the caller, the keyset applies to the page alone.
+    const where = inScope(collectionScope(context), {
+      accountLoan: { customerId: customer.id },
     });
+    const [rows, total] = await Promise.all([
+      this.database.client.collection.findMany({
+        where: { AND: [where, beforeCursor(page.cursor)] },
+        select: itemSelect,
+        // Newest first, with the id breaking ties so the order is total and a
+        // page boundary can neither repeat nor drop a row.
+        orderBy: [{ businessDate: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      }),
+      this.database.client.collection.count({ where }),
+    ]);
     const names = await this.names(rows.map((row) => row.collectedByUserId));
     return toPageBy(
       rows,
       page,
       (row) => `${fromUtcMidnight(row.businessDate)}|${row.id}`,
       (row) => toItem(row, names),
+      total,
     );
   }
 
@@ -295,13 +299,23 @@ export class CollectionHistoryService {
     return foundInScope(item, 'approval');
   }
 
+  /** How many approvals the same filter matches, the page's cursor aside. */
+  countQueueItems(
+    context: RequestContext,
+    where: Prisma.CollectionApprovalWhereInput,
+  ): Promise<number> {
+    return this.database.client.collectionApproval.count({
+      where: queueWhere(context, where),
+    });
+  }
+
   async queueItems(
     context: RequestContext,
     where: Prisma.CollectionApprovalWhereInput,
     page?: { cursor?: string | undefined; limit: number },
   ): Promise<ApprovalQueueItem[]> {
     const rows = await this.database.client.collectionApproval.findMany({
-      where: { AND: [where, { collection: collectionScope(context) }] },
+      where: queueWhere(context, where),
       select: {
         ...approvalSelect,
         collection: {
@@ -365,6 +379,18 @@ export class CollectionHistoryService {
     const byId = new Map(users.map((user) => [user.id, user.name]));
     return (userId) => (userId ? (byId.get(userId) ?? 'Unknown staff') : '');
   }
+}
+
+/**
+ * The approval-queue filter, written once so the rows and their count cannot
+ * drift: `collectionScope` bounds both, and an approval on a collection the
+ * caller may not see is neither listed nor counted (M02).
+ */
+function queueWhere(
+  context: RequestContext,
+  where: Prisma.CollectionApprovalWhereInput,
+): Prisma.CollectionApprovalWhereInput {
+  return { AND: [where, { collection: collectionScope(context) }] };
 }
 
 /** The original plus its CONFIRMED adjustments (BR-14). */

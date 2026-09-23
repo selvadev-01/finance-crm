@@ -6,6 +6,7 @@ import {
   errorSchema,
   idSchema,
   pageQuerySchema,
+  pageSchema,
 } from "./shared.js";
 
 /**
@@ -137,11 +138,7 @@ export const auditContract = {
       to: calendarDateSchema.optional(),
     }),
     responses: {
-      200: z.object({
-        data: z.array(auditEntrySchema),
-        nextCursor: z.string().nullable(),
-        hasMore: z.boolean(),
-      }),
+      200: pageSchema(auditEntrySchema),
       ...errors,
     },
   }),

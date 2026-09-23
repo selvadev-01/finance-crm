@@ -126,16 +126,22 @@ export class StaffDirectoryService {
     },
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<Page<StaffSummary>> {
-    const rows = await this.database.client.staffProfile.findMany({
-      where: inScope(staffScope(context, today), {
-        ...(page.q ? { OR: staffSearchTerms(page.q) } : {}),
-        ...(page.role ? { role: page.role } : {}),
-        ...(page.status ? { status: page.status } : {}),
-      }),
-      select: staffFields(today),
-      ...pageArgs(page),
+    // One `where` for both reads: `staffScope` bounds the count as it bounds
+    // the rows, so a Senior can never count staff off their line.
+    const where = inScope(staffScope(context, today), {
+      ...(page.q ? { OR: staffSearchTerms(page.q) } : {}),
+      ...(page.role ? { role: page.role } : {}),
+      ...(page.status ? { status: page.status } : {}),
     });
-    return toPage(rows, page, toSummary);
+    const [rows, total] = await Promise.all([
+      this.database.client.staffProfile.findMany({
+        where,
+        select: staffFields(today),
+        ...pageArgs(page),
+      }),
+      this.database.client.staffProfile.count({ where }),
+    ]);
+    return toPage(rows, page, toSummary, total);
   }
 
   async get(

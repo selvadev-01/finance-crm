@@ -4,7 +4,10 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowsDownUp,
+  CaretDoubleLeft,
   CaretDown,
+  CaretLeft,
+  CaretRight,
   SlidersHorizontal,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -27,8 +30,10 @@ import {
 
 import { Button } from "./button";
 import { cn } from "./cn";
+import { formatCount } from "./format";
 import { flatSurfaceClass } from "./layout";
 import { LoadMoreSentinel } from "./load-more";
+import { Select } from "./select";
 
 declare module "@tanstack/react-table" {
   // Column options Rasi adds. The type parameters must match TanStack's own.
@@ -478,8 +483,151 @@ export function ListSkeleton({
 }
 
 /**
- * The foot of a list: how many are shown, and the next cursor page
- * (api-design.md#pagination). `onMore` is absent when everything is loaded.
+ * The rows-per-page choices. Ten is the default: a page of ten is the whole
+ * list on a phone screen and a glanceable block on a computer, and a Senior
+ * scanning for one customer reaches the pager rather than scrolling past
+ * fifty rows they did not want.
+ */
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
+
+export interface ListPagerProps {
+  /** The current page, 1-based. */
+  page: number;
+  /** `ceil(total / pageSize)`, at least 1. */
+  pageCount: number;
+  /** Every row the filter matches, from the API's `total`. */
+  total: number;
+  /** Rows on this page — the last page is short, so it is not always `pageSize`. */
+  shown: number;
+  pageSize: number;
+  /** Plural, lower case: "customers". The singular is only used at a total of one. */
+  noun: string;
+  nounSingular?: string;
+  /** Each is absent when that step is not available, which disables its control. */
+  onFirst?: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  onPageSize?: (size: number) => void;
+  busy?: boolean;
+  /** A failed page, shown in place of the range sentence. */
+  note?: ReactNode;
+}
+
+/**
+ * The foot of a paged list (api-design.md#pagination): where the reader is,
+ * how many rows there are altogether, how many to show at a time, and the
+ * steps between pages.
+ *
+ * **There is no "last page" and no page-number jumping**, and that is the
+ * cursor's doing rather than an omission: a page is reached by walking the
+ * cursor the API issued for it, so page 17 has no address until the sixteen
+ * before it have been read. The count and the page total come from the API's
+ * `total`, which is counted under the same scope as the rows (M02). Offset
+ * paging would buy the jump and cost correctness — collections are inserted
+ * all day, and an offset skips or repeats rows underneath the reader.
+ */
+export function ListPager({
+  page,
+  pageCount,
+  total,
+  shown,
+  pageSize,
+  noun,
+  nounSingular,
+  onFirst,
+  onPrevious,
+  onNext,
+  onPageSize,
+  busy = false,
+  note,
+}: ListPagerProps) {
+  const sizeId = useId();
+  const from = (page - 1) * pageSize + 1;
+  const to = from + shown - 1;
+  const name = total === 1 ? (nounSingular ?? noun) : noun;
+  // One page of rows needs no range: "48 customers" says everything.
+  const range =
+    total === 0
+      ? `No ${noun}`
+      : pageCount <= 1
+        ? `${formatCount(total)} ${name}`
+        : `${formatCount(from)}–${formatCount(to)} of ${formatCount(total)} ${name}`;
+
+  return (
+    <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
+      {/* The reader's place changes without the page reloading, so it is
+       * announced rather than only drawn. */}
+      <p
+        role="status"
+        aria-live="polite"
+        data-numeric
+        className="text-caption text-ink-muted"
+      >
+        {note ?? range}
+      </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:justify-end">
+        {onPageSize ? (
+          <div className="flex items-center gap-2">
+            <label htmlFor={sizeId} className="text-caption text-ink-muted">
+              Rows
+            </label>
+            <Select
+              id={sizeId}
+              value={pageSize}
+              disabled={busy}
+              onChange={(event) => onPageSize(Number(event.target.value))}
+              className="w-[5.5rem]"
+            >
+              {PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
+
+        {pageCount > 1 ? (
+          <nav aria-label={`${noun} pages`} className="flex items-center gap-1">
+            <Button
+              size="sm"
+              aria-label="First page"
+              disabled={busy || !onFirst}
+              onClick={onFirst}
+            >
+              <CaretDoubleLeft aria-hidden size={14} weight="bold" />
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy || !onPrevious}
+              onClick={onPrevious}
+            >
+              <CaretLeft aria-hidden size={14} weight="bold" />
+              Previous
+            </Button>
+            <span
+              data-numeric
+              className="px-2 text-caption whitespace-nowrap text-ink-muted"
+            >
+              Page {formatCount(page)} of {formatCount(pageCount)}
+            </span>
+            <Button size="sm" disabled={busy || !onNext} onClick={onNext}>
+              Next
+              <CaretRight aria-hidden size={14} weight="bold" />
+            </Button>
+          </nav>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The foot of a list that loads by scrolling rather than by page — the
+ * notification panel and the Junior's field app, where there is one column of
+ * rows in a popover or a phone screen and no place for a pager.
+ * `onMore` is absent when everything is loaded.
  *
  * The next page loads by itself as the reader scrolls near the end (a lazy
  * list in the one page scroll, never a scroll box of its own); "Show more"

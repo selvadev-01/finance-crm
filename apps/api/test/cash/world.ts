@@ -134,6 +134,7 @@ export async function cashWorld(tx: PrismaClient) {
         investedAmount: toMoney(dailyAmount).times(17).toFixed(2),
         dailyAmount,
         termDays: 20,
+        collectionFrequency: 'DAILY',
         disbursementDate: SATURDAY,
         disburse: true,
       },

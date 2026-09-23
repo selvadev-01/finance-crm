@@ -42,15 +42,20 @@ export class LineService {
       sectorId?: string | undefined;
     },
   ): Promise<Page<Line>> {
-    const rows = await this.database.client.line.findMany({
-      where: inScope(lineScope(context), {
-        ...(page.includeInactive ? {} : { isActive: true }),
-        ...(page.sectorId ? { sectorId: page.sectorId } : {}),
-      }),
-      select: lineFields,
-      ...pageArgs(page),
+    // One `where` for both reads, so the total is scoped exactly as the rows are.
+    const where = inScope(lineScope(context), {
+      ...(page.includeInactive ? {} : { isActive: true }),
+      ...(page.sectorId ? { sectorId: page.sectorId } : {}),
     });
-    return toPage(rows, page, (row) => row);
+    const [rows, total] = await Promise.all([
+      this.database.client.line.findMany({
+        where,
+        select: lineFields,
+        ...pageArgs(page),
+      }),
+      this.database.client.line.count({ where }),
+    ]);
+    return toPage(rows, page, (row) => row, total);
   }
 
   /** One line in scope, active or not; out of scope is `404` (M02). */

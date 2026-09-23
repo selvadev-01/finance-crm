@@ -216,7 +216,9 @@ The page's server component reads them (`readListParams`), and the list keeps th
 | `/settings`            | None. It holds nothing: it opens the first tab the role may see             |
 | `/profile`             | None                                                                        |
 
-Paging is not in the URL. The next page follows the API's cursor and loads by itself as the list scrolls near its end, with "Show more" kept for the keyboard; a reload starts again from the first page.
+**Paging is in the URL** (ADR-0017, replacing the scroll-loading lists of 2026-09-22): `page`, `after` — the cursor that page starts at — and `size` when it is not the default ten. A reload or a shared link opens the same page rather than the top of the list. Those three are the pager's own and no filter writes them, so changing a filter drops them and the list starts again at page 1, which is what a new filter means.
+
+`usePagedQuery` reads them from the location at mount rather than through `useSearchParams`, for the reason `useListState` takes its filters as a prop: a Suspense boundary on every statically rendered list page. A list inside a record page — a customer's accounts and their collection history — pages without the URL, because one set of params cannot serve two lists on one screen.
 
 **The Junior's routes are under `/route`** so the service worker scope covers exactly them and nothing else — the admin console carries no offline machinery it never uses ([offline-sync](../02-architecture/offline-sync.md#service-worker-scope)).
 

@@ -5,7 +5,6 @@ import {
   Button,
   FilterBar,
   FilterField,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -15,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ListFallback } from "../../../components/list-state";
+import { Pager } from "../../../components/pager";
 import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
 import { useApiQuery } from "../../../lib/use-api-query";
@@ -45,13 +45,16 @@ export function LineList({
   const sectorId = manages ? filters.sectorId : "";
   const showInactive = manages && filters.inactive === "show";
 
-  const lines = usePagedQuery(org.listLines, {
-    query: {
-      limit: LIST_LIMIT,
-      includeInactive: showInactive ? "true" : "false",
-      ...(sectorId ? { sectorId } : {}),
+  const lines = usePagedQuery(
+    org.listLines,
+    {
+      query: {
+        includeInactive: showInactive ? "true" : "false",
+        ...(sectorId ? { sectorId } : {}),
+      },
     },
-  });
+    { url: true },
+  );
   const sectors = useApiQuery(org.listSectors, {
     query: { limit: LIST_LIMIT, includeInactive: "true" },
   });
@@ -184,16 +187,8 @@ export function LineList({
           lines={lines.rows}
           staffing={staffingMap}
           sectors={sectorMap}
-          complete={!lines.hasMore}
-          footer={
-            <ListFooter
-              shown={lines.rows.length}
-              noun={lines.rows.length === 1 ? "line" : "lines"}
-              onMore={lines.loadMore}
-              loadingMore={lines.loadingMore}
-              note={lines.moreError ?? undefined}
-            />
-          }
+          complete={lines.pageCount <= 1}
+          footer={<Pager list={lines} noun="lines" nounSingular="line" />}
         />
       ) : (
         <ListFallback query={lines} columns={6} empty={empty} />

@@ -32,6 +32,7 @@ describe("US-034 worked example — pending slots on 14, 15 and 16 January 2026"
       pending,
       changedDate: holiday,
       disbursementDate: d("2026-01-03"),
+      frequency: "DAILY" as const,
       holidays: new Set([holiday]),
     });
     expect(moved).toEqual([
@@ -50,6 +51,7 @@ describe("US-034 worked example — pending slots on 14, 15 and 16 January 2026"
         pending: shifted,
         changedDate: holiday,
         disbursementDate: d("2026-01-03"),
+        frequency: "DAILY" as const,
         holidays: NONE,
       }),
     ).toEqual([
@@ -67,6 +69,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-17"),
         disbursementDate: d("2026-01-01"),
+        frequency: "DAILY" as const,
         holidays: new Set([d("2026-01-17")]),
       }),
     ).toEqual([
@@ -84,6 +87,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-14"),
         disbursementDate: d("2026-01-01"),
+        frequency: "DAILY" as const,
         holidays: first,
       }),
     );
@@ -94,6 +98,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending: afterFirst,
         changedDate: d("2026-01-15"),
         disbursementDate: d("2026-01-01"),
+        frequency: "DAILY" as const,
         holidays: both,
       }),
     );
@@ -116,6 +121,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-15"),
         disbursementDate: d("2026-01-01"),
+        frequency: "DAILY" as const,
         holidays,
       }),
     ).toEqual([]);
@@ -128,6 +134,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-20"),
         disbursementDate: d("2026-01-10"),
+        frequency: "DAILY" as const,
         holidays: new Set([d("2026-01-20")]),
       }),
     ).toEqual([]);
@@ -142,6 +149,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-15"),
         disbursementDate: d("2026-01-20"),
+        frequency: "DAILY" as const,
         holidays,
       }),
     ).toEqual([]);
@@ -154,6 +162,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
         pending,
         changedDate: d("2026-01-15"),
         disbursementDate: d("2026-01-14"),
+        frequency: "DAILY" as const,
         holidays: new Set([d("2026-01-15")]),
       }),
     ).toEqual([
@@ -168,6 +177,7 @@ describe("shiftForHolidayChange (BR-02, US-093)", () => {
       pending,
       changedDate: d("2026-01-15"),
       disbursementDate: d("2026-01-01"),
+      frequency: "DAILY" as const,
       holidays: new Set([d("2026-01-15")]),
     });
     expect(moved.map((slot) => slot.sequence)).toEqual([1, 2, 3]);
@@ -218,6 +228,7 @@ describe("shiftForHolidayChange — properties", () => {
             pending,
             changedDate: holiday,
             disbursementDate: input.disbursed,
+            frequency: "DAILY" as const,
             holidays: after,
           }),
         );
@@ -227,6 +238,7 @@ describe("shiftForHolidayChange — properties", () => {
             pending: declared,
             changedDate: holiday,
             disbursementDate: input.disbursed,
+            frequency: "DAILY" as const,
             holidays: before,
           }),
         );
@@ -246,6 +258,7 @@ describe("shiftForHolidayChange — properties", () => {
             pending,
             changedDate: holiday,
             disbursementDate: input.disbursed,
+            frequency: "DAILY" as const,
             holidays: after,
           }),
         );
@@ -267,6 +280,7 @@ describe("shiftForHolidayChange — properties", () => {
           pending,
           changedDate: holiday,
           disbursementDate: input.disbursed,
+          frequency: "DAILY" as const,
           holidays: after,
         });
         for (const slot of moved) {
@@ -277,5 +291,132 @@ describe("shiftForHolidayChange — properties", () => {
         }
       }),
     );
+  });
+});
+
+describe("a weekly account — only the visit on the holiday moves", () => {
+  // Wednesdays: 30 September, 7 October, 14 October.
+  const pending = [
+    { sequence: 1, dueDate: d("2026-09-30") },
+    { sequence: 2, dueDate: d("2026-10-07") },
+    { sequence: 3, dueDate: d("2026-10-14") },
+  ];
+  const disbursementDate = d("2026-09-23");
+
+  it("moves the 7th to the 8th and leaves the 14th alone", () => {
+    expect(
+      shiftForHolidayChange({
+        pending,
+        changedDate: d("2026-10-07"),
+        disbursementDate,
+        frequency: "WEEKLY",
+        holidays: new Set([d("2026-10-07")]),
+      }),
+    ).toEqual([{ sequence: 2, dueDate: "2026-10-08" }]);
+  });
+
+  it("moves nothing when the holiday falls between two visits", () => {
+    expect(
+      shiftForHolidayChange({
+        pending,
+        changedDate: d("2026-10-09"),
+        disbursementDate,
+        frequency: "WEEKLY",
+        holidays: new Set([d("2026-10-09")]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("leaves a rescheduled visit where it is when the holiday is removed", () => {
+    // The anchors never moved, so there is nothing to shift back — and the
+    // customer has already been told the Thursday.
+    expect(
+      shiftForHolidayChange({
+        pending: [
+          { sequence: 1, dueDate: d("2026-09-30") },
+          { sequence: 2, dueDate: d("2026-10-08") },
+          { sequence: 3, dueDate: d("2026-10-14") },
+        ],
+        changedDate: d("2026-10-07"),
+        disbursementDate,
+        frequency: "WEEKLY",
+        holidays: NONE,
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not pile two visits onto one date when a run of holidays pushes one along", () => {
+    const holidays = new Set([d("2026-10-07"), d("2026-10-08")]);
+    const moved = shiftForHolidayChange({
+      pending: [
+        { sequence: 1, dueDate: d("2026-10-07") },
+        { sequence: 2, dueDate: d("2026-10-09") },
+      ],
+      changedDate: d("2026-10-07"),
+      disbursementDate,
+      frequency: "WEEKLY",
+      holidays,
+    });
+    expect(moved).toEqual([
+      { sequence: 1, dueDate: "2026-10-09" },
+      { sequence: 2, dueDate: "2026-10-10" },
+    ]);
+  });
+});
+
+describe("a weekly account — only the visit on the holiday moves", () => {
+  // Wednesdays, as generateSchedule lays them for a weekly account.
+  const pending = slots(
+    [d("2026-09-30"), d("2026-10-07"), d("2026-10-14"), d("2026-10-21")],
+    3,
+  );
+  const holiday = d("2026-10-07");
+
+  it("moves that one visit to the next working day and leaves the rest alone", () => {
+    const moved = shiftForHolidayChange({
+      pending,
+      changedDate: holiday,
+      disbursementDate: d("2026-09-23"),
+      frequency: "WEEKLY",
+      holidays: new Set([holiday]),
+    });
+    expect(moved).toEqual([{ sequence: 4, dueDate: "2026-10-08" }]);
+    expect(apply(pending, moved).map((slot) => slot.dueDate)).toEqual([
+      "2026-09-30",
+      "2026-10-08",
+      "2026-10-14",
+      "2026-10-21",
+    ]);
+  });
+
+  it("does not pull a rescheduled visit back when the holiday is removed", () => {
+    // The anchors never moved, and the customer has been told Thursday.
+    const rescheduled = slots(
+      [d("2026-09-30"), d("2026-10-08"), d("2026-10-14")],
+      3,
+    );
+    expect(
+      shiftForHolidayChange({
+        pending: rescheduled,
+        changedDate: holiday,
+        disbursementDate: d("2026-09-23"),
+        frequency: "WEEKLY",
+        holidays: NONE,
+      }),
+    ).toEqual([]);
+  });
+
+  it("keeps the dates strictly increasing when a run of holidays pushes one visit onto the next", () => {
+    const monthly = slots([d("2026-10-23"), d("2026-10-24")], 1);
+    const moved = shiftForHolidayChange({
+      pending: monthly,
+      changedDate: d("2026-10-23"),
+      disbursementDate: d("2026-09-23"),
+      frequency: "MONTHLY",
+      holidays: new Set([d("2026-10-23"), d("2026-10-24")]),
+    });
+    const dates = apply(monthly, moved).map((slot) => slot.dueDate);
+    expect(new Set(dates).size).toBe(dates.length);
+    expect(dates).toEqual(["2026-10-26", "2026-10-27"]);
   });
 });

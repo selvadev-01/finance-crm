@@ -14,6 +14,13 @@ export interface Page<Item> {
   data: Item[];
   nextCursor: string | null;
   hasMore: boolean;
+  /**
+   * How many rows the filter matches in total. The rows are still walked by
+   * cursor — this only tells the reader where they are ("51–100 of 1,234")
+   * and how many pages there are. It is counted with the same `where` as the
+   * page itself, so it is scoped exactly as the rows are (M02).
+   */
+  total: number;
 }
 
 export function encodeCursor(id: string): string {
@@ -47,8 +54,9 @@ export function toPage<Row extends { id: string }, Item>(
   rows: Row[],
   page: PageRequest,
   toItem: (row: Row) => Item,
+  total: number,
 ): Page<Item> {
-  return toPageBy(rows, page, (row) => row.id, toItem);
+  return toPageBy(rows, page, (row) => row.id, toItem, total);
 }
 
 /**
@@ -63,6 +71,7 @@ export function toPageBy<Row, Item>(
   page: PageRequest,
   key: (row: Row) => string,
   toItem: (row: Row) => Item,
+  total: number,
 ): Page<Item> {
   const hasMore = rows.length > page.limit;
   const visible = hasMore ? rows.slice(0, page.limit) : rows;
@@ -71,5 +80,6 @@ export function toPageBy<Row, Item>(
     data: visible.map(toItem),
     nextCursor: hasMore && last !== undefined ? encodeCursor(key(last)) : null,
     hasMore,
+    total,
   };
 }

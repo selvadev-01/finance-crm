@@ -144,6 +144,52 @@ describe('accounts (M05, US-030, e2e)', () => {
     expect(term.body.details).toEqual([
       { field: 'termDays', issue: '50 × 100 days cannot clear 10,000' },
     ]);
+
+    // BR-04: the unit follows the cadence, so a weekly account is not told
+    // that its instalments are days.
+    const weekly = await as('ADMIN')
+      .post(
+        '/api/accounts',
+        terms({
+          dailyAmount: '50',
+          termDays: 20,
+          collectionFrequency: 'WEEKLY',
+        }),
+      )
+      .expect(400);
+    expect(weekly.body.details).toEqual([
+      { field: 'termDays', issue: '50 × 20 weeks cannot clear 10,000' },
+    ]);
+  });
+
+  it('BR-04: previews a weekly account a week apart, and defaults to daily when no cadence is sent', async () => {
+    // Nothing is created here — a preview saves nothing, so Tier 2 may run it.
+    const weekly = await as('ADMIN')
+      .post(
+        '/api/accounts/preview',
+        terms({
+          dailyAmount: '500',
+          termDays: 20,
+          collectionFrequency: 'WEEKLY',
+        }),
+      )
+      .expect(200);
+    expect(weekly.body.slotCount).toBe(20);
+    const dates: string[] = weekly.body.slots.map(
+      (slot: { dueDate: string }) => slot.dueDate,
+    );
+    // Seven calendar days between consecutive visits, with no drift.
+    for (let index = 1; index < dates.length; index += 1) {
+      expect(
+        Date.parse(`${dates[index]}T00:00:00Z`) -
+          Date.parse(`${dates[index - 1]}T00:00:00Z`),
+      ).toBe(7 * 86_400_000);
+    }
+
+    const daily = await as('ADMIN')
+      .post('/api/accounts/preview', terms())
+      .expect(200);
+    expect(daily.body.slotCount).toBe(100);
   });
 
   it('creates a PENDING account with its schedule, audited, and lists it for the customer', async () => {

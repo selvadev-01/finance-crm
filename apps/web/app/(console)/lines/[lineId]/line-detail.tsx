@@ -15,7 +15,6 @@ import {
   FilterField,
   formatBusinessDate,
   Input,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -30,6 +29,7 @@ import { type ChangeEvent, useState } from "react";
 import { identityColumn, valueColumn } from "../../../../components/columns";
 import { ListFallback } from "../../../../components/list-state";
 import { PageTrail } from "../../../../components/page-trail";
+import { Pager } from "../../../../components/pager";
 import { LoadFailed, RecordFallback } from "../../../../components/query-state";
 import { ActivityBadge } from "../../../../components/status-badge";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
@@ -82,10 +82,16 @@ export function LineDetail({
   });
   // US-015: with a date, only the assignments in effect that day — the
   // question asked when a discrepancy surfaces months later.
-  const history = usePagedQuery(org.listAssignmentHistory, {
-    params: { lineId },
-    query: { limit: LIST_LIMIT, ...(filters.on ? { on: filters.on } : {}) },
-  });
+  // The one paged list on this page, and its date filter is already in the
+  // URL, so its page belongs there too (US-015: the answer gets sent on).
+  const history = usePagedQuery(
+    org.listAssignmentHistory,
+    {
+      params: { lineId },
+      query: { ...(filters.on ? { on: filters.on } : {}) },
+    },
+    { url: true },
+  );
   // Candidates for the assign dialog, and names for lines a move leaves
   // without a Senior. Only an Admin assigns.
   // Filtered by role at the API, so one role can never crowd the other out
@@ -277,7 +283,7 @@ export function LineDetail({
               caption="Assignment history"
               rows={history.rows}
               getRowId={(entry) => entry.id}
-              complete={!history.hasMore}
+              complete={history.pageCount <= 1}
               columns={[
                 identityColumn<AssignmentHistoryEntry>({
                   header: "Staff",
@@ -309,14 +315,10 @@ export function LineDetail({
                 }),
               ]}
               footer={
-                <ListFooter
-                  shown={history.rows.length}
-                  noun={
-                    history.rows.length === 1 ? "assignment" : "assignments"
-                  }
-                  onMore={history.loadMore}
-                  loadingMore={history.loadingMore}
-                  note={history.moreError ?? undefined}
+                <Pager
+                  list={history}
+                  noun="assignments"
+                  nounSingular="assignment"
                 />
               }
             />

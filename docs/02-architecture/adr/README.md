@@ -26,6 +26,8 @@ One decision per file, numbered, never deleted. A decision that turns out wrong 
 | [0014](0014-security-event-log.md)                      | Refused attempts in `security_event`, not audit      | Accepted                    |
 | [0015](0015-console-layout-and-in-house-charts.md)      | Lavish-structured shell and dashboards, SVG charts   | Accepted                    |
 | [0016](0016-installable-app-and-per-device-layout.md)   | Installable app; phone or computer layout per device | Accepted                    |
+| [0017](0017-numbered-pages-over-cursors.md)             | Numbered pages, walked over the API's cursors        | Accepted                    |
+| [0017](0017-collection-frequency.md)                    | Weekly and monthly collection, anchored from day 0   | Accepted                    |
 
 ## When to write one
 

@@ -30,15 +30,39 @@ export const accountStatusSchema = z.enum([
 /** The shape `moneyStringSchema` accepts, after commas and spaces are removed. */
 const MONEY_SHAPE = /^\d{1,12}(\.\d{1,2})?$/;
 
+/**
+ * BR-04: how often an instalment falls due. `DAILY` is the default, so a caller
+ * written before weekly and monthly existed keeps its behaviour exactly.
+ *
+ * Spelled out here rather than imported: this package may depend on zod and
+ * nothing else, so it cannot reach `COLLECTION_FREQUENCIES` in `@repo/domain`.
+ * `apps/api`, which depends on both, holds the two lists to each other in
+ * `test/accounts/collection-frequency.spec.ts`.
+ */
+export const collectionFrequencySchema = z.enum(["DAILY", "WEEKLY", "MONTHLY"]);
+
+/** What `termDays` counts at each cadence — the word BR-01's message uses. */
+const TERM_UNIT: Record<z.infer<typeof collectionFrequencySchema>, string> = {
+  DAILY: "days",
+  WEEKLY: "weeks",
+  MONTHLY: "months",
+};
+
 const termsShape = {
   /** A */
   accountAmount: positiveMoneySchema,
   /** I */
   investedAmount: positiveMoneySchema,
-  /** D */
+  /** D — one instalment, at `collectionFrequency`. */
   dailyAmount: positiveMoneySchema,
-  /** N — default 100 (M05). */
+  /**
+   * N — **the number of instalments**, counted in units of the frequency:
+   * days for a daily account, weeks for a weekly one, months for a monthly
+   * one. Default 100 (M05). BR-01's `D × N ≥ A` is the same check at every
+   * cadence, which is why the unit rather than the rule changes.
+   */
   termDays: z.coerce.number().int().min(1).max(1000).default(100),
+  collectionFrequency: collectionFrequencySchema.default("DAILY"),
   /** Day 0 — not itself a collection day (BR-03). */
   disbursementDate: calendarDateSchema,
   /**
@@ -55,6 +79,7 @@ type Terms = {
   investedAmount: string;
   dailyAmount: string;
   termDays: number;
+  collectionFrequency: z.infer<typeof collectionFrequencySchema>;
   collectedToDate?: string | undefined;
 };
 
@@ -102,10 +127,13 @@ function checkTerms(terms: Terms, context: z.RefinementCtx) {
       message: "cannot be more than the account amount",
     });
   } else if (D * BigInt(terms.termDays) < A) {
+    // The unit follows the cadence, so a weekly account is not told its
+    // instalments are days: "500 × 20 weeks cannot clear 15,000".
+    const unit = TERM_UNIT[terms.collectionFrequency] ?? TERM_UNIT.DAILY;
     context.addIssue({
       code: "custom",
       path: ["termDays"],
-      message: `${formatPaiseForMessage(D)} × ${terms.termDays} days cannot clear ${formatPaiseForMessage(A)}`,
+      message: `${formatPaiseForMessage(D)} × ${terms.termDays} ${unit} cannot clear ${formatPaiseForMessage(A)}`,
     });
   }
 }
@@ -159,6 +187,7 @@ export const accountSchema = z.object({
   profitAmount: moneyStringSchema.nullable(),
   dailyAmount: moneyStringSchema,
   termDays: z.number().int(),
+  collectionFrequency: collectionFrequencySchema,
   disbursementDate: calendarDateSchema,
   firstCollectionDate: calendarDateSchema,
   targetCompletionDate: calendarDateSchema,
@@ -289,5 +318,6 @@ export const accountContract = {
 } as const;
 
 export type Account = z.infer<typeof accountSchema>;
+export type CollectionFrequency = z.infer<typeof collectionFrequencySchema>;
 export type AccountPreview = z.infer<typeof accountPreviewSchema>;
 export type ScheduleSlotView = z.infer<typeof scheduleSlotSchema>;

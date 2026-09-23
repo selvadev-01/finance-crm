@@ -136,12 +136,16 @@ GET /api/collections?cursor=eyJpZCI6...&limit=50
 ```
 
 ```json
-{ "data": [...], "nextCursor": "eyJpZCI6...", "hasMore": true }
+{ "data": [...], "nextCursor": "eyJpZCI6...", "hasMore": true, "total": 1234 }
 ```
 
 > Offset pagination skips or repeats rows when data is inserted mid-scan, and collections are inserted continuously throughout the day. Cursors are stable under concurrent writes.
 
-Default limit 50, maximum 200. **Every list endpoint is bounded** — reports additionally require a date range, defaulting to the current month.
+`total` is how many rows the request's filter matches in all, ignoring `cursor` and `limit` — it is what lets the console show numbered pages ("51–100 of 1,234") while the rows themselves are still walked by cursor. **It is counted with exactly the same `where` as the page, scope predicate included** (M02), so a row the caller may not see is never countable; in `apps/api` the filter is hoisted into one `const where` shared by the `findMany` and the `count`, which run together. Where a list is not a single Prisma query — the approval queue, the discrepancy report — the total is derived the same way the rows are: the same filter counted, or the length of the in-memory set before the page is sliced out of it.
+
+One hand-written list response does not declare `total` — the notification centre, whose body carries `unreadCount` beside the page — so the field is computed there and then dropped by the contract. Its panel scrolls rather than pages, so nothing reads it.
+
+Default limit 50, maximum 200; the console asks for 10 (ADR-0017), and the reader may raise it to 25, 50 or 100. **Every list endpoint is bounded** — reports additionally require a date range, defaulting to the current month.
 
 ---
 

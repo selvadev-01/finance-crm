@@ -7,10 +7,8 @@ import {
   Description,
   DescriptionList,
   EmptyFrame,
-  FormMessage,
   formatBusinessDate,
   formatCurrency,
-  ListFooter,
   NothingYet,
   NotPermitted,
   PageHeader,
@@ -22,7 +20,7 @@ import { useState } from "react";
 
 import { ListFallback } from "../../../../components/list-state";
 import { PageTrail } from "../../../../components/page-trail";
-import { LIST_LIMIT } from "../../../../lib/list-limit";
+import { Pager } from "../../../../components/pager";
 import { useSignedIn } from "../../../../lib/use-me";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 import {
@@ -46,7 +44,8 @@ export function ApprovalQueue() {
   } | null>(null);
   const queue = usePagedQuery(
     collectionContract.listApprovals,
-    allowed ? { query: { limit: LIST_LIMIT, decision: "PENDING" } } : null,
+    allowed ? { query: { decision: "PENDING" } } : null,
+    { url: true },
   );
 
   return (
@@ -86,15 +85,7 @@ export function ApprovalQueue() {
               </li>
             ))}
           </ul>
-          <ListFooter
-            shown={queue.rows.length}
-            noun={queue.rows.length === 1 ? "correction" : "corrections"}
-            onMore={queue.loadMore}
-            loadingMore={queue.loadingMore}
-          />
-          {queue.moreError ? (
-            <FormMessage tone="critical">{queue.moreError}</FormMessage>
-          ) : null}
+          <Pager list={queue} noun="corrections" nounSingular="correction" />
         </>
       ) : (
         <ListFallback

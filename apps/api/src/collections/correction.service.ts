@@ -105,12 +105,14 @@ export class CorrectionService {
     context: RequestContext,
     query: PageRequest & { decision: 'PENDING' | 'APPROVED' | 'REJECTED' },
   ): Promise<Page<ApprovalQueueItem>> {
-    const items = await this.history.queueItems(
-      context,
-      { decision: query.decision },
-      query,
-    );
-    return toPage(items, query, (item) => item);
+    // One filter for both reads — the queue's rows and how many there are —
+    // and `queueItems`/`countQueueItems` put the same scope predicate on it.
+    const where = { decision: query.decision };
+    const [items, total] = await Promise.all([
+      this.history.queueItems(context, where, query),
+      this.history.countQueueItems(context, where),
+    ]);
+    return toPage(items, query, (item) => item, total);
   }
 
   private async requestChange(
@@ -367,6 +369,7 @@ export class CorrectionService {
         accountAmount: true,
         profitAmount: true,
         dailyAmount: true,
+        collectionFrequency: true,
         collectedAmount: true,
         outstandingAmount: true,
         targetCompletionDate: true,

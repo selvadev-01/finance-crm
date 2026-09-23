@@ -82,6 +82,7 @@ describe('OverdueReportService (US-087)', () => {
         investedAmount: amount.times('0.85').toFixed(2),
         dailyAmount: options.daily,
         termDays: options.slots,
+        collectionFrequency: 'DAILY',
         disbursementDate: SATURDAY,
         disburse: true,
       },

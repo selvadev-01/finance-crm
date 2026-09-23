@@ -183,11 +183,16 @@ export class DiscrepancyReportService {
       )
       .sort(order);
 
+    // `rows` is already the whole matching set — every line-day-Junior in the
+    // range, in scope, after `show` has filtered it — so the total is its
+    // length, taken before `after` slices the page out of it. Nothing is
+    // counted that the caller could not page to.
     const page = toPageBy(
       after(rows, query),
       query,
       (row) => collectorDayKey(row.line.id, row.businessDate, row.userId),
       (row) => toRow(row, names),
+      rows.length,
     );
     return {
       ...page,

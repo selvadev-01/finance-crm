@@ -124,6 +124,7 @@ describe('OperationsDashboardService (US-082)', () => {
           investedAmount: toMoney(daily).times(17).toFixed(2),
           dailyAmount: daily,
           termDays: 20,
+          collectionFrequency: 'DAILY',
           disbursementDate: SATURDAY,
           disburse: true,
         },

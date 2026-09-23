@@ -6,7 +6,11 @@ import {
   accountTermsSchema,
   customerContract,
 } from "@repo/contracts";
-import { toBusinessDate } from "@repo/domain";
+import {
+  type CollectionFrequency,
+  COLLECTION_FREQUENCIES,
+  toBusinessDate,
+} from "@repo/domain";
 import {
   Button,
   buttonClass,
@@ -24,6 +28,7 @@ import {
   NotPermitted,
   PageHeader,
   Section,
+  Select,
   Stat,
   StatGrid,
   SubmitButton,
@@ -43,6 +48,7 @@ import { PageTrail } from "../../../../components/page-trail";
 import { RecordNotFound } from "../../../../components/query-state";
 import { api } from "../../../../lib/api-client";
 import { apiWrite } from "../../../../lib/api-write";
+import { CADENCE, cadenceOf } from "../../../../lib/cadence";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { isZeroMoney, subtractMoney } from "../../../../lib/money";
@@ -60,6 +66,7 @@ const TERM_FIELDS = [
   "investedAmount",
   "dailyAmount",
   "termDays",
+  "collectionFrequency",
   "disbursementDate",
   "collectedToDate",
 ] as const;
@@ -69,6 +76,13 @@ function requestTerms(terms: Terms, today: string): Terms {
   if (terms.disbursementDate < today) return terms;
   const { collectedToDate: _dropped, ...rest } = terms;
   return rest;
+}
+
+/** "Pongal (14 Jan 2026), Republic Day (26 Jan 2026)". */
+function holidayList(holidays: AccountPreview["holidaysSkipped"]): string {
+  return holidays
+    .map((holiday) => `${holiday.name} (${formatBusinessDate(holiday.date)})`)
+    .join(", ");
 }
 
 /** "50 × 100 days cannot clear 10,000" → with rupee signs, as US-030 words it. */
@@ -129,12 +143,16 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       // M15's `account.defaultTermDays` (US-094), forward-only: it starts the
       // field for a new account and never touches one that already exists.
       termDays: String(me.organization.defaultTermDays),
+      // BR-04: daily is the business's normal round, so it is what the form
+      // opens on; the other two are a deliberate choice.
+      collectionFrequency: "DAILY",
       disbursementDate: today,
       collectedToDate: undefined,
     },
   });
 
   const watched = useWatch({ control: form.control });
+  const cadence = CADENCE[cadenceOf(watched.collectionFrequency)];
   const parsed = schema.safeParse(watched);
   const valid = parsed.success;
   const previewKey = parsed.success
@@ -308,13 +326,26 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
                   Account amount − invested amount. Not editable.
                 </span>
               </div>
+              <FormField
+                name="collectionFrequency"
+                label="Collection frequency"
+                hint="How often the customer is collected from. It cannot be changed after disbursement."
+              >
+                <Select>
+                  {COLLECTION_FREQUENCIES.map((frequency) => (
+                    <option key={frequency} value={frequency}>
+                      {CADENCE[frequency].option}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
               <div className="grid gap-[var(--stack-gap)] sm:grid-cols-2">
-                <FormField name="dailyAmount" label="Daily amount (₹)">
+                <FormField name="dailyAmount" label={cadence.amount}>
                   <Input inputMode="decimal" autoComplete="off" data-numeric />
                 </FormField>
                 <FormField
                   name="termDays"
-                  label="Term (days)"
+                  label={cadence.term}
                   rewrite={withRupees}
                 >
                   <Input inputMode="numeric" autoComplete="off" data-numeric />
@@ -323,7 +354,7 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
               <FormField
                 name="disbursementDate"
                 label="Disbursement date"
-                hint="Day 0 — collection starts the next working day."
+                hint={cadence.firstSlot}
               >
                 <Input type="date" />
               </FormField>
@@ -413,6 +444,7 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
             <SchedulePreview
               preview={current}
               accountAmount={accountText}
+              frequency={cadenceOf(watched.collectionFrequency)}
               showAll={showAllSlots}
               onToggle={() => setShowAllSlots((all) => !all)}
             />
@@ -426,11 +458,13 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
 function SchedulePreview({
   preview,
   accountAmount,
+  frequency,
   showAll,
   onToggle,
 }: {
   preview: AccountPreview;
   accountAmount: string;
+  frequency: CollectionFrequency;
   showAll: boolean;
   onToggle: () => void;
 }) {
@@ -467,14 +501,20 @@ function SchedulePreview({
         <Stat label="Target completion">
           {formatBusinessDate(preview.targetCompletionDate)}
         </Stat>
-        <Stat label={midTerm ? "Collection days left" : "Collection days"}>
+        <Stat label={midTerm ? "Collections left" : "Collections"}>
           {preview.slots.filter((slot) => slot.status === "PENDING").length}
         </Stat>
       </StatGrid>
       <p className="text-body text-ink-muted">
-        {preview.holidaysSkipped.length > 0
-          ? `Skips ${preview.holidaysSkipped.map((holiday) => `${holiday.name} (${formatBusinessDate(holiday.date)})`).join(", ")}, and every Sunday.`
-          : "Sundays are skipped."}
+        {/* A daily account steps over a non-working day; a weekly or monthly
+            one keeps its cadence and moves only the visit that lands on one. */}
+        {frequency === "DAILY"
+          ? preview.holidaysSkipped.length > 0
+            ? `Skips ${holidayList(preview.holidaysSkipped)}, and every Sunday.`
+            : "Sundays are skipped."
+          : preview.holidaysSkipped.length > 0
+            ? `A visit falling on a Sunday, or on ${holidayList(preview.holidaysSkipped)}, moves to the next working day; the visits after it keep their dates.`
+            : "A visit falling on a Sunday or a holiday moves to the next working day; the visits after it keep their dates."}
       </p>
       <DataView
         caption="Collection slots"
@@ -484,7 +524,7 @@ function SchedulePreview({
         columns={[
           valueColumn<Slot>({
             id: "day",
-            header: "Day",
+            header: frequency === "DAILY" ? "Day" : "Visit",
             align: "end",
             value: (slot) => slot.sequence,
           }),

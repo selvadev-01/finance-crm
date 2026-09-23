@@ -193,6 +193,7 @@ describe('InvestmentReportService (US-085)', () => {
         investedAmount: '8500.00',
         dailyAmount: '100.00',
         termDays: 100,
+        collectionFrequency: 'DAILY',
         disbursementDate: SATURDAY,
         disburse: true,
       },

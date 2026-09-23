@@ -33,15 +33,20 @@ export class SectorService {
     context: RequestContext,
     page: PageRequest & { includeInactive: boolean },
   ): Promise<Page<Sector>> {
-    const rows = await this.database.client.sector.findMany({
-      where: inScope(
-        sectorScope(context),
-        page.includeInactive ? {} : { isActive: true },
-      ),
-      select: sectorFields,
-      ...pageArgs(page),
-    });
-    return toPage(rows, page, (row) => row);
+    // One `where` for both reads, so the total is scoped exactly as the rows are.
+    const where = inScope(
+      sectorScope(context),
+      page.includeInactive ? {} : { isActive: true },
+    );
+    const [rows, total] = await Promise.all([
+      this.database.client.sector.findMany({
+        where,
+        select: sectorFields,
+        ...pageArgs(page),
+      }),
+      this.database.client.sector.count({ where }),
+    ]);
+    return toPage(rows, page, (row) => row, total);
   }
 
   /** One sector in scope, active or not; out of scope is `404` (M02). */

@@ -37,54 +37,64 @@ export class StaffingService {
     page: PageRequest,
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<Page<LineStaffing>> {
-    const rows = await this.database.client.line.findMany({
-      where: inScope(lineScope(context), { isActive: true }),
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        sectorId: true,
-        assignments: {
-          // Only staff who can actually work the line today (decided
-          // 2026-09-20): a suspended or departed Junior cannot sign in or
-          // collect, so counting them makes a line look staffed when nobody
-          // is walking it. The assignment itself stays on record (US-015).
-          where: {
-            ...inEffectOn(today),
-            staffProfile: { status: 'ACTIVE', deletedAt: null },
+    // One `where` for both reads, so the total is scoped exactly as the rows are.
+    const where = inScope(lineScope(context), { isActive: true });
+    const [rows, total] = await Promise.all([
+      this.database.client.line.findMany({
+        where,
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          sectorId: true,
+          assignments: {
+            // Only staff who can actually work the line today (decided
+            // 2026-09-20): a suspended or departed Junior cannot sign in or
+            // collect, so counting them makes a line look staffed when nobody
+            // is walking it. The assignment itself stays on record (US-015).
+            where: {
+              ...inEffectOn(today),
+              staffProfile: { status: 'ACTIVE', deletedAt: null },
+            },
+            select: {
+              assignmentRole: true,
+              staffProfileId: true,
+              staffProfile: { select: { user: { select: { name: true } } } },
+            },
           },
-          select: {
-            assignmentRole: true,
-            staffProfileId: true,
-            staffProfile: { select: { user: { select: { name: true } } } },
-          },
+          _count: { select: { customers: { where: { deletedAt: null } } } },
         },
-        _count: { select: { customers: { where: { deletedAt: null } } } },
-      },
-      ...pageArgs(page),
-    });
+        ...pageArgs(page),
+      }),
+      this.database.client.line.count({ where }),
+    ]);
 
-    return toPage(rows, page, (line) => {
-      const senior = line.assignments.find(
-        (assignment) => assignment.assignmentRole === 'SENIOR',
-      );
-      return {
-        lineId: line.id,
-        code: line.code,
-        name: line.name,
-        sectorId: line.sectorId,
-        senior: senior
-          ? {
-              staffProfileId: senior.staffProfileId,
-              name: senior.staffProfile.user.name,
-            }
-          : null,
-        juniorCount: line.assignments.filter(
-          (assignment) => assignment.assignmentRole === 'JUNIOR',
-        ).length,
-        customerCount: line._count.customers,
-      };
-    });
+    return toPage(
+      rows,
+      page,
+      (line) => {
+        const senior = line.assignments.find(
+          (assignment) => assignment.assignmentRole === 'SENIOR',
+        );
+        return {
+          lineId: line.id,
+          code: line.code,
+          name: line.name,
+          sectorId: line.sectorId,
+          senior: senior
+            ? {
+                staffProfileId: senior.staffProfileId,
+                name: senior.staffProfile.user.name,
+              }
+            : null,
+          juniorCount: line.assignments.filter(
+            (assignment) => assignment.assignmentRole === 'JUNIOR',
+          ).length,
+          customerCount: line._count.customers,
+        };
+      },
+      total,
+    );
   }
 
   /**
@@ -104,31 +114,42 @@ export class StaffingService {
       'line',
     );
 
-    const rows = await this.database.client.lineAssignment.findMany({
-      where: {
-        lineId,
-        ...(page.on ? inEffectOn(parseCalendarDate(page.on)) : {}),
-      },
-      select: {
-        id: true,
-        lineId: true,
-        staffProfileId: true,
-        assignmentRole: true,
-        effectiveFrom: true,
-        effectiveTo: true,
-        staffProfile: { select: { user: { select: { name: true } } } },
-      },
-      ...pageArgs(page),
-    });
+    // The line itself was already checked in scope above, so this filter is
+    // bounded; one `where` keeps the count on the same rows as the page.
+    const where = {
+      lineId,
+      ...(page.on ? inEffectOn(parseCalendarDate(page.on)) : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.database.client.lineAssignment.findMany({
+        where,
+        select: {
+          id: true,
+          lineId: true,
+          staffProfileId: true,
+          assignmentRole: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+          staffProfile: { select: { user: { select: { name: true } } } },
+        },
+        ...pageArgs(page),
+      }),
+      this.database.client.lineAssignment.count({ where }),
+    ]);
 
-    return toPage(rows, page, (row) => ({
-      id: row.id,
-      lineId: row.lineId,
-      staffProfileId: row.staffProfileId,
-      assignmentRole: row.assignmentRole,
-      effectiveFrom: fromUtcMidnight(row.effectiveFrom),
-      effectiveTo: row.effectiveTo ? fromUtcMidnight(row.effectiveTo) : null,
-      staffName: row.staffProfile.user.name,
-    }));
+    return toPage(
+      rows,
+      page,
+      (row) => ({
+        id: row.id,
+        lineId: row.lineId,
+        staffProfileId: row.staffProfileId,
+        assignmentRole: row.assignmentRole,
+        effectiveFrom: fromUtcMidnight(row.effectiveFrom),
+        effectiveTo: row.effectiveTo ? fromUtcMidnight(row.effectiveTo) : null,
+        staffName: row.staffProfile.user.name,
+      }),
+      total,
+    );
   }
 }

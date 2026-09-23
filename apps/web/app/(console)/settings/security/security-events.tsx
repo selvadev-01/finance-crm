@@ -12,9 +12,7 @@ import {
   Card,
   FilterBar,
   FilterField,
-  FormMessage,
   Input,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -22,6 +20,7 @@ import {
 } from "@repo/ui";
 
 import { ListFallback } from "../../../../components/list-state";
+import { Pager } from "../../../../components/pager";
 import { STATUS, StatusBadge } from "../../../../components/status-badge";
 import { EntityRef } from "../../../../lib/audit/audit-parts";
 import { formatTimestamp } from "../../../../lib/format";
@@ -42,8 +41,6 @@ export const SECURITY_FILTERS = {
 
 export type SecurityFilters = Partial<typeof SECURITY_FILTERS>;
 
-const PAGE = 50;
-
 const KINDS = Object.keys(STATUS.securityEvent) as SecurityEventKind[];
 
 /**
@@ -59,16 +56,19 @@ export function SecurityEvents({ initial }: { initial: SecurityFilters }) {
     initial,
   );
   const staff = useApiQuery(staffContract.listStaff, { query: { limit: 200 } });
-  const events = usePagedQuery(securityContract.listSecurityEvents, {
-    query: {
-      limit: PAGE,
-      ...(filters.kind ? { kind: filters.kind as SecurityEventKind } : {}),
-      ...(filters.code ? { code: filters.code } : {}),
-      ...(filters.actorUserId ? { actorUserId: filters.actorUserId } : {}),
-      ...(filters.from ? { from: filters.from } : {}),
-      ...(filters.to ? { to: filters.to } : {}),
+  const events = usePagedQuery(
+    securityContract.listSecurityEvents,
+    {
+      query: {
+        ...(filters.kind ? { kind: filters.kind as SecurityEventKind } : {}),
+        ...(filters.code ? { code: filters.code } : {}),
+        ...(filters.actorUserId ? { actorUserId: filters.actorUserId } : {}),
+        ...(filters.from ? { from: filters.from } : {}),
+        ...(filters.to ? { to: filters.to } : {}),
+      },
     },
-  });
+    { url: true },
+  );
 
   const clear = (
     <Button tone="secondary" onClick={reset}>
@@ -152,15 +152,7 @@ export function SecurityEvents({ initial }: { initial: SecurityFilters }) {
               <SecurityEventRow key={event.id} event={event} />
             ))}
           </ul>
-          <ListFooter
-            shown={events.rows.length}
-            noun={events.rows.length === 1 ? "attempt" : "attempts"}
-            onMore={events.loadMore}
-            loadingMore={events.loadingMore}
-          />
-          {events.moreError ? (
-            <FormMessage tone="critical">{events.moreError}</FormMessage>
-          ) : null}
+          <Pager list={events} noun="attempts" nounSingular="attempt" />
         </div>
       ) : (
         <ListFallback

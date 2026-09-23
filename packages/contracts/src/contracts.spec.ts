@@ -265,7 +265,12 @@ describe("createApiClient", () => {
     const fetchMock = vi.fn(
       async (_url: URL | RequestInfo, _init?: RequestInit) =>
         new Response(
-          JSON.stringify({ data: [], nextCursor: null, hasMore: false }),
+          JSON.stringify({
+            data: [],
+            nextCursor: null,
+            hasMore: false,
+            total: 0,
+          }),
           { status: 200 },
         ),
     );

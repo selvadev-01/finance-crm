@@ -36,6 +36,7 @@ import {
   StatusBadge,
 } from "../../../../components/status-badge";
 import { apiWrite } from "../../../../lib/api-write";
+import { CADENCE } from "../../../../lib/cadence";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { CloseAccount } from "./close-account";
 import { CorrectTerms } from "./correct-terms";
@@ -135,7 +136,12 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
         {record.profitAmount !== null ? (
           <Stat label="Profit">{formatCurrency(record.profitAmount)}</Stat>
         ) : null}
-        <Stat label="Daily amount" hint={`${record.termDays} days`}>
+        {/* BR-04: the label and the unit follow the account's own cadence, so
+            a weekly account is never read as a daily one. */}
+        <Stat
+          label={CADENCE[record.collectionFrequency].amountShort}
+          hint={`${record.termDays} ${CADENCE[record.collectionFrequency].termUnit}`}
+        >
           {formatCurrency(record.dailyAmount)}
         </Stat>
         <Stat label="Collected">{formatCurrency(record.collectedAmount)}</Stat>

@@ -5,7 +5,6 @@ import {
   buttonClass,
   DataView,
   formatBusinessDate,
-  ListFooter,
   NothingYet,
 } from "@repo/ui";
 import Link from "next/link";
@@ -18,8 +17,8 @@ import {
 } from "../../../components/columns";
 import { ListFallback } from "../../../components/list-state";
 import { Money } from "../../../components/money";
+import { Pager } from "../../../components/pager";
 import { AccountStatusBadge } from "../../../components/status-badge";
-import { LIST_LIMIT } from "../../../lib/list-limit";
 import { sumMoney } from "../../../lib/money";
 import { canManageOrganisation, type Role } from "../../../lib/roles";
 import { usePagedQuery } from "../../../lib/use-paged-query";
@@ -36,8 +35,10 @@ export function CustomerAccounts({
   customerId: string;
   role: Role;
 }) {
+  // No `url`: the Customer 360 page carries this list and the collection
+  // history, and one set of page params cannot serve both.
   const accounts = usePagedQuery(accountContract.listAccounts, {
-    query: { customerId, limit: LIST_LIMIT },
+    query: { customerId },
   });
   const manages = canManageOrganisation(role);
   const newAccount = manages ? (
@@ -71,9 +72,12 @@ export function CustomerAccounts({
 
   const rows = accounts.rows;
   const open = rows.filter((account) => account.status === "ACTIVE");
-  // Summed in exact paise — never a floating-point number (BR-11). Only once
-  // every account is loaded, so the sum is never of a partial list.
+  // Summed in exact paise — never a floating-point number (BR-11). Only when
+  // one page holds every account, so the sum is never of a partial list: a
+  // "total outstanding" that silently means "of the ten on this page" is
+  // worse than no total at all.
   const openTotal = sumMoney(open.map((account) => account.outstandingAmount));
+  const wholePortfolio = accounts.pageCount <= 1;
 
   return (
     <div className="flex flex-col gap-3">
@@ -82,7 +86,7 @@ export function CustomerAccounts({
         caption="Accounts"
         rows={rows}
         getRowId={(account) => account.id}
-        complete={!accounts.hasMore}
+        complete={wholePortfolio}
         columns={[
           identityColumn<Account>({
             header: "Account",
@@ -114,18 +118,10 @@ export function CustomerAccounts({
           }),
         ]}
         footer={
-          accounts.hasMore ? (
-            <ListFooter
-              shown={rows.length}
-              noun="accounts"
-              onMore={accounts.loadMore}
-              loadingMore={accounts.loadingMore}
-              note={accounts.moreError ?? undefined}
-            />
-          ) : null
+          <Pager list={accounts} noun="accounts" nounSingular="account" />
         }
       />
-      {!accounts.hasMore && open.length > 1 ? (
+      {wholePortfolio && open.length > 1 ? (
         <p className="text-right text-body text-ink" data-numeric>
           Total outstanding, summed across {open.length} active accounts:{" "}
           <Money amount={openTotal} className="font-semibold" />

@@ -7,6 +7,8 @@ import {
   type DataViewColumn,
   FilterBar,
   FilterField,
+  ListPager,
+  type ListPagerProps,
 } from "./data-view";
 import { Input } from "./input";
 
@@ -166,6 +168,91 @@ describe("FilterBar", () => {
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByLabelText("From")).toBeInTheDocument();
+  });
+});
+
+describe("ListPager", () => {
+  const pager = (props: Partial<ListPagerProps> = {}) => (
+    <ListPager
+      page={2}
+      pageCount={5}
+      total={45}
+      shown={10}
+      pageSize={10}
+      noun="customers"
+      nounSingular="customer"
+      onFirst={() => {}}
+      onPrevious={() => {}}
+      onNext={() => {}}
+      onPageSize={() => {}}
+      {...props}
+    />
+  );
+
+  it("says which rows of how many are shown, and which page they are", () => {
+    render(pager());
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "11–20 of 45 customers",
+    );
+    expect(screen.getByText("Page 2 of 5")).toBeInTheDocument();
+  });
+
+  it("counts the last, short page from where it starts, not from its length", () => {
+    render(pager({ page: 5, shown: 5 }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "41–45 of 45 customers",
+    );
+  });
+
+  it("groups a long count the Indian way", () => {
+    render(pager({ total: 1234567, pageCount: 123457 }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "11–20 of 12,34,567 customers",
+    );
+  });
+
+  it("shows a single page as a plain count, with no steps to take", () => {
+    render(pager({ page: 1, pageCount: 1, total: 3, shown: 3 }));
+    expect(screen.getByRole("status")).toHaveTextContent("3 customers");
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  });
+
+  it("names one row in the singular, and none at all plainly", () => {
+    const { rerender } = render(
+      pager({ page: 1, pageCount: 1, total: 1, shown: 1 }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("1 customer");
+    rerender(pager({ page: 1, pageCount: 1, total: 0, shown: 0 }));
+    expect(screen.getByRole("status")).toHaveTextContent("No customers");
+  });
+
+  // A step this browser cannot take — page 5 reached from a shared link has
+  // no cursor for page 4 — is offered and refused, never silently missing.
+  it("disables a step it has no cursor for, rather than hiding it", () => {
+    render(pager({ onPrevious: undefined }));
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+
+  it("disables every control while a page is in flight", () => {
+    render(pager({ busy: true }));
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByLabelText("Rows")).toBeDisabled();
+  });
+
+  it("asks for a new page size, in rows", async () => {
+    const user = userEvent.setup();
+    const sizes: number[] = [];
+    render(pager({ onPageSize: (size) => sizes.push(size) }));
+    await user.selectOptions(screen.getByLabelText("Rows"), "25");
+    expect(sizes).toEqual([25]);
+  });
+
+  it("shows a failed page in place of the count", () => {
+    render(pager({ note: "That page couldn’t be loaded." }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "That page couldn’t be loaded.",
+    );
   });
 });
 

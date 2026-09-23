@@ -428,6 +428,7 @@ export class DayCloseService {
           organizationId: true,
           status: true,
           dailyAmount: true,
+          collectionFrequency: true,
           collectedAmount: true,
           outstandingAmount: true,
           targetCompletionDate: true,

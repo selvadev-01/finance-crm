@@ -1,5 +1,6 @@
 export {
   addCalendarDays,
+  addCalendarMonths,
   type CalendarDate,
   dayOfWeek,
   daysBetween,
@@ -20,5 +21,6 @@ export {
   type HolidaySet,
   isWorkingDay,
   nextWorkingDay,
+  workingDayOnOrAfter,
   workingDayRange,
 } from "./working-days.js";

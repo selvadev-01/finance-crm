@@ -271,6 +271,40 @@ Scenario: Collected amount is entered, never inferred
 
 > The third scenario is the one that matters. Inferring the balance as `47 × ₹100 = ₹4,700` overstates it for every customer who ever underpaid — and an overstated balance means the account completes early and the business never collects the difference.
 
+### US-030b · Choose a weekly or monthly collection frequency · P1
+
+_As an Admin, I want to set how often a customer is collected from, so that an account that is not a daily round can be run in Rasi rather than on paper._
+
+```gherkin
+Scenario: A weekly account is collected once a week, on the same weekday
+  Given account amount 10,000, weekly amount 500, term 20 weeks
+  And a disbursement date of Wednesday 23 September
+  When the schedule is generated
+  Then there are 20 slots, each of 500, totalling 10,000
+  And the first is Wednesday 30 September, a week after day 0
+  And every later slot is seven calendar days after the one before it
+
+Scenario: A holiday moves one visit, not the cadence
+  Given a weekly account collected on Wednesdays
+  When 7 October is declared a holiday
+  Then that visit moves to Thursday 8 October
+  And the visit after it is still Wednesday 14 October
+
+Scenario: A monthly account keeps its day of the month
+  Given a monthly account disbursed on 31 December
+  When the schedule is generated
+  Then the visits fall on 31 January, 28 February, 31 March and 30 April
+  And a visit falling on a Sunday or a holiday moves to the next working day
+
+Scenario: The term counts instalments, not days
+  Given a weekly account at 500 a week
+  When I enter a term of 20
+  Then it means 20 weekly visits
+  And a term that cannot clear the account is refused as "500 × 20 weeks cannot clear 10,000"
+```
+
+> The cadence changes **where the slots fall and nothing else**. `D` is still one instalment and `N` still the number of them, so BR-01's `D × N ≥ A`, BR-07's `min(D, remaining)` and BR-18's profit apportionment are the same calculation at every frequency. Daily remains the default and the common case.
+
 ### US-031 · Uneven final instalment · P0
 
 ```gherkin

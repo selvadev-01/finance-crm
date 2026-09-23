@@ -28,6 +28,7 @@ describe("US-030a worked example — started 1 July, paid 4,700 of 10,000", () =
     disbursementDate: disbursed,
     enteredOn: entered,
     collectedToDate: "4700",
+    frequency: "DAILY" as const,
     holidays: NONE,
   });
 
@@ -69,6 +70,7 @@ describe("US-030a worked example — started 1 July, paid 4,700 of 10,000", () =
       disbursementDate: disbursed,
       enteredOn: d("2026-08-25"),
       collectedToDate: "4700",
+      frequency: "DAILY" as const,
       holidays: NONE,
     });
     expect(countWorkingDays(disbursed, d("2026-08-25"), NONE)).toBe(47);
@@ -79,6 +81,7 @@ describe("US-030a worked example — started 1 July, paid 4,700 of 10,000", () =
       disbursementDate: disbursed,
       enteredOn: d("2026-08-25"),
       collectedToDate: "4580",
+      frequency: "DAILY" as const,
       holidays: NONE,
     });
     expect(behind.amountBehind.toString()).toBe("120");
@@ -93,6 +96,7 @@ describe("US-030a — collected amount is entered, never inferred", () => {
       disbursementDate: d("2026-07-01"),
       enteredOn: d("2026-08-14"),
       collectedToDate: "4580",
+      frequency: "DAILY" as const,
       holidays: NONE,
     });
     expect(plan.outstanding.toString()).toBe("5420");
@@ -113,6 +117,7 @@ describe("a hand-checked week — disbursed Saturday 3 January, entered Saturday
     dailyAmount: "100",
     disbursementDate: d("2026-01-03"),
     enteredOn: d("2026-01-10"),
+    frequency: "DAILY" as const,
     holidays: NONE,
   };
 
@@ -187,6 +192,7 @@ describe("release gate 6 — the tail is exactly a day-one account's regenerated
             disbursementDate: d("2026-01-03"),
             enteredOn: entered,
             collectedToDate: collected,
+            frequency: "DAILY" as const,
             holidays: NONE,
           });
           const paid = plan.slots.filter((slot) => slot.status !== "PENDING");
@@ -195,6 +201,7 @@ describe("release gate 6 — the tail is exactly a day-one account's regenerated
             outstanding: accountAmount.minus(collected),
             dailyAmount,
             after: entered,
+            frequency: "DAILY" as const,
             holidays: NONE,
             firstSequence: paid.length + 1,
           });

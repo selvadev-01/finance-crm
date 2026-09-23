@@ -151,25 +151,26 @@ Multiple references per customer are allowed; at least one is required at onboar
 
 The loan. Called "Account" everywhere in the UI.
 
-| Column                 | Type                | Null | Notes                                                                                           |
-| ---------------------- | ------------------- | ---- | ----------------------------------------------------------------------------------------------- |
-| `accountCode`          | `String`            | No   | Unique (`ACC-2026-00892`). API-issued: creation year + `account_code_seq`, which never restarts |
-| `customerId`           | `String`            | No   | FK → `customer.id`                                                                              |
-| `lineId`               | `String`            | No   | FK → `line.id`. Line at creation                                                                |
-| `accountAmount`        | `Decimal`           | No   | `A`. Immutable after disbursement                                                               |
-| `investedAmount`       | `Decimal`           | No   | `I`. Immutable after disbursement                                                               |
-| `profitAmount`         | `Decimal`           | No   | `P`. Derived (BR-01); check constraint enforces `= A - I`                                       |
-| `dailyAmount`          | `Decimal`           | No   | `D`                                                                                             |
-| `termDays`             | `Int`               | No   | `N`. Default `100`                                                                              |
-| `disbursementDate`     | `DateTime @db.Date` | No   | Day 0, not a collection day (BR-03)                                                             |
-| `firstCollectionDate`  | `DateTime @db.Date` | No   | Next working day after disbursement                                                             |
-| `targetCompletionDate` | `DateTime @db.Date` | No   | Recomputed after every collection (BR-06)                                                       |
-| `actualCompletionDate` | `DateTime @db.Date` | Yes  | Set when status → `COMPLETED`                                                                   |
-| `collectedAmount`      | `Decimal`           | No   | Denormalised cache, default `0`. Reconciled nightly                                             |
-| `outstandingAmount`    | `Decimal`           | No   | Cache of `A − collected`                                                                        |
-| `status`               | `AccountStatus`     | No   | `PENDING` \| `ACTIVE` \| `COMPLETED` \| `DEFAULTED` \| `WRITTEN_OFF`                            |
-| `isOverdue`            | `Boolean`           | No   | Flag on `ACTIVE`, not a status (BR-05). Set by scheduled job                                    |
-| `closureNote`          | `String`            | Yes  | Required for `DEFAULTED` / `WRITTEN_OFF`                                                        |
+| Column                 | Type                  | Null | Notes                                                                                           |
+| ---------------------- | --------------------- | ---- | ----------------------------------------------------------------------------------------------- |
+| `accountCode`          | `String`              | No   | Unique (`ACC-2026-00892`). API-issued: creation year + `account_code_seq`, which never restarts |
+| `customerId`           | `String`              | No   | FK → `customer.id`                                                                              |
+| `lineId`               | `String`              | No   | FK → `line.id`. Line at creation                                                                |
+| `accountAmount`        | `Decimal`             | No   | `A`. Immutable after disbursement                                                               |
+| `investedAmount`       | `Decimal`             | No   | `I`. Immutable after disbursement                                                               |
+| `profitAmount`         | `Decimal`             | No   | `P`. Derived (BR-01); check constraint enforces `= A - I`                                       |
+| `dailyAmount`          | `Decimal`             | No   | `D`, one instalment at `collectionFrequency` — not necessarily one day's money                  |
+| `termDays`             | `Int`                 | No   | `N`, the number of instalments, in units of `collectionFrequency`. Default `100`                |
+| `collectionFrequency`  | `CollectionFrequency` | No   | `DAILY` \| `WEEKLY` \| `MONTHLY` (BR-04). Default `DAILY`. Immutable after disbursement         |
+| `disbursementDate`     | `DateTime @db.Date`   | No   | Day 0, not a collection day (BR-03)                                                             |
+| `firstCollectionDate`  | `DateTime @db.Date`   | No   | One period after disbursement: the next working day, a week, or a month (BR-04)                 |
+| `targetCompletionDate` | `DateTime @db.Date`   | No   | Recomputed after every collection (BR-06)                                                       |
+| `actualCompletionDate` | `DateTime @db.Date`   | Yes  | Set when status → `COMPLETED`                                                                   |
+| `collectedAmount`      | `Decimal`             | No   | Denormalised cache, default `0`. Reconciled nightly                                             |
+| `outstandingAmount`    | `Decimal`             | No   | Cache of `A − collected`                                                                        |
+| `status`               | `AccountStatus`       | No   | `PENDING` \| `ACTIVE` \| `COMPLETED` \| `DEFAULTED` \| `WRITTEN_OFF`                            |
+| `isOverdue`            | `Boolean`             | No   | Flag on `ACTIVE`, not a status (BR-05). Set by scheduled job                                    |
+| `closureNote`          | `String`              | Yes  | Required for `DEFAULTED` / `WRITTEN_OFF`                                                        |
 
 Constraints:
 
@@ -180,6 +181,9 @@ Constraints:
 - `status IN (DEFAULTED, WRITTEN_OFF)` requires a non-blank `closureNote`
 - BR-05: `isOverdue` only when `status = ACTIVE` — whatever moves an account out of `ACTIVE` clears the flag in the same write
 - Trigger: `accountAmount` and `investedAmount` cannot change once `status` has left `PENDING`
+- Trigger: `collectionFrequency` cannot change once `status` has left `PENDING` (BR-04) — it would move every remaining visit
+
+> `dailyAmount * termDays >= accountAmount` is the same check at every frequency, because `termDays` counts instalments rather than calendar days. That is why adding weekly and monthly cadences needed no change to the CHECK constraints.
 
 `outstandingAmount` is deliberately not checked against `accountAmount - collectedAmount`: it is a cache, and reconciling it is the nightly job's work.
 

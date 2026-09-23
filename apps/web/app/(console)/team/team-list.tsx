@@ -8,7 +8,6 @@ import {
   FilterBar,
   FilterField,
   formatBusinessDate,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -22,8 +21,8 @@ import {
   valueColumn,
 } from "../../../components/columns";
 import { ListFallback } from "../../../components/list-state";
+import { Pager } from "../../../components/pager";
 import { STATUS, StatusBadge } from "../../../components/status-badge";
-import { LIST_LIMIT } from "../../../lib/list-limit";
 import {
   canCreateStaff,
   canManageOrganisation,
@@ -60,13 +59,16 @@ export function TeamList({
   const role = ROLES.find((each) => each === filters.role);
   const status = STATUSES.find((each) => each === filters.status);
 
-  const staff = usePagedQuery(staffContract.listStaff, {
-    query: {
-      limit: LIST_LIMIT,
-      ...(role ? { role } : {}),
-      ...(status ? { status } : {}),
+  const staff = usePagedQuery(
+    staffContract.listStaff,
+    {
+      query: {
+        ...(role ? { role } : {}),
+        ...(status ? { status } : {}),
+      },
     },
-  });
+    { url: true },
+  );
 
   return (
     <>
@@ -125,7 +127,7 @@ export function TeamList({
             caption="Team"
             rows={staff.rows}
             getRowId={(person) => person.staffProfileId}
-            complete={!staff.hasMore}
+            complete={staff.pageCount <= 1}
             columns={[
               identityColumn<StaffSummary>({
                 header: "Name",
@@ -169,15 +171,7 @@ export function TeamList({
                 ),
               }),
             ]}
-            footer={
-              <ListFooter
-                shown={staff.rows.length}
-                noun={staff.rows.length === 1 ? "person" : "people"}
-                onMore={staff.loadMore}
-                loadingMore={staff.loadingMore}
-                note={staff.moreError ?? undefined}
-              />
-            }
+            footer={<Pager list={staff} noun="people" nounSingular="person" />}
           />
         </>
       ) : (

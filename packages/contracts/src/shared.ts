@@ -102,6 +102,12 @@ export function pageSchema<Item extends z.ZodType>(item: Item) {
     data: z.array(item),
     nextCursor: z.string().nullable(),
     hasMore: z.boolean(),
+    /**
+     * How many rows the filter matches in total, not just on this page — it
+     * is what makes "51–100 of 1,234" and a page count possible while the
+     * rows themselves are still walked by cursor.
+     */
+    total: z.number().int().nonnegative(),
   });
 }
 

@@ -82,6 +82,40 @@ export function addCalendarDays(
   return fromEpochDay(toEpochDay(date) + days);
 }
 
+/**
+ * `months` calendar months after `date`, clamped to the last day of the target
+ * month: 31 January plus one month is 28 February (29 in a leap year), never
+ * 3 March.
+ *
+ * **Call it with the series base and an index — `addCalendarMonths(base, i)` —
+ * never by stepping one month at a time.** Stepping loses the day of the month
+ * at every short month and never gets it back (31 Jan → 28 Feb → 28 Mar),
+ * which is how a monthly schedule drifts.
+ */
+export function addCalendarMonths(
+  date: CalendarDate,
+  months: number,
+): CalendarDate {
+  if (!Number.isSafeInteger(months)) {
+    throw new RangeError(`months must be an integer, got ${months}`);
+  }
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7)) - 1;
+  const day = Number(date.slice(8, 10));
+
+  const total = year * 12 + month + months;
+  const targetYear = Math.floor(total / 12);
+  // The double modulo keeps the month positive for dates before year 0.
+  const targetMonth = ((total % 12) + 12) % 12;
+  // Day 0 of the next month is the last day of this one.
+  const lastDay = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  return formatUtc(
+    new Date(Date.UTC(targetYear, targetMonth, Math.min(day, lastDay))),
+  ) as CalendarDate;
+}
+
 /** Whole days from `from` to `to`: `0` for the same date, negative when `to` is earlier. */
 export function daysBetween(from: CalendarDate, to: CalendarDate): number {
   return toEpochDay(to) - toEpochDay(from);

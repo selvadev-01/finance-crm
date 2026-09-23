@@ -355,7 +355,7 @@ interface OverdueFilters extends LineFilters {
 
 /** US-087 — every overdue account, not one page; the summary covers the set. */
 export function overdueDocument(
-  report: Omit<OverdueReport, 'data' | 'nextCursor' | 'hasMore'>,
+  report: Omit<OverdueReport, 'data' | 'nextCursor' | 'hasMore' | 'total'>,
   rows: readonly OverdueAccount[],
   filters: OverdueFilters,
 ): ExportDocument {
@@ -459,7 +459,7 @@ interface DiscrepancyFilters extends LineFilters {
 
 /** BR-17 — every matching line, day and Junior; the summary covers the set. */
 export function discrepancyDocument(
-  report: Omit<DiscrepancyReport, 'data' | 'nextCursor' | 'hasMore'>,
+  report: Omit<DiscrepancyReport, 'data' | 'nextCursor' | 'hasMore' | 'total'>,
   rows: readonly DiscrepancyRow[],
   filters: DiscrepancyFilters,
 ): ExportDocument {

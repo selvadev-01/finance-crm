@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   type CalendarDate,
+  type CollectionFrequency,
   fromUtcMidnight,
   generateSchedule,
   toMoney,
@@ -18,6 +19,8 @@ export interface SettlingAccount {
   organizationId: string;
   status: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'DEFAULTED' | 'WRITTEN_OFF';
   dailyAmount: { toString(): string };
+  /** BR-04: the tail is regenerated at the account's own cadence, not daily. */
+  collectionFrequency: CollectionFrequency;
   collectedAmount: { toString(): string };
   outstandingAmount: { toString(): string };
   targetCompletionDate: Date;
@@ -89,6 +92,7 @@ export class AccountSettlement {
         outstanding: outstandingAfter,
         dailyAmount: toMoney(account.dailyAmount.toString()),
         after: businessDate,
+        frequency: account.collectionFrequency,
         holidays: await this.holidaysAfter(account, businessDate),
         firstSequence: (last._max.sequence ?? 0) + 1,
       });

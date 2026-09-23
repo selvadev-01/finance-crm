@@ -556,6 +556,7 @@ export async function seedDataset(
       outstanding: A,
       dailyAmount: D,
       after: plan.disbursement,
+      frequency: 'DAILY',
       holidays,
       firstSequence: 1,
     });
@@ -750,6 +751,7 @@ export async function seedDataset(
             outstanding: A.minus(collected),
             dailyAmount: D,
             after: slot.dueDate,
+            frequency: 'DAILY',
             holidays,
             firstSequence: slot.sequence + 1,
           }),
@@ -764,6 +766,7 @@ export async function seedDataset(
           outstanding,
           dailyAmount: D,
           after: lastCollection ?? plan.disbursement,
+          frequency: 'DAILY',
           holidays,
         })!;
     accountRows.push({

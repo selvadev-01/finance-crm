@@ -30,10 +30,12 @@ import { useRouter } from "next/navigation";
 import { type BaseSyntheticEvent, useState } from "react";
 import { useFieldArray } from "react-hook-form";
 
+import { CustomerPicker } from "../../../../components/customer-picker";
 import { PageTrail } from "../../../../components/page-trail";
 import { api } from "../../../../lib/api-client";
 import { apiWrite } from "../../../../lib/api-write";
 import { applyWriteFailure } from "../../../../lib/form-errors";
+import { formatMobile } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
@@ -96,12 +98,43 @@ export function NewCustomerForm() {
   );
   const [duplicate, setDuplicate] = useState<Duplicate | null>(null);
   const [saved, setSaved] = useState<CustomerDetail | null>(null);
+  // Which existing customer filled each reference row, by the field array's
+  // own key: it survives a row above being removed, which an index does not.
+  const [copied, setCopied] = useState<Record<string, CustomerSummary>>({});
 
   const form = useZodForm(schema, { defaultValues: blank(rememberedLine()) });
   const references = useFieldArray({
     control: form.control,
     name: "references",
   });
+
+  /**
+   * A reference person is very often a customer already on the books — a
+   * brother on the same line, the shop owner opposite. Choosing them fills
+   * their name and mobile rather than having them typed a second time, with
+   * every field still editable: it is a copy, not a link, because the
+   * reference is the customer's own record (M04) and must not change when
+   * that other customer is edited.
+   */
+  function copyReference(
+    index: number,
+    rowKey: string,
+    customer: CustomerSummary,
+  ) {
+    const filled = { shouldValidate: true, shouldDirty: true };
+    form.setValue(`references.${index}.name`, customer.name, filled);
+    form.setValue(
+      `references.${index}.mobile`,
+      formatMobile(customer.mobile),
+      filled,
+    );
+    setCopied((rows) => ({ ...rows, [rowKey]: customer }));
+  }
+
+  function removeReference(index: number, rowKey: string) {
+    references.remove(index);
+    setCopied(({ [rowKey]: _dropped, ...rest }) => rest);
+  }
 
   if (!manages) {
     return (
@@ -169,6 +202,7 @@ export function NewCustomerForm() {
     });
     setSaved(result.body);
     form.reset(blank(values.lineId));
+    setCopied({});
     form.setFocus("name");
   }
 
@@ -313,44 +347,70 @@ export function NewCustomerForm() {
               </div>
             ) : null}
             <ol className="flex flex-col divide-y divide-border">
-              {references.fields.map((reference, index) => (
-                <li key={reference.id} className="flex flex-col gap-3 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-label text-ink-muted">
-                      Reference {index + 1}
-                    </p>
-                    {references.fields.length > 1 ? (
-                      <Button
-                        tone="ghost"
-                        size="sm"
-                        onClick={() => references.remove(index)}
-                        disabled={pending}
+              {references.fields.map((reference, index) => {
+                const source = copied[reference.id] ?? null;
+                return (
+                  <li key={reference.id} className="flex flex-col gap-3 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-label text-ink-muted">
+                        Reference {index + 1}
+                      </p>
+                      {references.fields.length > 1 ? (
+                        <Button
+                          tone="ghost"
+                          size="sm"
+                          onClick={() => removeReference(index, reference.id)}
+                          disabled={pending}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                    <CustomerPicker
+                      label="An existing customer (optional)"
+                      hint="Fills in their name and mobile. For anybody else, type the details below."
+                      selected={source}
+                      disabled={pending}
+                      onSelect={(customer) =>
+                        copyReference(index, reference.id, customer)
+                      }
+                    />
+                    <div className="grid gap-[var(--stack-gap)] sm:grid-cols-3">
+                      <FormField name={`references.${index}.name`} label="Name">
+                        <Input autoComplete="off" maxLength={120} />
+                      </FormField>
+                      <FormField
+                        name={`references.${index}.mobile`}
+                        label="Mobile"
                       >
-                        Remove
-                      </Button>
+                        <Input type="tel" inputMode="tel" autoComplete="off" />
+                      </FormField>
+                      <FormField
+                        name={`references.${index}.relation`}
+                        label="Relation (optional)"
+                        hint="e.g. brother, shop owner"
+                        valueAs="optional"
+                      >
+                        <Input autoComplete="off" maxLength={80} />
+                      </FormField>
+                    </div>
+                    {source ? (
+                      <p className="text-caption text-ink-muted">
+                        Copied from{" "}
+                        <Link
+                          href={`/customers/${source.id}`}
+                          target="_blank"
+                          className="font-medium underline"
+                        >
+                          {source.name} ({source.customerCode})
+                        </Link>
+                        . Edit anything that differs — this is a copy, not a
+                        link, so it does not change when they do.
+                      </p>
                     ) : null}
-                  </div>
-                  <div className="grid gap-[var(--stack-gap)] sm:grid-cols-3">
-                    <FormField name={`references.${index}.name`} label="Name">
-                      <Input autoComplete="off" maxLength={120} />
-                    </FormField>
-                    <FormField
-                      name={`references.${index}.mobile`}
-                      label="Mobile"
-                    >
-                      <Input type="tel" inputMode="tel" autoComplete="off" />
-                    </FormField>
-                    <FormField
-                      name={`references.${index}.relation`}
-                      label="Relation (optional)"
-                      hint="e.g. brother, shop owner"
-                      valueAs="optional"
-                    >
-                      <Input autoComplete="off" maxLength={80} />
-                    </FormField>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           </Card.Body>
         </Card.Root>

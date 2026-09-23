@@ -13,9 +13,7 @@ import {
   Card,
   FilterBar,
   FilterField,
-  FormMessage,
   Input,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -23,6 +21,7 @@ import {
 } from "@repo/ui";
 
 import { ListFallback } from "../../../../components/list-state";
+import { Pager } from "../../../../components/pager";
 import {
   ACTION_LABEL,
   ActionBadge,
@@ -49,8 +48,6 @@ export const AUDIT_FILTERS = {
 
 export type AuditFilters = Partial<typeof AUDIT_FILTERS>;
 
-const PAGE = 50;
-
 /**
  * S-29 (US-090): the organization's audit log, newest first, read-only. Each
  * entry opens to show IP address, device and the recorded before and after.
@@ -61,19 +58,22 @@ export function AuditLog({ initial }: { initial: AuditFilters }) {
     initial,
   );
   const staff = useApiQuery(staffContract.listStaff, { query: { limit: 200 } });
-  const entries = usePagedQuery(auditContract.listAuditLog, {
-    query: {
-      limit: PAGE,
-      ...(filters.action ? { action: filters.action as AuditAction } : {}),
-      ...(filters.entityTable
-        ? { entityTable: filters.entityTable as AuditedTable }
-        : {}),
-      ...(filters.entityId ? { entityId: filters.entityId } : {}),
-      ...(filters.actorUserId ? { actorUserId: filters.actorUserId } : {}),
-      ...(filters.from ? { from: filters.from } : {}),
-      ...(filters.to ? { to: filters.to } : {}),
+  const entries = usePagedQuery(
+    auditContract.listAuditLog,
+    {
+      query: {
+        ...(filters.action ? { action: filters.action as AuditAction } : {}),
+        ...(filters.entityTable
+          ? { entityTable: filters.entityTable as AuditedTable }
+          : {}),
+        ...(filters.entityId ? { entityId: filters.entityId } : {}),
+        ...(filters.actorUserId ? { actorUserId: filters.actorUserId } : {}),
+        ...(filters.from ? { from: filters.from } : {}),
+        ...(filters.to ? { to: filters.to } : {}),
+      },
     },
-  });
+    { url: true },
+  );
 
   const clear = (
     <Button tone="secondary" onClick={reset}>
@@ -170,15 +170,7 @@ export function AuditLog({ initial }: { initial: AuditFilters }) {
               <AuditEntryRow key={entry.id} entry={entry} />
             ))}
           </ul>
-          <ListFooter
-            shown={entries.rows.length}
-            noun={entries.rows.length === 1 ? "entry" : "entries"}
-            onMore={entries.loadMore}
-            loadingMore={entries.loadingMore}
-          />
-          {entries.moreError ? (
-            <FormMessage tone="critical">{entries.moreError}</FormMessage>
-          ) : null}
+          <Pager list={entries} noun="entries" nounSingular="entry" />
         </div>
       ) : (
         <ListFallback

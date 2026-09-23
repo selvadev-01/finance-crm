@@ -77,23 +77,30 @@ export class SecurityEventsService {
       );
     }
 
+    // One `where` for the page and for how many refusals match it: the
+    // organization bounds both, so another business's events are neither
+    // listed nor counted.
+    const where: Prisma.SecurityEventWhereInput = {
+      organizationId: context.organizationId,
+      ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.code ? { code: query.code } : {}),
+      ...(query.from || query.to ? { createdAt } : {}),
+    };
     // Newest first; (createdAt, id) is a total order, so a page never repeats
     // or skips a row.
-    const rows = await tx.securityEvent.findMany({
-      where: {
-        organizationId: context.organizationId,
-        ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
-        ...(query.kind ? { kind: query.kind } : {}),
-        ...(query.code ? { code: query.code } : {}),
-        ...(query.from || query.to ? { createdAt } : {}),
-      },
-      select: rowSelect,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: query.limit + 1,
-      ...(query.cursor
-        ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
-        : {}),
-    });
+    const [rows, total] = await Promise.all([
+      tx.securityEvent.findMany({
+        where,
+        select: rowSelect,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: query.limit + 1,
+        ...(query.cursor
+          ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
+          : {}),
+      }),
+      tx.securityEvent.count({ where }),
+    ]);
     const hasMore = rows.length > query.limit;
     const visible = hasMore ? rows.slice(0, query.limit) : rows;
     const names = await userNames(
@@ -105,6 +112,7 @@ export class SecurityEventsService {
       nextCursor:
         hasMore && visible.length > 0 ? encodeCursor(visible.at(-1)!.id) : null,
       hasMore,
+      total,
     };
   }
 }

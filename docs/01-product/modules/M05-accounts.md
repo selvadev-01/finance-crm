@@ -24,16 +24,18 @@
 
 ## Creation
 
-Admin enters `A` (account amount), `I` (invested), `D` (daily), `N` (term days, default 100), and a disbursement date. **`P = A − I` is derived and never editable** (BR-01).
+Admin enters `A` (account amount), `I` (invested), `D` (one instalment), `N` (term, default 100), a **collection frequency** and a disbursement date. **`P = A − I` is derived and never editable** (BR-01).
+
+The frequency is `DAILY` (the default), `WEEKLY` or `MONTHLY` (BR-04). It renames the two fields counted in it — the form reads "Weekly amount (₹)" and "Term (weeks)" — because `N` counts **instalments** at the chosen cadence. It changes nothing else: the validation below is the same check at every frequency.
 
 Validation — all enforced as database check constraints, not only in the form:
 
-| Constraint       | Message                                |
-| ---------------- | -------------------------------------- |
-| `I < A`          | Profit cannot be zero or negative      |
-| `D ≤ A`          | A single day cannot exceed the account |
-| `D × N ≥ A`      | The term cannot clear the account      |
-| `A, I, D, N > 0` |                                        |
+| Constraint       | Message                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `I < A`          | Profit cannot be zero or negative                                                                               |
+| `D ≤ A`          | One instalment cannot exceed the account                                                                        |
+| `D × N ≥ A`      | The term cannot clear the account — worded in the frequency's own unit ("₹500 × 20 weeks cannot clear ₹10,000") |
+| `A, I, D, N > 0` |                                                                                                                 |
 
 **Multiple concurrent accounts per customer are permitted** (BR-01a). No constraint restricts this.
 
@@ -55,13 +57,17 @@ An account created this way must behave **identically** to one created from day 
 
 ## Schedule
 
-`ceil(A ÷ D)` slots on consecutive working days from the first collection day (BR-03, BR-04) — the count comes from the balance, not from `N`. Each slot expects `min(D, remaining)`, so every slot expects `D` except the last, which takes the remainder, and the schedule sums exactly to `A`.
+`ceil(A ÷ D)` slots, laid on the dates the account's frequency gives from day 0 (BR-03, BR-04) — the count comes from the balance, not from `N`. Each slot expects `min(D, remaining)`, so every slot expects `D` except the last, which takes the remainder, and the schedule sums exactly to `A`.
+
+Where the slots fall is the only thing the frequency decides: consecutive working days for a `DAILY` account, every seventh calendar day for a `WEEKLY` one, the same day of each month for a `MONTHLY` one, with an anchor landing on a Sunday or holiday moving forward to the next working day and the anchors after it still measured from day 0. BR-04 has the table and the worked example.
 
 > **Uneven example:** `A = 10,000`, `D = 150`. Slots 1–66 expect ₹150 (₹9,900); slot 67 expects ₹100. The customer pays ₹100 on the final day, not ₹150.
 
 > ⚠️ **Corrected during implementation.** This section previously said `N` slots with the last expecting `A − D × (N − 1)`, which BR-04 had already replaced: with `N = 100` and `D = 150` it gives a final slot of −₹4,850.
 
-**Implemented in `packages/domain`** (`src/schedule/`). One function, `generateSchedule({ outstanding, dailyAmount, after, holidays, firstSequence })`, produces both the initial schedule (`outstanding = A`, `after = disbursementDate`, `firstSequence = 1`) and every regenerated tail. `targetCompletionDate` is the last slot's due date, or `null` when nothing is outstanding. Amounts are `Decimal` in and out; the slot count is integer division on paise, so no decimal precision setting is involved.
+**Implemented in `packages/domain`** (`src/schedule/`). One function, `generateSchedule({ outstanding, dailyAmount, after, frequency, holidays, firstSequence })`, produces both the initial schedule (`outstanding = A`, `after = disbursementDate`, `firstSequence = 1`) and every regenerated tail. `targetCompletionDate` is the last slot's due date, or `null` when nothing is outstanding. Amounts are `Decimal` in and out; the slot count is integer division on paise, so no decimal precision setting is involved.
+
+`frequency` is **required, with no default**, and the due dates come from `collectionDueDates` in `src/schedule/frequency.ts`. Defaulting it would be the dangerous option: a tail regenerated after a collection would quietly put a weekly customer back on a daily round, and nothing would fail until the Junior arrived at the wrong door. Making it required turns that into a compile error at every call site.
 
 ### The schedule is a plan, and its tail is regenerable
 
@@ -164,9 +170,17 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 | `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                               |
 | `GET /api/accounts/:accountId/schedule`             | `account.viewSchedule` | `404`                                                                                                                                                         |
 
-**Validation.** BR-01's rules are checked in the contract, in US-030's words: "must be below the account amount — profit cannot be zero or negative", and "50 × 100 days cannot clear 10,000". The form and the API therefore give the same answer, and the database CHECKs repeat the rules.
+**Validation.** BR-01's rules are checked in the contract, in US-030's words: "must be below the account amount — profit cannot be zero or negative", and "50 × 100 days cannot clear 10,000" — with the unit following the frequency, so a weekly account reads "50 × 20 weeks cannot clear 10,000". The form and the API therefore give the same answer, and the database CHECKs repeat the rules.
 
 **Schedule.** Creation stores the whole `generateSchedule` result. Holidays come from the `holiday` table: business-wide rows plus the customer's sector, resolved once per call. The preview endpoint uses the same code path, so what the Admin sees is what is stored.
+
+**Collection frequency (BR-04, US-030b, 2026-09-23).** `collectionFrequency` is part of the terms, defaulting to `DAILY` so every caller written before it existed is unchanged, and it is carried into `generateSchedule`, `planMidTermSchedule` (US-030a), the disbursement-day regeneration, the regenerated tail in `AccountSettlement` and the holiday shift.
+
+- `termDays` is **the number of instalments**, in units of the cadence. Under `DAILY` that is days, which is what it always meant, so no stored row changed meaning. This is why BR-01's `D × N ≥ A` and its CHECK constraint needed no change.
+- It is **immutable after disbursement**, enforced by the trigger `account_loan_frequency_immutable` alongside the one for `A` and `I`: changing it would move every remaining visit on an account whose dates the customer already has.
+- It is correctable while `PENDING`, and the correction dialog carries the account's current value rather than letting the schema's default quietly return a weekly account to a daily round.
+- The enum is written out in both `@repo/domain` and `@repo/contracts`, which may not import each other; `apps/api/test/accounts/collection-frequency.spec.ts` holds the two lists together.
+- **Not done:** the seed dataset is still entirely daily, and the picker has had no browser pass.
 
 **Scope** follows the customer's **current** line (`accountScope`), not `account_loan.lineId`. The line that collects a transferred customer sees their accounts.
 

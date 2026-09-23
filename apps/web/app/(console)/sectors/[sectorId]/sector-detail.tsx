@@ -1,11 +1,12 @@
 "use client";
 
 import { organisationContract as org } from "@repo/contracts";
-import { Button, ListFooter, NothingYet, PageHeader, Section } from "@repo/ui";
+import { Button, NothingYet, PageHeader, Section } from "@repo/ui";
 import { useState } from "react";
 
 import { ListFallback } from "../../../../components/list-state";
 import { PageTrail } from "../../../../components/page-trail";
+import { Pager } from "../../../../components/pager";
 import { RecordFallback } from "../../../../components/query-state";
 import { ActivityBadge } from "../../../../components/status-badge";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
@@ -29,8 +30,10 @@ export function SectorDetail({ sectorId }: { sectorId: string }) {
   const [open, setOpen] = useState<Open>(null);
 
   const sector = useApiQuery(org.getSector, { params: { sectorId } });
+  // No `url`: a sector page is a record, not a list screen, and its own
+  // params belong to the sector rather than to this table.
   const lines = usePagedQuery(org.listLines, {
-    query: { sectorId, includeInactive: "true", limit: LIST_LIMIT },
+    query: { sectorId, includeInactive: "true" },
   });
   const staffing = useApiQuery(org.listLineStaffing, {
     query: { limit: LIST_LIMIT },
@@ -96,15 +99,8 @@ export function SectorDetail({ sectorId }: { sectorId: string }) {
           <LineTable
             lines={lines.rows}
             staffing={staffingMap}
-            complete={!lines.hasMore}
-            footer={
-              <ListFooter
-                shown={lines.rows.length}
-                noun={lines.rows.length === 1 ? "line" : "lines"}
-                onMore={lines.loadMore}
-                loadingMore={lines.loadingMore}
-              />
-            }
+            complete={lines.pageCount <= 1}
+            footer={<Pager list={lines} noun="lines" nounSingular="line" />}
           />
         ) : (
           <ListFallback

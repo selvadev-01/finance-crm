@@ -121,18 +121,24 @@ export class CustomerService {
       status?: CustomerSummary['status'] | undefined;
     },
   ): Promise<Page<CustomerSummary>> {
-    const rows = await this.database.client.customer.findMany({
-      where: inScope(customerScope(context), {
-        deletedAt: null,
-        ...(page.q ? { OR: searchTerms(page.q) } : {}),
-        ...(page.lineId ? { lineId: page.lineId } : {}),
-        ...(page.mobile ? { mobile: page.mobile } : {}),
-        ...(page.status ? { status: page.status } : {}),
-      }),
-      select: summaryFields,
-      ...pageArgs(page),
+    // One `where` for both reads: the total is the same filter, scope
+    // predicate included, so an out-of-scope customer can never be counted.
+    const where = inScope(customerScope(context), {
+      deletedAt: null,
+      ...(page.q ? { OR: searchTerms(page.q) } : {}),
+      ...(page.lineId ? { lineId: page.lineId } : {}),
+      ...(page.mobile ? { mobile: page.mobile } : {}),
+      ...(page.status ? { status: page.status } : {}),
     });
-    return toPage(rows, page, toSummary);
+    const [rows, total] = await Promise.all([
+      this.database.client.customer.findMany({
+        where,
+        select: summaryFields,
+        ...pageArgs(page),
+      }),
+      this.database.client.customer.count({ where }),
+    ]);
+    return toPage(rows, page, toSummary, total);
   }
 
   async get(

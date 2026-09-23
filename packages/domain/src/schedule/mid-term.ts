@@ -3,6 +3,7 @@ import type { Decimal } from "decimal.js";
 import type { CalendarDate } from "../calendar/calendar-date.js";
 import type { HolidaySet } from "../calendar/working-days.js";
 import { type MoneyInput, toMoney } from "../money/money.js";
+import type { CollectionFrequency } from "./frequency.js";
 import { generateSchedule, type ScheduleSlot } from "./schedule.js";
 
 /**
@@ -23,8 +24,10 @@ import { generateSchedule, type ScheduleSlot } from "./schedule.js";
 export interface MidTermInput {
   /** A */
   accountAmount: MoneyInput;
-  /** D */
+  /** D — one instalment, at `frequency`. */
   dailyAmount: MoneyInput;
+  /** How often an instalment falls due (BR-04). */
+  frequency: CollectionFrequency;
   /** Day 0 of the original term. Before `enteredOn`. */
   disbursementDate: CalendarDate;
   /** The business date the account is entered into Rasi. */
@@ -71,6 +74,7 @@ export function planMidTermSchedule(input: MidTermInput): MidTermPlan {
     outstanding: accountAmount,
     dailyAmount: input.dailyAmount,
     after: input.disbursementDate,
+    frequency: input.frequency,
     holidays: input.holidays,
     firstSequence: 1,
   });
@@ -93,6 +97,7 @@ export function planMidTermSchedule(input: MidTermInput): MidTermPlan {
     outstanding,
     dailyAmount: input.dailyAmount,
     after: input.enteredOn,
+    frequency: input.frequency,
     holidays: input.holidays,
     firstSequence: paid.length + 1,
   }).map((slot): MidTermSlot => ({ ...slot, status: "PENDING" }));

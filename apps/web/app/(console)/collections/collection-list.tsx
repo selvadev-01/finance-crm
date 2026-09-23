@@ -18,9 +18,7 @@ import {
   FilterBar,
   FilterField,
   formatBusinessDate,
-  FormMessage,
   Input,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -37,8 +35,8 @@ import {
 import { ExportMenu } from "../../../components/export-menu";
 import { LineFilter } from "../../../components/line-filter";
 import { ListFallback } from "../../../components/list-state";
+import { Pager } from "../../../components/pager";
 import { CollectionEntryBadge } from "../../../components/status-badge";
-import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
 import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
@@ -95,7 +93,8 @@ export function CollectionList({
   };
   const collections = usePagedQuery(
     collectionContract.listCollections,
-    validRange ? { query: { limit: LIST_LIMIT, ...query } } : null,
+    validRange ? { query } : null,
+    { url: true },
   );
 
   const showToday = () => setFilters({ from: today, to: today });
@@ -193,7 +192,7 @@ export function CollectionList({
             caption="Collections"
             rows={collections.rows}
             getRowId={(entry) => entry.id}
-            complete={!collections.hasMore}
+            complete={collections.pageCount <= 1}
             columns={[
               identityColumn<CollectionListItem>({
                 header: "Customer",
@@ -242,17 +241,9 @@ export function CollectionList({
               }),
             ]}
             footer={
-              <ListFooter
-                shown={collections.rows.length}
-                noun={collections.rows.length === 1 ? "entry" : "entries"}
-                onMore={collections.loadMore}
-                loadingMore={collections.loadingMore}
-              />
+              <Pager list={collections} noun="entries" nounSingular="entry" />
             }
           />
-          {collections.moreError ? (
-            <FormMessage tone="critical">{collections.moreError}</FormMessage>
-          ) : null}
         </>
       ) : (
         <ListFallback

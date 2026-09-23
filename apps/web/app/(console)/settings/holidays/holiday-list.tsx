@@ -14,7 +14,6 @@ import {
   FilterField,
   FormMessage,
   formatBusinessDate,
-  ListFooter,
   NothingYet,
   PageHeader,
   Select,
@@ -23,6 +22,7 @@ import { useState } from "react";
 
 import { displayColumn, valueColumn } from "../../../../components/columns";
 import { ListFallback } from "../../../../components/list-state";
+import { Pager } from "../../../../components/pager";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
@@ -64,9 +64,11 @@ export function HolidayList({
   const { filters, setFilter } = useListState(HOLIDAY_FILTERS, initial);
   const period = filters.period === "past" ? "past" : "upcoming";
 
-  const holidays = usePagedQuery(holidayContract.listHolidays, {
-    query: { limit: LIST_LIMIT, period },
-  });
+  const holidays = usePagedQuery(
+    holidayContract.listHolidays,
+    { query: { period } },
+    { url: true },
+  );
   // Active sectors, for "Applies to" in the dialog.
   const sectors = useApiQuery(
     org.listSectors,
@@ -111,7 +113,7 @@ export function HolidayList({
           caption={period === "past" ? "Past holidays" : "Upcoming holidays"}
           rows={holidays.rows}
           getRowId={(holiday) => holiday.id}
-          complete={!holidays.hasMore}
+          complete={holidays.pageCount <= 1}
           columns={[
             valueColumn<Holiday>({
               id: "date",
@@ -173,12 +175,7 @@ export function HolidayList({
               : []),
           ]}
           footer={
-            <ListFooter
-              shown={holidays.rows.length}
-              noun={holidays.rows.length === 1 ? "holiday" : "holidays"}
-              onMore={holidays.loadMore}
-              loadingMore={holidays.loadingMore}
-            />
+            <Pager list={holidays} noun="holidays" nounSingular="holiday" />
           }
         />
       ) : (
@@ -205,9 +202,6 @@ export function HolidayList({
           }
         />
       )}
-      {holidays.moreError ? (
-        <FormMessage tone="critical">{holidays.moreError}</FormMessage>
-      ) : null}
 
       <p className="text-label text-ink-muted">
         Past holidays, and today’s, stay in history and cannot be changed.

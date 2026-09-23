@@ -8,7 +8,6 @@ import {
   FilterBar,
   FilterField,
   Input,
-  ListFooter,
   NoMatches,
   NothingYet,
   PageHeader,
@@ -23,9 +22,9 @@ import {
 } from "../../../components/columns";
 import { LineFilter } from "../../../components/line-filter";
 import { ListFallback } from "../../../components/list-state";
+import { Pager } from "../../../components/pager";
 import { StatusBadge } from "../../../components/status-badge";
 import { formatMobile } from "../../../lib/format";
-import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
 import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
@@ -64,13 +63,16 @@ export function CustomerList({
     return () => clearTimeout(timer);
   }, [searchText, filters.q, setFilter]);
 
-  const customers = usePagedQuery(customerContract.listCustomers, {
-    query: {
-      limit: LIST_LIMIT,
-      ...(filters.q ? { q: filters.q } : {}),
-      ...(lineId ? { lineId } : {}),
+  const customers = usePagedQuery(
+    customerContract.listCustomers,
+    {
+      query: {
+        ...(filters.q ? { q: filters.q } : {}),
+        ...(lineId ? { lineId } : {}),
+      },
     },
-  });
+    { url: true },
+  );
 
   const newCustomer = manages ? (
     <Link href="/customers/new" className={buttonClass("primary")}>
@@ -122,7 +124,7 @@ export function CustomerList({
             caption="Customers"
             rows={customers.rows}
             getRowId={(customer) => customer.id}
-            complete={!customers.hasMore}
+            complete={customers.pageCount <= 1}
             columns={[
               identityColumn<CustomerSummary>({
                 header: "Customer",
@@ -154,12 +156,10 @@ export function CustomerList({
               }),
             ]}
             footer={
-              <ListFooter
-                shown={customers.rows.length}
-                noun={customers.rows.length === 1 ? "customer" : "customers"}
-                onMore={customers.loadMore}
-                loadingMore={customers.loadingMore}
-                note={customers.moreError ?? undefined}
+              <Pager
+                list={customers}
+                noun="customers"
+                nounSingular="customer"
               />
             }
           />

@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { ListFallback } from "../../components/list-state";
-import { usePagedQuery } from "../use-paged-query";
+import { useInfiniteQuery } from "../use-infinite-query";
 import { markAllRead, NotificationList } from "./notification-list";
 
 /** One panel-ful. Older notifications arrive through "Show more". */
@@ -30,7 +30,7 @@ const PAGE = 20;
  */
 export function NotificationPanel({ onNavigate }: { onNavigate: () => void }) {
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const list = usePagedQuery(notificationContract.listNotifications, {
+  const list = useInfiniteQuery(notificationContract.listNotifications, {
     query: { limit: PAGE, ...(unreadOnly ? { unread: "true" as const } : {}) },
   });
   const unread = list.status === "ready" ? list.data.unreadCount : 0;

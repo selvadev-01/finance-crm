@@ -7,7 +7,6 @@ import {
   DataView,
   EmptyFrame,
   FilterBar,
-  ListFooter,
   NothingYet,
   NotPermitted,
   PageHeader,
@@ -22,6 +21,7 @@ import {
   valueColumn,
 } from "../../../components/columns";
 import { ListFallback } from "../../../components/list-state";
+import { Pager } from "../../../components/pager";
 import { ActivityBadge } from "../../../components/status-badge";
 import { LIST_LIMIT } from "../../../lib/list-limit";
 import { canManageOrganisation } from "../../../lib/roles";
@@ -52,12 +52,10 @@ export function SectorList({
     org.listSectors,
     manages
       ? {
-          query: {
-            limit: LIST_LIMIT,
-            includeInactive: showInactive ? "true" : "false",
-          },
+          query: { includeInactive: showInactive ? "true" : "false" },
         }
       : null,
+    { url: true },
   );
   // Active lines per sector, for the count column.
   const lines = useApiQuery(
@@ -115,7 +113,7 @@ export function SectorList({
           caption="Sectors"
           rows={sectors.rows}
           getRowId={(sector) => sector.id}
-          complete={!sectors.hasMore}
+          complete={sectors.pageCount <= 1}
           columns={[
             identityColumn<Sector>({
               header: "Sector",
@@ -138,14 +136,7 @@ export function SectorList({
               cell: (sector) => <ActivityBadge isActive={sector.isActive} />,
             }),
           ]}
-          footer={
-            <ListFooter
-              shown={sectors.rows.length}
-              noun={sectors.rows.length === 1 ? "sector" : "sectors"}
-              onMore={sectors.loadMore}
-              loadingMore={sectors.loadingMore}
-            />
-          }
+          footer={<Pager list={sectors} noun="sectors" nounSingular="sector" />}
         />
       ) : (
         <ListFallback

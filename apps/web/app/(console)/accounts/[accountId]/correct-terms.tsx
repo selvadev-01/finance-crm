@@ -1,18 +1,21 @@
 "use client";
 
 import { type Account, accountContract } from "@repo/contracts";
+import { COLLECTION_FREQUENCIES } from "@repo/domain";
 import {
   DialogForm,
   FormField,
   FormMessage,
   formatCurrency,
   Input,
+  Select,
   toast,
   useZodForm,
 } from "@repo/ui";
 import { useWatch } from "react-hook-form";
 
 import { apiWrite } from "../../../../lib/api-write";
+import { CADENCE, cadenceOf } from "../../../../lib/cadence";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import {
   isNegativeMoney,
@@ -45,10 +48,15 @@ export function CorrectTerms({
       investedAmount: account.investedAmount ?? "",
       dailyAmount: account.dailyAmount,
       termDays: String(account.termDays),
+      // Carried from the account, not defaulted: the field is part of the
+      // whole set of terms this dialog resubmits, and leaving it out would
+      // quietly put a pending weekly account back on a daily round.
+      collectionFrequency: account.collectionFrequency,
       disbursementDate: account.disbursementDate,
     },
   });
   const watched = useWatch({ control: form.control });
+  const cadence = CADENCE[cadenceOf(watched.collectionFrequency)];
 
   // P = A − I, derived and never entered (BR-01). Exact paise, never a number.
   const profit =
@@ -79,6 +87,7 @@ export function CorrectTerms({
               "investedAmount",
               "dailyAmount",
               "termDays",
+              "collectionFrequency",
               "disbursementDate",
             ],
             fallback: "The terms were not saved.",
@@ -95,13 +104,26 @@ export function CorrectTerms({
         <FormField name="investedAmount" label="Invested amount">
           <Input inputMode="decimal" autoComplete="off" />
         </FormField>
-        <FormField name="dailyAmount" label="Daily amount">
+        <FormField name="dailyAmount" label={cadence.amount}>
           <Input inputMode="decimal" autoComplete="off" />
         </FormField>
-        <FormField name="termDays" label="Term (days)">
+        <FormField name="termDays" label={cadence.term}>
           <Input inputMode="numeric" autoComplete="off" />
         </FormField>
       </div>
+      <FormField
+        name="collectionFrequency"
+        label="Collection frequency"
+        hint="Fixed once the account is disbursed."
+      >
+        <Select>
+          {COLLECTION_FREQUENCIES.map((frequency) => (
+            <option key={frequency} value={frequency}>
+              {CADENCE[frequency].option}
+            </option>
+          ))}
+        </Select>
+      </FormField>
       <FormField
         name="disbursementDate"
         label="Disbursement date"

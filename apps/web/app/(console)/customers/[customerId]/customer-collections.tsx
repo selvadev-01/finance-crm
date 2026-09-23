@@ -1,7 +1,7 @@
 "use client";
 
 import { collectionContract, type CollectionListItem } from "@repo/contracts";
-import { DataView, formatBusinessDate, ListFooter, NothingYet } from "@repo/ui";
+import { DataView, formatBusinessDate, NothingYet } from "@repo/ui";
 
 import {
   displayColumn,
@@ -10,8 +10,8 @@ import {
   valueColumn,
 } from "../../../../components/columns";
 import { ListFallback } from "../../../../components/list-state";
+import { Pager } from "../../../../components/pager";
 import { StatusBadge } from "../../../../components/status-badge";
-import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation, type Role } from "../../../../lib/roles";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 
@@ -28,9 +28,10 @@ export function CustomerCollections({
   customerId: string;
   role: Role;
 }) {
+  // No `url`: this list shares the Customer 360 page with the portfolio's
+  // own list, and one set of page params cannot serve both.
   const entries = usePagedQuery(collectionContract.listCustomerCollections, {
     params: { customerId },
-    query: { limit: LIST_LIMIT },
   });
   const manages = canManageOrganisation(role);
 
@@ -54,7 +55,7 @@ export function CustomerCollections({
       caption="Collections"
       rows={entries.rows}
       getRowId={(entry) => entry.id}
-      complete={!entries.hasMore}
+      complete={entries.pageCount <= 1}
       columns={[
         identityColumn<CollectionListItem>({
           header: "Account",
@@ -100,15 +101,7 @@ export function CustomerCollections({
         }),
       ]}
       footer={
-        entries.hasMore ? (
-          <ListFooter
-            shown={entries.rows.length}
-            noun="collections"
-            onMore={entries.loadMore}
-            loadingMore={entries.loadingMore}
-            note={entries.moreError ?? undefined}
-          />
-        ) : null
+        <Pager list={entries} noun="collections" nounSingular="collection" />
       }
     />
   );

@@ -102,6 +102,53 @@ describe("Combobox", () => {
     expect(screen.getByText("Nothing matches.")).toBeInTheDocument();
   });
 
+  it("leaves a searched list to the caller, and keeps saying what is chosen", async () => {
+    const user = userEvent.setup();
+    const onSearchChange = vi.fn();
+    // The list the caller's latest search left behind — it no longer holds
+    // the customer already chosen.
+    render(
+      <Field label="Customer">
+        <Combobox
+          options={[{ value: "cust-2", label: "Lakshmi Narayanan" }]}
+          value="cust-1"
+          selectedLabel="Meenakshi Velu · CUS-00417"
+          onValueChange={() => {}}
+          search="98765"
+          onSearchChange={onSearchChange}
+        />
+      </Field>,
+    );
+    const trigger = screen.getByRole("combobox", { name: "Customer" });
+    // The chosen customer is not in the list the search left behind, and the
+    // trigger still names them.
+    expect(trigger).toHaveTextContent("Meenakshi Velu · CUS-00417");
+
+    await user.click(trigger);
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    await user.type(screen.getByPlaceholderText("Search…"), "4");
+    expect(onSearchChange).toHaveBeenCalledWith("987654");
+  });
+
+  it("says it is searching rather than that nothing matches", async () => {
+    const user = userEvent.setup();
+    render(
+      <Field label="Customer">
+        <Combobox
+          options={[]}
+          value=""
+          onValueChange={() => {}}
+          search="meen"
+          onSearchChange={() => {}}
+          loading
+          emptyText="No customer matches."
+        />
+      </Field>,
+    );
+    await user.click(screen.getByRole("combobox", { name: "Customer" }));
+    expect(screen.getByText("Searching…")).toBeInTheDocument();
+  });
+
   it("opens its list inside a dialog, not behind it", async () => {
     const user = userEvent.setup();
     render(

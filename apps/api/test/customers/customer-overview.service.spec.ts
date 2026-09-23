@@ -75,6 +75,7 @@ describe('CustomerOverviewService (US-022)', () => {
           investedAmount: (Number(amount) * 0.85).toFixed(2),
           dailyAmount: '100',
           termDays: Number(amount) / 100,
+          collectionFrequency: 'DAILY',
           disbursementDate: SATURDAY,
           disburse: true,
         },

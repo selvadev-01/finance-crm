@@ -51,18 +51,24 @@ export class NotificationCentreService {
     },
   ) {
     const tx = this.database.client;
-    const rows = await tx.notification.findMany({
-      where: {
-        userId: context.userId,
-        ...(query.unread === 'true' ? { readAt: null } : {}),
-        ...(query.category ? { category: query.category } : {}),
-      },
-      ...pageArgs(query),
-      // Newest first: cuid ids sort by creation, so descending id is newest first.
-      orderBy: { id: 'desc' },
-    });
+    // One `where` for both reads. A notification is only ever its recipient's,
+    // so `userId` is the scope and the count carries it too.
+    const where = {
+      userId: context.userId,
+      ...(query.unread === 'true' ? { readAt: null } : {}),
+      ...(query.category ? { category: query.category } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      tx.notification.findMany({
+        where,
+        ...pageArgs(query),
+        // Newest first: cuid ids sort by creation, so descending id is newest first.
+        orderBy: { id: 'desc' },
+      }),
+      tx.notification.count({ where }),
+    ]);
     return {
-      ...toPage(rows, query, toView),
+      ...toPage(rows, query, toView, total),
       unreadCount: await this.unread(tx, context),
     };
   }

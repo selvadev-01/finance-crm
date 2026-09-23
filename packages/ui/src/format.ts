@@ -34,6 +34,20 @@ function groupIndian(digits: string): string {
 }
 
 /**
+ * A whole count for display: `formatCount(1234)` → `1,234`, grouped the Indian
+ * way like every other number on screen. For counts of rows only — never for
+ * money, which stays a decimal string from the API to the screen (BR-11).
+ */
+export function formatCount(count: number): string {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error(
+      `formatCount expects a whole count, received ${JSON.stringify(count)}.`,
+    );
+  }
+  return groupIndian(String(count));
+}
+
+/**
  * Render a money amount for display: `formatCurrency("123456.5")` → `₹1,23,456.50`.
  *
  * Accepts at most two decimal places. More than that is rejected rather than

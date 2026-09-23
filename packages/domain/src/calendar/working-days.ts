@@ -47,6 +47,19 @@ export function nextWorkingDay(
   return candidate;
 }
 
+/**
+ * `date` itself when it is a working day, otherwise the first working day
+ * after it. Unlike `nextWorkingDay` this can return its own argument, which is
+ * what a weekly or monthly anchor wants: the visit keeps its date unless that
+ * date is a Sunday or a holiday (BR-02).
+ */
+export function workingDayOnOrAfter(
+  date: CalendarDate,
+  holidays: HolidaySet,
+): CalendarDate {
+  return isWorkingDay(date, holidays) ? date : nextWorkingDay(date, holidays);
+}
+
 /** The `n`-th working day after `date`. `n = 0` returns `date` itself, working or not. */
 export function addWorkingDays(
   date: CalendarDate,

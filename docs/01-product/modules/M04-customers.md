@@ -157,7 +157,7 @@ Which line a customer was on, and when, is now a table: `customer_line_period` (
 **Screens:**
 
 - `/customers`: the list, with a search box for every role (`?q=`) and a line filter for Admins.
-- `/customers/new` (S-10): keyboard-first, validated with the contract's own schema, "Save and add another" keeps the line.
+- `/customers/new` (S-10): keyboard-first, validated with the contract's own schema, "Save and add another" keeps the line. Each reference person carries an optional **existing-customer search** (2026-09-23): typing a name, customer code or mobile reads `GET /api/customers?q=` — the same scoped list US-024 searches, so nobody is found who could not be listed — and choosing somebody copies their name and mobile into that reference, naming and linking who they were copied from. **A copy, not a link:** the reference is the onboarded customer's own record (`customer_reference` has no customer of its own), so it stays as entered when that other customer is edited, and every field is still editable. A reference who is not a customer is typed as before.
 - `/customers/:id`: the profile and references. Accounts and collections are stated as not yet available.
 - `/customers/:id` (S-09) shows the totals above the tabs, the assigned Senior and Junior in the details, and a Collections tab with the whole history beside the Accounts tab (US-022). It also carries a Transfer action for Admin+ (US-023), stating that the new line collects from today and past collections do not move, and shows a line history once there has been a transfer.
 - `/customers/:id/edit` (US-021): the record as saved, validated with the contract's schema; reached from an Edit action on the profile, shown to Admin+.

@@ -15,8 +15,6 @@ import {
   FilterField,
   formatBusinessDate,
   formatCurrency,
-  FormMessage,
-  ListFooter,
   NothingYet,
   PageHeader,
   Select,
@@ -32,8 +30,8 @@ import {
 } from "../../../../components/columns";
 import { ExportMenu } from "../../../../components/export-menu";
 import { PageTrail } from "../../../../components/page-trail";
+import { Pager } from "../../../../components/pager";
 import { formatTimestamp } from "../../../../lib/format";
-import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { canManageOrganisation, seesReports } from "../../../../lib/roles";
 import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
@@ -110,7 +108,8 @@ export function OverdueReport({
   };
   const report = usePagedQuery(
     reportContract.getOverdue,
-    allowed ? { query: { limit: LIST_LIMIT, ...query } } : null,
+    allowed ? { query } : null,
+    { url: true },
   );
 
   if (!allowed) return <ReportNotPermitted />;
@@ -204,20 +203,12 @@ export function OverdueReport({
             caption="Overdue accounts"
             rows={report.rows}
             getRowId={(row) => row.accountLoanId}
-            complete={!report.hasMore}
+            complete={report.pageCount <= 1}
             columns={columnsFor(manages)}
             footer={
-              <ListFooter
-                shown={report.rows.length}
-                noun={report.rows.length === 1 ? "account" : "accounts"}
-                onMore={report.loadMore}
-                loadingMore={report.loadingMore}
-              />
+              <Pager list={report} noun="accounts" nounSingular="account" />
             }
           />
-          {report.moreError ? (
-            <FormMessage tone="critical">{report.moreError}</FormMessage>
-          ) : null}
         </>
       ) : report.status === "ready" ? (
         narrowed ? (

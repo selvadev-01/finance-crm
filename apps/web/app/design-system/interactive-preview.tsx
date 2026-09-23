@@ -19,6 +19,7 @@ import {
   formatCurrency,
   Input,
   ListFooter,
+  ListPager,
   Menu,
   Select,
   Stat,
@@ -124,6 +125,22 @@ export function RecordsPreview() {
           }),
         ]}
       />
+      {/* The console's pager, at page 2 of a long list, so the preview shows
+       * the state that actually has every control live. */}
+      <ListPager
+        page={2}
+        pageCount={25}
+        total={247}
+        shown={SAMPLE_ROWS.length}
+        pageSize={10}
+        noun="collections"
+        nounSingular="collection"
+        onFirst={() => {}}
+        onPrevious={() => {}}
+        onNext={() => {}}
+        onPageSize={() => {}}
+      />
+      {/* The scrolling footer the notification panel and the field app keep. */}
       <ListFooter
         shown={SAMPLE_ROWS.length}
         noun="collections"

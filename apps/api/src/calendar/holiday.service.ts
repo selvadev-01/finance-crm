@@ -90,7 +90,12 @@ export class HolidayService {
       limit: number;
     },
     today: CalendarDate = toBusinessDate(new Date()),
-  ): Promise<{ data: Holiday[]; nextCursor: string | null; hasMore: boolean }> {
+  ): Promise<{
+    data: Holiday[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    total: number;
+  }> {
     const upcoming = query.period === 'upcoming';
     const day = toUtcMidnight(today);
     const date: Prisma.DateTimeFilter = upcoming ? { gte: day } : { lt: day };
@@ -104,16 +109,22 @@ export class HolidayService {
             ],
           };
     const direction = upcoming ? 'asc' : 'desc';
-    const rows = await this.database.client.holiday.findMany({
-      where: inScope(holidayScope(context), { date, ...year }),
-      select: holidayFields,
-      // (date, id) is a total order, so a page never repeats or skips a row.
-      orderBy: [{ date: direction }, { id: direction }],
-      take: query.limit + 1,
-      ...(query.cursor
-        ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
-        : {}),
-    });
+    // One `where` for both reads, so the total carries `holidayScope` exactly
+    // as the rows do — a holiday on a sector out of scope is not countable.
+    const where = inScope(holidayScope(context), { date, ...year });
+    const [rows, total] = await Promise.all([
+      this.database.client.holiday.findMany({
+        where,
+        select: holidayFields,
+        // (date, id) is a total order, so a page never repeats or skips a row.
+        orderBy: [{ date: direction }, { id: direction }],
+        take: query.limit + 1,
+        ...(query.cursor
+          ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 }
+          : {}),
+      }),
+      this.database.client.holiday.count({ where }),
+    ]);
     const hasMore = rows.length > query.limit;
     const visible = hasMore ? rows.slice(0, query.limit) : rows;
     const names = await this.names(visible);
@@ -122,6 +133,7 @@ export class HolidayService {
       nextCursor:
         hasMore && visible.length > 0 ? encodeCursor(visible.at(-1)!.id) : null,
       hasMore,
+      total,
     };
   }
 
@@ -309,6 +321,7 @@ export class HolidayService {
         select: {
           id: true,
           disbursementDate: true,
+          collectionFrequency: true,
           customer: { select: { sectorId: true } },
           schedules: {
             where: { status: 'PENDING' },
@@ -326,6 +339,7 @@ export class HolidayService {
           pending,
           changedDate: change.date,
           disbursementDate: fromUtcMidnight(account.disbursementDate),
+          frequency: account.collectionFrequency,
           holidays: holidays(account.customer.sectorId),
         });
         if (moved.length === 0) continue;

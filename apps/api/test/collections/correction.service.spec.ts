@@ -127,6 +127,7 @@ describe('CorrectionService (US-044, BR-14)', () => {
           investedAmount,
           dailyAmount: '100',
           termDays: 100,
+          collectionFrequency: 'DAILY',
           disbursementDate: SATURDAY,
           disburse: true,
         },

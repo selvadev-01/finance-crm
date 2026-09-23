@@ -56,6 +56,7 @@ const accountFields = {
   profitAmount: true,
   dailyAmount: true,
   termDays: true,
+  collectionFrequency: true,
   disbursementDate: true,
   firstCollectionDate: true,
   targetCompletionDate: true,
@@ -113,6 +114,7 @@ function toAccount(row: AccountRow, context: RequestContext): Account {
     profitAmount: hideMargin ? null : money(row.profitAmount),
     dailyAmount: money(row.dailyAmount),
     termDays: row.termDays,
+    collectionFrequency: row.collectionFrequency,
     disbursementDate: fromUtcMidnight(row.disbursementDate),
     firstCollectionDate: fromUtcMidnight(row.firstCollectionDate),
     targetCompletionDate: fromUtcMidnight(row.targetCompletionDate),
@@ -215,6 +217,7 @@ export class AccountService {
           profitAmount: A.minus(input.investedAmount).toFixed(2),
           dailyAmount: toMoney(input.dailyAmount).toFixed(2),
           termDays: input.termDays,
+          collectionFrequency: input.collectionFrequency,
           disbursementDate: toUtcMidnight(
             parseCalendarDate(input.disbursementDate),
           ),
@@ -257,6 +260,7 @@ export class AccountService {
           investedAmount: toMoney(input.investedAmount).toFixed(2),
           dailyAmount: toMoney(input.dailyAmount).toFixed(2),
           termDays: input.termDays,
+          collectionFrequency: input.collectionFrequency,
           disbursementDate: input.disbursementDate,
           slots: plan.slots.length,
           ...(plan.kind === 'MID_TERM'
@@ -335,6 +339,7 @@ export class AccountService {
           outstanding: account.accountAmount.toString(),
           dailyAmount: account.dailyAmount.toString(),
           after: today,
+          frequency: account.collectionFrequency,
           holidays,
           firstSequence: 1,
         });
@@ -382,17 +387,22 @@ export class AccountService {
       status?: Account['status'] | undefined;
     },
   ): Promise<Page<Account>> {
-    const rows = await this.database.client.accountLoan.findMany({
-      where: inScope(accountScope(context), {
-        ...(page.q ? { OR: accountSearchTerms(page.q) } : {}),
-        ...(page.customerId ? { customerId: page.customerId } : {}),
-        ...(page.lineId ? { lineId: page.lineId } : {}),
-        ...(page.status ? { status: page.status } : {}),
-      }),
-      select: accountFields,
-      ...pageArgs(page),
+    // One `where` for both reads, so the total is scoped exactly as the rows are.
+    const where = inScope(accountScope(context), {
+      ...(page.q ? { OR: accountSearchTerms(page.q) } : {}),
+      ...(page.customerId ? { customerId: page.customerId } : {}),
+      ...(page.lineId ? { lineId: page.lineId } : {}),
+      ...(page.status ? { status: page.status } : {}),
     });
-    return toPage(rows, page, (row) => toAccount(row, context));
+    const [rows, total] = await Promise.all([
+      this.database.client.accountLoan.findMany({
+        where,
+        select: accountFields,
+        ...pageArgs(page),
+      }),
+      this.database.client.accountLoan.count({ where }),
+    ]);
+    return toPage(rows, page, (row) => toAccount(row, context), total);
   }
 
   async get(context: RequestContext, accountId: string): Promise<Account> {
@@ -497,6 +507,7 @@ export class AccountService {
           profitAmount: A.minus(input.investedAmount).toFixed(2),
           dailyAmount: toMoney(input.dailyAmount).toFixed(2),
           termDays: input.termDays,
+          collectionFrequency: input.collectionFrequency,
           disbursementDate: toUtcMidnight(disbursement),
           firstCollectionDate: toUtcMidnight(plan.firstCollectionDate),
           targetCompletionDate: toUtcMidnight(plan.targetCompletionDate),
@@ -525,6 +536,7 @@ export class AccountService {
           investedAmount: money(before.investedAmount),
           dailyAmount: money(before.dailyAmount),
           termDays: before.termDays,
+          collectionFrequency: before.collectionFrequency,
           disbursementDate: fromUtcMidnight(before.disbursementDate),
         },
         after: {
@@ -532,6 +544,7 @@ export class AccountService {
           investedAmount: money(account.investedAmount),
           dailyAmount: money(account.dailyAmount),
           termDays: account.termDays,
+          collectionFrequency: account.collectionFrequency,
           disbursementDate: input.disbursementDate,
           slots: plan.slots.length,
         },
@@ -897,6 +910,7 @@ export class AccountService {
       const plan = planMidTermSchedule({
         accountAmount: input.accountAmount,
         dailyAmount: input.dailyAmount,
+        frequency: input.collectionFrequency,
         disbursementDate,
         enteredOn: today,
         collectedToDate: input.collectedToDate!,
@@ -920,6 +934,7 @@ export class AccountService {
       outstanding: input.accountAmount,
       dailyAmount: input.dailyAmount,
       after: disbursementDate,
+      frequency: input.collectionFrequency,
       holidays: holidays.set,
       firstSequence: 1,
     }).map((slot) => ({ ...slot, status: 'PENDING' as const }));

@@ -143,6 +143,36 @@ describe('account lifecycle constraints (BR-03, BR-05, BR-07)', () => {
     });
   });
 
+  describe('the collection cadence after disbursement (BR-04)', () => {
+    it('rejects changing it once ACTIVE — every remaining visit would move', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { account } = await createActiveAccount(tx);
+          await tx.accountLoan.update({
+            where: { id: account.id },
+            data: { collectionFrequency: 'WEEKLY' },
+          });
+        }),
+      ).rejects.toThrow('account_loan_frequency_immutable');
+    });
+
+    it('allows correcting it while the account is still PENDING', async () => {
+      await expect(
+        withRollback(prisma, async (tx) => {
+          const { account } = await createActiveAccount(tx);
+          await tx.$executeRawUnsafe(
+            `UPDATE "account_loan" SET "status" = 'PENDING' WHERE "id" = $1`,
+            account.id,
+          );
+          await tx.accountLoan.update({
+            where: { id: account.id },
+            data: { collectionFrequency: 'MONTHLY' },
+          });
+        }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('account_schedule', () => {
     async function insertSlot(
       tx: PrismaClient,
