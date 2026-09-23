@@ -89,23 +89,17 @@ export function chennaiDataset(runId: string) {
     phone: mobile("6", 2),
   };
 
-  const sectors: Record<SectorKey, { code: string; name: string }> = {
-    north: { code: `CHN-N-${runId}`, name: "Chennai North" },
-    south: { code: `CHN-S-${runId}`, name: "Chennai South" },
+  // Codes are issued by the API (US-010, US-011), so only names are given here.
+  const sectors: Record<SectorKey, { name: string }> = {
+    north: { name: "Chennai North" },
+    south: { name: "Chennai South" },
   };
 
-  const lines: Record<
-    LineKey,
-    { sector: SectorKey; code: string; name: string }
-  > = {
-    tondiarpet: {
-      sector: "north",
-      code: `TNP-${runId}`,
-      name: "Tondiarpet",
-    },
-    royapuram: { sector: "north", code: `RYP-${runId}`, name: "Royapuram" },
-    mylapore: { sector: "south", code: `MYL-${runId}`, name: "Mylapore" },
-    adyar: { sector: "south", code: `ADY-${runId}`, name: "Adyar" },
+  const lines: Record<LineKey, { sector: SectorKey; name: string }> = {
+    tondiarpet: { sector: "north", name: "Tondiarpet" },
+    royapuram: { sector: "north", name: "Royapuram" },
+    mylapore: { sector: "south", name: "Mylapore" },
+    adyar: { sector: "south", name: "Adyar" },
   };
 
   const customers: CustomerSeed[] = [

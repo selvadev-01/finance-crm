@@ -75,34 +75,33 @@ export async function addStaff(
   return password;
 }
 
-/** US-010. Returns the new sector's id. */
+/** US-010. Only the name is typed — the code is issued. Returns the new id. */
 export async function createSector(
   page: Page,
-  sector: { code: string; name: string },
+  sector: { name: string },
 ): Promise<string> {
   await page.goto("/sectors");
   await page.getByRole("button", { name: "New sector" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New sector" });
-  await dialog.getByLabel("Code").fill(sector.code);
   await dialog.getByLabel("Name").fill(sector.name);
   await dialog.getByRole("button", { name: "Create sector" }).click();
   await page.waitForURL(/\/sectors\/[^/]+$/);
   return idFrom(page.url());
 }
 
-/** US-011. Returns the new line's id. */
+/**
+ * US-011. The sector is chosen by its id, which is the option's value, because
+ * its label carries the issued code this suite never sees.
+ */
 export async function createLine(
   page: Page,
-  line: { code: string; name: string },
-  sector: { code: string; name: string },
+  line: { name: string },
+  sectorId: string,
 ): Promise<string> {
   await page.goto("/lines");
   await page.getByRole("button", { name: "New line" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New line" });
-  await dialog
-    .getByLabel("Sector")
-    .selectOption({ label: `${sector.name} (${sector.code})` });
-  await dialog.getByLabel("Code").fill(line.code);
+  await dialog.getByLabel("Sector").selectOption(sectorId);
   await dialog.getByLabel("Name").fill(line.name);
   await dialog.getByRole("button", { name: "Create line" }).click();
   await page.waitForURL(/\/lines\/[^/]+$/);

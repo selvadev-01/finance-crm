@@ -115,8 +115,19 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
   await prisma.securityEvent.deleteMany({
     where: { organization: { name: taggedCode } },
   });
-  await prisma.line.deleteMany({ where: { code: taggedCode } });
-  await prisma.sector.deleteMany({ where: { code: taggedCode } });
+  // Sectors and lines inserted directly by a test carry a tagged code; those
+  // created over HTTP get an API-issued `SEC-…` / `LIN-…` code (US-010,
+  // US-011) and are matched by their tagged organization instead.
+  await prisma.line.deleteMany({
+    where: {
+      OR: [{ code: taggedCode }, { organization: { name: taggedCode } }],
+    },
+  });
+  await prisma.sector.deleteMany({
+    where: {
+      OR: [{ code: taggedCode }, { organization: { name: taggedCode } }],
+    },
+  });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });
 }
 

@@ -239,14 +239,14 @@ describe("createApiClient", () => {
     const call = createApiClient({ baseUrl: "http://api", fetch: fetchMock });
 
     const result = await call(organisationContract.createLine, {
-      body: { sectorId: "s1", code: "LN-07", name: "Line 7" },
+      body: { sectorId: "s1", name: "Line 7" },
     });
 
     expect(fetchMock).toHaveBeenCalledWith("http://api/api/lines", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sectorId: "s1", code: "LN-07", name: "Line 7" }),
+      body: JSON.stringify({ sectorId: "s1", name: "Line 7" }),
     });
     expect(result).toEqual({
       ok: true,
@@ -327,7 +327,7 @@ describe("createApiClient", () => {
       fetch: async () => new Response(JSON.stringify({}), { status: 200 }),
     });
     const created = await noReplay(organisationContract.createSector, {
-      body: { code: "S-1", name: "North" },
+      body: { name: "North" },
     });
     expect(created.ok).toBe(false);
   });

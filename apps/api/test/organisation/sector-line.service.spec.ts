@@ -54,12 +54,12 @@ describe('SectorService and LineService (US-010, US-011)', () => {
   }
 
   describe('sectors (US-010)', () => {
-    it('creates a sector in the caller’s organization and audits the CREATE', async () => {
+    it('creates a sector in the caller’s organization, issuing its code, and audits the CREATE', async () => {
       await withRollback(prisma, async (tx) => {
         const { context, sectors } = await world(tx);
-        const code = `SEC-${randomUUID().slice(0, 8)}`;
 
-        const sector = await sectors.create(context, { code, name: 'North' });
+        const sector = await sectors.create(context, { name: 'North' });
+        const code = 'SEC-00001';
 
         expect(sector).toEqual({
           id: expect.any(String),
@@ -79,6 +79,24 @@ describe('SectorService and LineService (US-010, US-011)', () => {
           actorUserId: context.userId,
           after: { code, name: 'North' },
         });
+      });
+    });
+
+    it('issues each sector the next code, per organization and ignoring codes it did not issue', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, sectors } = await world(tx);
+        // The fixture's own sector is `S-<uuid>`: not a code this issues, so
+        // numbering starts at 1 rather than being thrown by it.
+        const first = await sectors.create(context, { name: 'North' });
+        const second = await sectors.create(context, { name: 'South' });
+        expect([first.code, second.code]).toEqual(['SEC-00001', 'SEC-00002']);
+
+        const elsewhere = await createLine(tx);
+        const other = await sectors.create(
+          { ...context, organizationId: elsewhere.organization.id },
+          { name: 'Theirs' },
+        );
+        expect(other.code).toBe('SEC-00001');
       });
     });
 
@@ -159,19 +177,24 @@ describe('SectorService and LineService (US-010, US-011)', () => {
   });
 
   describe('lines (US-011)', () => {
-    it('creates a line in an active sector and audits the CREATE', async () => {
+    it('creates a line in an active sector, issuing its code, and audits the CREATE', async () => {
       await withRollback(prisma, async (tx) => {
         const { context, lines, sector } = await world(tx);
         const line = await lines.create(context, {
           sectorId: sector.id,
-          code: `LN-${randomUUID().slice(0, 8)}`,
           name: 'Line 9',
         });
         expect(line).toMatchObject({
           sectorId: sector.id,
+          code: 'LIN-00001',
           name: 'Line 9',
           isActive: true,
         });
+        const next = await lines.create(context, {
+          sectorId: sector.id,
+          name: 'Line 10',
+        });
+        expect(next.code).toBe('LIN-00002');
         expect(
           await tx.auditLog.count({
             where: { entityId: line.id, action: 'CREATE' },
@@ -188,11 +211,7 @@ describe('SectorService and LineService (US-010, US-011)', () => {
           data: { isActive: false },
         });
         await expect(
-          lines.create(context, {
-            sectorId: sector.id,
-            code: `LN-${randomUUID()}`,
-            name: 'x',
-          }),
+          lines.create(context, { sectorId: sector.id, name: 'x' }),
         ).rejects.toMatchObject({ code: 'SECTOR_INACTIVE', status: 422 });
       });
     });

@@ -3,7 +3,6 @@ import { z } from "zod";
 import { route } from "./route.js";
 import {
   calendarDateSchema,
-  codeSchema,
   errorSchema,
   idSchema,
   nameSchema,
@@ -123,7 +122,8 @@ export const organisationContract = {
     method: "POST",
     path: "/api/sectors",
     summary: "Create a sector (US-010)",
-    body: z.object({ code: codeSchema, name: nameSchema }),
+    /** The code is issued by the API — `SEC-00001` upward — never typed. */
+    body: z.object({ name: nameSchema }),
     responses: { 201: sectorSchema, ...errors, 409: errorSchema },
   }),
 
@@ -170,7 +170,8 @@ export const organisationContract = {
     method: "POST",
     path: "/api/lines",
     summary: "Create a line within an active sector (US-011)",
-    body: z.object({ sectorId: idSchema, code: codeSchema, name: nameSchema }),
+    /** The code is issued by the API — `LIN-00001` upward — never typed. */
+    body: z.object({ sectorId: idSchema, name: nameSchema }),
     responses: {
       201: lineSchema,
       ...errors,

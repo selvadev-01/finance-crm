@@ -126,9 +126,8 @@ describe('organisation (M03, e2e)', () => {
     it.each(['ADMIN', 'SUPER_ADMIN'] as const)(
       'an %s creates a sector: 201, only contract fields, audited with actor and IP',
       async (role) => {
-        const code = testCode('SEC');
         const response = await as(role)
-          .post('/api/sectors', { code, name: 'North' })
+          .post('/api/sectors', { name: 'North' })
           .expect(201);
 
         expect(Object.keys(response.body).sort()).toEqual([
@@ -138,7 +137,8 @@ describe('organisation (M03, e2e)', () => {
           'name',
         ]);
         expect(response.body).toMatchObject({
-          code,
+          // Issued by the API (US-010), never sent by the caller.
+          code: expect.stringMatching(/^SEC-\d{5,}$/),
           name: 'North',
           isActive: true,
         });
@@ -152,26 +152,31 @@ describe('organisation (M03, e2e)', () => {
       },
     );
 
-    it('a duplicate code is 409 SECTOR_CODE_TAKEN', async () => {
-      const code = testCode('SEC');
-      await as('ADMIN').post('/api/sectors', { code, name: 'One' }).expect(201);
-      const response = await as('ADMIN')
-        .post('/api/sectors', { code, name: 'Two' })
-        .expect(409);
-      expect(response.body).toMatchObject({
-        code: 'SECTOR_CODE_TAKEN',
-        details: [{ field: 'code', issue: 'is already in use' }],
-      });
+    it('issues consecutive codes, and ignores a code the caller tries to send', async () => {
+      const one = await as('ADMIN')
+        .post('/api/sectors', { name: 'One' })
+        .expect(201);
+      const two = await as('ADMIN')
+        // The contract strips what it does not declare, so a caller cannot
+        // choose its own code by reaching past the dialog.
+        .post('/api/sectors', { code: 'MINE', name: 'Two' })
+        .expect(201);
+
+      expect(two.body.code).not.toBe('MINE');
+      const [first, second] = [one, two].map((r) =>
+        Number(String(r.body.code).slice('SEC-'.length)),
+      );
+      expect(second).toBe(first! + 1);
     });
 
     it('an invalid body is 400 with a detail per field', async () => {
       const response = await as('ADMIN')
-        .post('/api/sectors', { code: 'has space', name: '' })
+        .post('/api/sectors', { name: '' })
         .expect(400);
       expect(response.body.code).toBe('VALIDATION_FAILED');
       expect(
         response.body.details.map((d: { field: string }) => d.field).sort(),
-      ).toEqual(['code', 'name']);
+      ).toEqual(['name']);
     });
 
     it('renames, and refuses to deactivate while a line is active (422)', async () => {
@@ -203,7 +208,7 @@ describe('organisation (M03, e2e)', () => {
 
     it('a Senior lists only the sector of their own line; an Admin lists the organization', async () => {
       const extra = await as('ADMIN')
-        .post('/api/sectors', { code: testCode('SEC'), name: 'Extra' })
+        .post('/api/sectors', { name: 'Extra' })
         .expect(201);
 
       const senior = await as('SENIOR').get('/api/sectors').expect(200);
@@ -234,7 +239,7 @@ describe('organisation (M03, e2e)', () => {
       }
 
       const created = await as('ADMIN')
-        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Closed' })
+        .post('/api/lines', { sectorId, name: 'Closed' })
         .expect(201);
       await as('ADMIN')
         .post(`/api/lines/${created.body.id}/deactivation`)
@@ -258,7 +263,7 @@ describe('organisation (M03, e2e)', () => {
       }
 
       const sibling = await as('ADMIN')
-        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Sibling' })
+        .post('/api/lines', { sectorId, name: 'Sibling' })
         .expect(201);
       await as('SENIOR').get(`/api/lines/${sibling.body.id}`).expect(404);
       await as('JUNIOR').get(`/api/lines/${sibling.body.id}`).expect(404);
@@ -268,7 +273,7 @@ describe('organisation (M03, e2e)', () => {
   describe('lines (US-011)', () => {
     it('creates a line, then deactivates it, and inactive lines are hidden unless asked for', async () => {
       const created = await as('ADMIN')
-        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line B' })
+        .post('/api/lines', { sectorId, name: 'Line B' })
         .expect(201);
       const id = created.body.id as string;
 
@@ -332,17 +337,13 @@ describe('organisation (M03, e2e)', () => {
 
     it('a line in an inactive sector is 422 SECTOR_INACTIVE', async () => {
       const sector = await as('ADMIN')
-        .post('/api/sectors', { code: testCode('SEC'), name: 'Closing' })
+        .post('/api/sectors', { name: 'Closing' })
         .expect(201);
       await as('ADMIN')
         .post(`/api/sectors/${sector.body.id}/deactivation`)
         .expect(200);
       const response = await as('ADMIN')
-        .post('/api/lines', {
-          sectorId: sector.body.id,
-          code: testCode('LN'),
-          name: 'Nope',
-        })
+        .post('/api/lines', { sectorId: sector.body.id, name: 'Nope' })
         .expect(422);
       expect(response.body.code).toBe('SECTOR_INACTIVE');
     });
@@ -351,7 +352,7 @@ describe('organisation (M03, e2e)', () => {
   describe('assignments (US-012, US-013)', () => {
     it('assigning a Junior effective today changes their scope on their next request', async () => {
       const line = await as('ADMIN')
-        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line C' })
+        .post('/api/lines', { sectorId, name: 'Line C' })
         .expect(201);
       const junior = await createTestStaff(prisma, {
         organizationId,
@@ -391,7 +392,7 @@ describe('organisation (M03, e2e)', () => {
 
     it('assigning a new Senior closes the incumbent over HTTP and records both audit entries', async () => {
       const line = await as('ADMIN')
-        .post('/api/lines', { sectorId, code: testCode('LN'), name: 'Line D' })
+        .post('/api/lines', { sectorId, name: 'Line D' })
         .expect(201);
       const first = await createTestStaff(prisma, {
         organizationId,

@@ -53,21 +53,21 @@ Role is single-valued — a person is a Senior or a Junior, not both. Multi-role
 
 ### `sector`
 
-| Column           | Type      | Null | Notes                                                              |
-| ---------------- | --------- | ---- | ------------------------------------------------------------------ |
-| `organizationId` | `String`  | No   | FK → `organization.id`                                             |
-| `code`           | `String`  | No   | Unique within the organization (`SEC-01`)                          |
-| `name`           | `String`  | No   |                                                                    |
-| `isActive`       | `Boolean` | No   | Default `true`. Inactive sectors keep history, accept no new lines |
+| Column           | Type      | Null | Notes                                                                        |
+| ---------------- | --------- | ---- | ---------------------------------------------------------------------------- |
+| `organizationId` | `String`  | No   | FK → `organization.id`                                                       |
+| `code`           | `String`  | No   | Unique within the organization (`SEC-00001`). Issued by the API; never typed |
+| `name`           | `String`  | No   |                                                                              |
+| `isActive`       | `Boolean` | No   | Default `true`. Inactive sectors keep history, accept no new lines           |
 
 ### `line`
 
-| Column     | Type      | Null | Notes                                                    |
-| ---------- | --------- | ---- | -------------------------------------------------------- |
-| `sectorId` | `String`  | No   | FK → `sector.id`                                         |
-| `code`     | `String`  | No   | Unique within the organization, not per sector (`LN-07`) |
-| `name`     | `String`  | No   |                                                          |
-| `isActive` | `Boolean` | No   | Default `true`                                           |
+| Column     | Type      | Null | Notes                                                                                        |
+| ---------- | --------- | ---- | -------------------------------------------------------------------------------------------- |
+| `sectorId` | `String`  | No   | FK → `sector.id`                                                                             |
+| `code`     | `String`  | No   | Unique within the organization, not per sector (`LIN-00001`). Issued by the API; never typed |
+| `name`     | `String`  | No   |                                                                                              |
+| `isActive` | `Boolean` | No   | Default `true`                                                                               |
 
 A line cannot be deactivated while it has `ACTIVE` accounts — _service-enforced_, since it needs a count.
 

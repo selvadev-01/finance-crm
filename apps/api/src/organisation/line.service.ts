@@ -17,6 +17,12 @@ import {
   pageArgs,
   toPage,
 } from '../platform/pagination.js';
+import {
+  CODE_ATTEMPTS,
+  issuedCodes,
+  LINE_CODE_PREFIX,
+  nextCode,
+} from './codes.js';
 import { isUniqueViolation } from './prisma-errors.js';
 
 const lineFields = {
@@ -63,10 +69,32 @@ export class LineService {
     return this.getInScope(context, lineId);
   }
 
-  /** US-011: a line belongs to an active sector the caller can see. */
-  create(
+  /**
+   * US-011: a line belongs to an active sector the caller can see. Its code is
+   * issued, not typed — `LIN-00001` upward within the organization, settled by
+   * the unique index and retried when two Admins pick the same number at once
+   * (see `SectorService.create`).
+   */
+  async create(
     context: RequestContext,
-    input: { sectorId: string; code: string; name: string },
+    input: { sectorId: string; name: string },
+  ): Promise<Line> {
+    for (let attempt = 1; attempt <= CODE_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.createOnce(context, input);
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+    throw new ConflictError(
+      'LINE_CODE_TAKEN',
+      'Another line took the next code. Try again.',
+    );
+  }
+
+  private createOnce(
+    context: RequestContext,
+    input: { sectorId: string; name: string },
   ): Promise<Line> {
     return this.database.transaction(async (tx) => {
       const sector = foundInScope(
@@ -84,28 +112,23 @@ export class LineService {
         );
       }
 
-      let line: Line;
-      try {
-        line = await tx.line.create({
-          data: {
-            organizationId: context.organizationId,
-            sectorId: sector.id,
-            code: input.code,
-            name: input.name,
-            createdByUserId: context.userId,
-          },
-          select: lineFields,
-        });
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new ConflictError(
-            'LINE_CODE_TAKEN',
-            `Line code ${input.code} is already in use`,
-            [{ field: 'code', issue: 'is already in use' }],
-          );
-        }
-        throw error;
-      }
+      const used = await tx.line.findMany({
+        where: {
+          organizationId: context.organizationId,
+          code: issuedCodes(LINE_CODE_PREFIX),
+        },
+        select: { code: true },
+      });
+      const line = await tx.line.create({
+        data: {
+          organizationId: context.organizationId,
+          sectorId: sector.id,
+          code: nextCode(LINE_CODE_PREFIX, used),
+          name: input.name,
+          createdByUserId: context.userId,
+        },
+        select: lineFields,
+      });
       await this.audit.record(context, {
         action: 'CREATE',
         entityTable: 'line',

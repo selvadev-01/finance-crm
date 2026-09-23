@@ -147,7 +147,7 @@ test.describe.serial("regression: a business day in Chennai", () => {
     }
     for (const key of Object.keys(data.lines) as LineKey[]) {
       const line = data.lines[key];
-      made.lines[key] = await createLine(page, line, data.sectors[line.sector]);
+      made.lines[key] = await createLine(page, line, made.sectors[line.sector]);
     }
 
     // US-012, US-013: Murugan and Selvi work Royapuram from today.

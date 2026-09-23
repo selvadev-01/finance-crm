@@ -12,6 +12,12 @@ import {
   pageArgs,
   toPage,
 } from '../platform/pagination.js';
+import {
+  CODE_ATTEMPTS,
+  issuedCodes,
+  nextCode,
+  SECTOR_CODE_PREFIX,
+} from './codes.js';
 import { isUniqueViolation } from './prisma-errors.js';
 
 const sectorFields = {
@@ -54,32 +60,49 @@ export class SectorService {
     return this.getInScope(context, sectorId);
   }
 
-  create(
+  /**
+   * US-010. The code is issued, not typed: `SEC-00001` upward within the
+   * organization. Two Admins creating at the same moment can read the same
+   * highest code and pick the same number; the per-organization unique index
+   * settles it and the loser retries. The retry is around the transaction, not
+   * inside it — a unique violation aborts the PostgreSQL transaction, so
+   * nothing more can be done within it.
+   */
+  async create(
     context: RequestContext,
-    input: { code: string; name: string },
+    input: { name: string },
   ): Promise<Sector> {
-    return this.database.transaction(async (tx) => {
-      let sector: Sector;
+    for (let attempt = 1; attempt <= CODE_ATTEMPTS; attempt += 1) {
       try {
-        sector = await tx.sector.create({
-          data: {
-            organizationId: context.organizationId,
-            code: input.code,
-            name: input.name,
-            createdByUserId: context.userId,
-          },
-          select: sectorFields,
-        });
+        return await this.createOnce(context, input.name);
       } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new ConflictError(
-            'SECTOR_CODE_TAKEN',
-            `Sector code ${input.code} is already in use`,
-            [{ field: 'code', issue: 'is already in use' }],
-          );
-        }
-        throw error;
+        if (!isUniqueViolation(error)) throw error;
       }
+    }
+    throw new ConflictError(
+      'SECTOR_CODE_TAKEN',
+      'Another sector took the next code. Try again.',
+    );
+  }
+
+  private createOnce(context: RequestContext, name: string): Promise<Sector> {
+    return this.database.transaction(async (tx) => {
+      const used = await tx.sector.findMany({
+        where: {
+          organizationId: context.organizationId,
+          code: issuedCodes(SECTOR_CODE_PREFIX),
+        },
+        select: { code: true },
+      });
+      const sector = await tx.sector.create({
+        data: {
+          organizationId: context.organizationId,
+          code: nextCode(SECTOR_CODE_PREFIX, used),
+          name,
+          createdByUserId: context.userId,
+        },
+        select: sectorFields,
+      });
       await this.audit.record(context, {
         action: 'CREATE',
         entityTable: 'sector',

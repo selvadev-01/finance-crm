@@ -119,7 +119,13 @@ In `apps/api/src/organisation/`, served through the contract in `packages/contra
 | `POST /api/lines/:lineId/senior-assignment` | `assignment.assignSenior` | see below                                                                      |
 | `POST /api/lines/:lineId/junior-assignment` | `assignment.moveJunior`   | see below                                                                      |
 
-Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit entry in the same transaction (M13). Deactivating something already inactive changes and audits nothing. Codes are entered by the Admin and immutable; only names change.
+Lists are cursor-paginated. Every write records a `CREATE` or `UPDATE` audit entry in the same transaction (M13). Deactivating something already inactive changes and audits nothing.
+
+**Codes are issued, not entered** (2026-09-23). A sector gets `SEC-00001` and a line `LIN-00001`, counting up within the organization: `apps/api/src/organisation/codes.ts` reads the highest code already issued there and adds one. `POST /api/sectors` takes only a name, `POST /api/lines` a sector and a name, and the contract strips anything else, so a caller cannot choose its own code by reaching past the dialog. The shape is the customer code's (`CUS-00417`), five digits growing past them rather than wrapping; codes an organization holds from elsewhere — a seed, an import, a test fixture — do not match the prefix and are ignored, so its issued numbering still starts at 1.
+
+Two Admins creating at the same moment can read the same highest code and pick the same number. The per-organization unique index is the arbiter and the loser retries the whole transaction, five times before `409 SECTOR_CODE_TAKEN` / `409 LINE_CODE_TAKEN` — a unique violation aborts the PostgreSQL transaction, so the retry cannot be inside it. Those two refusals now mean "try again", never "that code is taken": nobody can take one.
+
+Codes stay immutable; only names change. The decision was the permanence: a code can never be edited, so a typo at the dialog would outlive everyone who saw it made.
 
 **Assignments.** `effectiveFrom` is required. The outgoing rows — the staff member's own open assignment, and for a Senior assignment the line's open Senior — are closed with `effectiveTo = effectiveFrom − 1 day` and the new row opened, in one transaction, with nothing deleted. So "effective today" closes the incumbent yesterday (US-012), and "effective tomorrow" closes the old line today (US-013). Collections are never touched; a test moves a Junior with 400 collections and proves Line 3's count and total unchanged.
 

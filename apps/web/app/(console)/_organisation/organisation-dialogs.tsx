@@ -22,14 +22,15 @@ import { useState } from "react";
 import { apiWrite } from "../../../lib/api-write";
 import { applyWriteFailure } from "../../../lib/form-errors";
 
-const CODE_HINT = "Letters, digits and hyphens. It can’t be changed later.";
-
 /**
  * The dialogs behind every sector and line write (US-010, US-011). Each is
  * validated against the contract's own body schema before it is sent, keeps
  * itself open while its request is pending (so a double click or an Escape
  * cannot leave the screen unsure whether the change happened), and shows the
  * API's refusals inside the dialog, where the person can still act on them.
+ *
+ * Codes are not asked for: the API issues them (`SEC-00001`, `LIN-00001`) and
+ * they can never be changed, so a typo would be permanent.
  */
 export function CreateSectorDialog({
   onClose,
@@ -40,7 +41,7 @@ export function CreateSectorDialog({
   onCreated: (sector: Sector) => void;
 }) {
   const form = useZodForm(org.createSector.body, {
-    defaultValues: { code: "", name: "" },
+    defaultValues: { name: "" },
   });
 
   return (
@@ -48,23 +49,20 @@ export function CreateSectorDialog({
       form={form}
       onClose={onClose}
       title="New sector"
-      description="A sector groups lines by area."
+      description="A sector groups lines by area. Its code is issued automatically."
       submitLabel="Create sector"
       pendingLabel="Creating…"
       onSubmit={async (body) => {
         const result = await apiWrite(org.createSector, { body });
         if (!result.ok) {
           return applyWriteFailure(form.setError, result, {
-            fields: ["code", "name"],
+            fields: ["name"],
           });
         }
         toast({ title: `Sector ${result.body.code} created` });
         onCreated(result.body);
       }}
     >
-      <FormField name="code" label="Code" hint={CODE_HINT}>
-        <Input autoComplete="off" maxLength={80} />
-      </FormField>
       <FormField name="name" label="Name">
         <Input autoComplete="off" maxLength={120} />
       </FormField>
@@ -87,7 +85,7 @@ export function CreateLineDialog({
   sectorId?: string;
 }) {
   const form = useZodForm(org.createLine.body, {
-    defaultValues: { sectorId: sectorId ?? "", code: "", name: "" },
+    defaultValues: { sectorId: sectorId ?? "", name: "" },
   });
 
   return (
@@ -95,14 +93,14 @@ export function CreateLineDialog({
       form={form}
       onClose={onClose}
       title="New line"
-      description="A line is a collection route within one sector."
+      description="A line is a collection route within one sector. Its code is issued automatically."
       submitLabel="Create line"
       pendingLabel="Creating…"
       onSubmit={async (body) => {
         const result = await apiWrite(org.createLine, { body });
         if (!result.ok) {
           return applyWriteFailure(form.setError, result, {
-            fields: ["sectorId", "code", "name"],
+            fields: ["sectorId", "name"],
           });
         }
         toast({ title: `Line ${result.body.code} created` });
@@ -120,9 +118,6 @@ export function CreateLineDialog({
             </option>
           ))}
         </Select>
-      </FormField>
-      <FormField name="code" label="Code" hint={CODE_HINT}>
-        <Input autoComplete="off" maxLength={80} />
       </FormField>
       <FormField name="name" label="Name">
         <Input autoComplete="off" maxLength={120} />
