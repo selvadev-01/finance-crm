@@ -30,9 +30,20 @@ const KEEP_SYNCED_MS = 24 * 60 * 60 * 1000;
 
 let database: Promise<FieldDb> | null = null;
 
-/** One open database per page. */
+/**
+ * One open database per page. When a newer app version needs to upgrade it,
+ * the connection closes so the upgrade is not blocked, and the next call
+ * opens it afresh.
+ */
 export function fieldDb(): Promise<FieldDb> {
-  database ??= openFieldDb();
+  database ??= openFieldDb(undefined, {
+    onClosedForUpgrade: () => {
+      database = null;
+    },
+  }).catch((error: unknown) => {
+    database = null;
+    throw error;
+  });
   return database;
 }
 

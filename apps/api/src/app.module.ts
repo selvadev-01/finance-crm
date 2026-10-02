@@ -4,6 +4,7 @@ import { AccessModule } from './access/access.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { CalendarModule } from './calendar/calendar.module.js';
+import { BooksModule } from './books/books.module.js';
 import { CashModule } from './cash/cash.module.js';
 import { CollectionsModule } from './collections/collections.module.js';
 import { RasiAuthModule } from './auth/auth.module.js';
@@ -42,6 +43,7 @@ import { SettingsModule } from './settings/settings.module.js';
     CustomersModule,
     AccountsModule,
     CollectionsModule,
+    BooksModule,
     CashModule,
     DashboardsModule,
     ReportsModule,

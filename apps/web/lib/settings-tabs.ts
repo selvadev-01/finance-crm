@@ -1,4 +1,5 @@
 import type { TabLink } from "../components/tab-links";
+import { BOOKS_SIMPLE } from "./books-mode";
 import { canManageOrganisation, type Role, seesSettings } from "./roles";
 
 const everyone = () => true;
@@ -38,6 +39,24 @@ export const SETTINGS_TABS: SettingsTab[] = [
   {
     href: "/settings/security",
     label: "Refused attempts",
+    shownTo: canManageOrganisation,
+  },
+  // Books (ADR-0018): Admins read them; the Super Admin manages them.
+  {
+    href: "/settings/expense-categories",
+    label: "Expense types",
+    shownTo: canManageOrganisation,
+  },
+  // Hidden in simple Books (lib/books-mode.ts), not removed.
+  {
+    href: "/settings/bank-accounts",
+    label: "Bank accounts",
+    shownTo: (role: Role) => !BOOKS_SIMPLE && canManageOrganisation(role),
+  },
+  // M14: whether the scheduled jobs ran. Admin and above.
+  {
+    href: "/settings/jobs",
+    label: "Scheduled jobs",
     shownTo: canManageOrganisation,
   },
 ];

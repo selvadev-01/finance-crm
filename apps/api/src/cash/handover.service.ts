@@ -95,7 +95,15 @@ export class HandoverService {
       });
       for (const group of groups) {
         const businessDate = fromUtcMidnight(group.businessDate);
-        const recorded = toMoney((group._sum.amount ?? 0).toString());
+        const expenses = await this.fieldExpenses(
+          tx,
+          context,
+          group.lineId,
+          businessDate,
+        );
+        const recorded = toMoney((group._sum.amount ?? 0).toString()).minus(
+          expenses,
+        );
         const { toHandOver, pending } = await this.remaining(
           tx,
           context,
@@ -115,6 +123,7 @@ export class HandoverService {
           businessDate,
           hop: 'JUNIOR_TO_SENIOR',
           toHandOver: toHandOver.toFixed(2),
+          expenses: expenses.toFixed(2),
           receiver: senior,
           pending,
         });
@@ -131,7 +140,15 @@ export class HandoverService {
       });
       for (const day of days) {
         const businessDate = fromUtcMidnight(day.businessDate);
-        const received = await this.receivedBySenior(tx, context, day.id);
+        const expenses = await this.fieldExpenses(
+          tx,
+          context,
+          day.lineId,
+          businessDate,
+        );
+        const received = (
+          await this.receivedBySenior(tx, context, day.id)
+        ).minus(expenses);
         const { toHandOver, pending } = await this.remaining(
           tx,
           context,
@@ -146,6 +163,7 @@ export class HandoverService {
           businessDate,
           hop: 'SENIOR_TO_OFFICE',
           toHandOver: toHandOver.toFixed(2),
+          expenses: expenses.toFixed(2),
           receiver: null,
           pending,
         });
@@ -233,6 +251,10 @@ export class HandoverService {
               'You have no collections recorded on this line for that day',
             );
           }
+          // ADR-0018: what an approved field expense paid for is not owed.
+          recorded = recorded.minus(
+            await this.fieldExpenses(tx, context, input.lineId, businessDate),
+          );
         } else {
           // A Senior hands over only their own line's cash.
           foundInScope(
@@ -256,7 +278,9 @@ export class HandoverService {
             );
           }
           toUserId = receiver.userId;
-          recorded = await this.receivedBySenior(tx, context, day.id);
+          recorded = (await this.receivedBySenior(tx, context, day.id)).minus(
+            await this.fieldExpenses(tx, context, input.lineId, businessDate),
+          );
         }
 
         const { toHandOver, pending } = await this.remaining(
@@ -576,6 +600,30 @@ export class HandoverService {
         ? (await this.views.toViews(tx, context, [waiting]))[0]!
         : null,
     };
+  }
+
+  /**
+   * Σ the caller's approved field expenses on a line's day (ADR-0018): cash
+   * they spent on the round with approval, so no longer theirs to hand over.
+   */
+  private async fieldExpenses(
+    tx: Tx,
+    context: RequestContext,
+    lineId: string,
+    businessDate: CalendarDate,
+  ) {
+    const sum = await tx.expense.aggregate({
+      where: {
+        organizationId: context.organizationId,
+        paidFrom: 'CASH_IN_HAND',
+        status: 'APPROVED',
+        spenderUserId: context.userId,
+        lineId,
+        businessDate: toUtcMidnight(businessDate),
+      },
+      _sum: { amount: true },
+    });
+    return toMoney((sum._sum.amount ?? 0).toString());
   }
 
   /** Σ declared of the Juniors' handovers this Senior acknowledged for the day. */

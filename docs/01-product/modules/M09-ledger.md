@@ -78,6 +78,15 @@ Using the reference figures: `A = 10,000`, `I = 8,500`, `P = 1,500`.
 | `WRITE_OFF_LOSS`  | 8,415.00 |          |
 | `LOAN_RECEIVABLE` |          | 9,900.00 |
 
+**Capital ₹50,000 put into the business** (US-032, as built 2026-09-24) — sourced to a `capital_entry` (M08), recorded by a Super Admin:
+
+| Ledger account   |     Debit |    Credit |
+| ---------------- | --------: | --------: |
+| `CASH_AT_OFFICE` | 50,000.00 |           |
+| `CAPITAL`        |           | 50,000.00 |
+
+After one disbursement of `I = 1,700`, office cash goes from `−1,700.00` to `48,300.00`. The transaction type is `CAPITAL`, so the dashboards' invested, collected and profit figures — which read `DISBURSEMENT`, `COLLECTION` and `ADJUSTMENT` postings only — never count it.
+
 `WRITE_OFF_LOSS` is a sixth business-wide account, one per organization and **debit-normal** like the expense it is (migrations `ledger_write_off_loss` and `constraints_ledger_write_off_loss`). The loss is `O − U`: what the business actually put out and did not get back. Profit already earned on what _was_ collected stays earned — the ₹15 above.
 
 **Only `WRITTEN_OFF` posts** (decided 2026-09-20). `DEFAULTED` stops collection and leaves the receivable standing, because the money is still owed and may still be recovered; a defaulted account can be written off later.
@@ -141,7 +150,9 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 
 ## As built
 
-`apps/api/src/ledger/ledger.service.ts` is the only writer of ledger rows. It has no controller, because postings are system-only.
+`apps/api/src/ledger/ledger.service.ts` is the only writer of ledger rows. Postings are system-only, so the module's one controller only reads.
+
+**Trial balance** (2026-09-24): `GET /api/ledger/trial-balance?date=` (`ledger.view`, Admin and above), in `trial-balance.service.ts`. It is read from the **entries**, never the `balance` caches, up to a business date (today by default). Each ledger account's debits and credits net to one balance on whichever side it falls. Cash in hand is one row per staff member, named. Every other type is one row, and the loan receivables row carries its account count. The totals of the two sides are compared, and `balanced` false is reported on screen as a fault, never adjusted. A Senior gets no rows (`seesOrganizationLedger`). The console shows it at `/reports/trial-balance`, listed on the reports index for Admins only. Worked example in `test/ledger/trial-balance.service.spec.ts`: 5,300.00 on each side, 2,000.00 as of the day before, a drifted cache ignored, organizations kept apart. **Postings** (2026-09-24): `GET /api/ledger/transactions?from=&to=&type=` (`ledger.view`), in `ledger-transactions.service.ts` — M09's "view transactions and entries". Every posting over a date range, newest first, paged, optionally one transaction type, each with its entries debits first (which account, whose cash, which loan, how much) and its amount. A transaction carries no organization, so it belongs to the organization whose ledger accounts its entries post to. The console shows it at `/reports/trial-balance/postings`, linked from the trial balance for that date's month, with each posting linked to the account or collection that caused it. Proven in `test/ledger/ledger-transactions.service.spec.ts`: the three postings of the worked example with their entries, the type and date filters, paging without repeats, organizations kept apart.
 
 - **`post(context, posting)`** refuses to run outside a `Database.transaction`. It drops zero lines, refuses negative ones, writes the transaction and its entries, and moves each account's `balance` cache, signed by its normal balance. Balancing is left to the deferred trigger (ADR-0006).
 - **`organizationAccount(organizationId, type)`** returns the organization's `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT` or `EARNED_PROFIT` account. It creates one with `INSERT … ON CONFLICT DO NOTHING` against the one-per-organization partial index, so concurrent first uses neither fail nor abort the caller's transaction.
@@ -158,9 +169,22 @@ Seniors cannot read the ledger: cash and capital account balances would let them
 Posting so far:
 
 - **Disbursement** (M05, US-032).
-- **The mid-term catch-up** (US-030a): one COLLECTION transaction sourced to the `account_loan`, debiting `CASH_AT_OFFICE`, with no collection row behind it. Collection, adjustment, handover and write-off postings arrive with their modules.
+- **The mid-term catch-up** (US-030a): one COLLECTION transaction sourced to the `account_loan`, debiting `CASH_AT_OFFICE`, with no collection row behind it.
+- **Collection and adjustment** (M07), **handover** (M08), **write-off** (US-035) and **capital** (M08, US-032).
 
-`CASH_AT_OFFICE` has no funding posting yet, so its balance goes negative as accounts are disbursed. A `CAPITAL` posting that funds the office has no story yet.
+**Capital funds office cash** (US-032, 2026-09-24): `CapitalService` in M08 posts `CAPITAL` transactions, debit `CASH_AT_OFFICE`, credit `CAPITAL`, with its `capital_entry` in the same transaction. Since 2026-10-02 a day-one disbursement is refused when office cash holds less than its invested amount (`INSUFFICIENT_CASH_IN_HAND`, [M05](M05-accounts.md)), so office cash goes negative only through expenses, drawings or mid-term accounts entered before capital; Books flags it. Still no human posts a ledger transaction directly: capital, like a disbursement, is a business event whose module posts it.
+
+**Books (ADR-0018, from 2026-09-25).** Four more account types — `EXPENSE` (one per expense category), `BANK` (one per bank account), `OTHER_INCOME` and `OWNER_DRAWINGS` — and five transaction types for the business's own money: `EXPENSE`, `BANK_TRANSFER`, `DRAWINGS`, `OTHER_INCOME`, `JOURNAL`. `LedgerService.expenseAccount` and `bankAccount` create the keyed accounts on first use, conflict-safe like `cashInHand`. The trial balance and postings name each category and bank. Slices 1 and 2 are built: categories, banks and the ledger shape; then `BooksMoneyService` (`src/books/books-money.service.ts`), which records an office expense (debit the category's `EXPENSE`, credit `CASH_AT_OFFICE` or the `BANK`), a bank transfer, other income (debit the place, credit `OTHER_INCOME`) and a drawing (debit `OWNER_DRAWINGS`, credit the place), each with its source row and audit entry in one transaction. So since slice 2 **people do record the business's own money** — but always as a typed business event whose module posts it, never as a free-form posting; the free-form journal is slice 5, the Super Admin's only, and barred from the accounts reconciliation checks. Slice 3 posts approved field expenses (debit `EXPENSE`, credit the spender's `CASH_IN_HAND`). Status is in the [backlog](../../06-delivery/backlog.md).
+
+**Manual journal (slice 5, built 2026-10-01).** The one free-form posting, and the Super Admin's alone (`journal.post`): `POST /api/journal-entries` writes a `journal_entry` header and a `JOURNAL` transaction of 2–20 balanced lines. The lines may name office cash, a bank, an expense category, other income, capital, drawings or write-off loss — **never** `CASH_IN_HAND`, `LOAN_RECEIVABLE`, `UNEARNED_PROFIT` or `EARNED_PROFIT`, which the reconciliation checks against the loan book and the collections; the contract cannot even express them. Those change only through the business event that keeps the loan book in step (a correction, a handover, a write-off).
+
+**Statements (ADR-0018 slice 4, built 2026-10-01).** `StatementsService` reads the entries, as the trial balance does, so every statement agrees with it to the paisa:
+
+- **Profit and loss** over a range: credits less debits on `EARNED_PROFIT` and `OTHER_INCOME`, less debits net on each `EXPENSE` and on `WRITE_OFF_LOSS`. A disbursement is not on it — it turns cash into a receivable — and nor is the principal inside a collection.
+- **Balance sheet** at a date: `CASH_AT_OFFICE + BANK + CASH_IN_HAND + LOAN_RECEIVABLE − UNEARNED_PROFIT` against `CAPITAL − OWNER_DRAWINGS + retained profit`, where retained profit is the profit and loss since the books began. Because every posting balances (ADR-0006) the two are equal; `balanced: false` is a defect, as on the trial balance.
+- **Account statement** for any one ledger account, and the **cash book** for office cash or a bank: the opening balance, each entry with the running balance on the account's normal side, and the closing balance. Reading never creates a ledger account; a place nothing has moved through has an empty book.
+
+Each has an export (Excel, PDF, CSV), and so now does the trial balance; every export is an `EXPORT` audit entry. Trial balance rows that are one account carry its id and open its statement.
 
 **Reconciliation** (`reconciliation.service.ts`, US-095): for one organization, every ledger account's balance is recomputed from its entries. A cache that disagrees is re-checked under its row lock, rebuilt, and audited as a system action. Every disbursed account's `collectedAmount` is compared with `A − receivable`: a mismatch is audited and reported, and **the account is not changed**, because its balance drives the schedule and completion. `UNEARNED_PROFIT` is compared with the sum of `unearnedProfit` over accounts. Mismatches log at error level; the alert waits for M10.
 

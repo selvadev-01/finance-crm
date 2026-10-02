@@ -127,6 +127,7 @@ const loan = (
   profitAmount: null,
   dailyAmount: "400.00",
   termDays: 30,
+  collectionFrequency: "DAILY",
   disbursementDate: "2026-08-20",
   firstCollectionDate: "2026-08-21",
   targetCompletionDate: "2026-09-27",
@@ -335,6 +336,7 @@ const answers: ApiAnswers = {
           businessDate: TODAY,
           hop: "JUNIOR_TO_SENIOR",
           toHandOver: "8450.00",
+          expenses: "0.00",
           receiver: { userId: "user-murugan", name: "Murugan" },
           pending: null,
         },
@@ -365,10 +367,22 @@ async function noSidewaysScroll(page: Page, where: string): Promise<void> {
   expect(overflows, `${where} scrolls sideways at 360px`).toBe(false);
 }
 
-const tab = (page: Page, name: string) =>
+const tab = (page: Page, name: string | RegExp) =>
   page
     .getByRole("navigation", { name: "Field app" })
     .getByRole("link", { name });
+
+/**
+ * Customers and Collections are reached from Home's menu tiles since the
+ * bottom bar became J-01's Home, Route, Cash, Sync, Profile (2026-10-02).
+ */
+async function openFromMenu(page: Page, name: "Customers" | "Collections") {
+  await tab(page, "Home").click();
+  await page
+    .getByRole("navigation", { name: "Menu" })
+    .getByRole("link", { name })
+    .click();
+}
 
 test.describe("the Junior's field app at 360px", () => {
   test("J-01: the route is a native home screen — progress, the line, customers to visit, five tabs", async ({
@@ -387,13 +401,46 @@ test.describe("the Junior's field app at 360px", () => {
     await expect(page.getByTestId("customer-CUS-00587")).toContainText(
       "2 accounts",
     );
-    for (const name of ["Route", "Customers", "Collections", "Cash", "Profile"])
+    for (const name of ["Home", "Route", "Cash", /^Sync/, "Profile"])
       await expect(tab(page, name)).toBeVisible();
-    await expect(tab(page, "Route")).toHaveAttribute("aria-current", "page");
+    await expect(tab(page, "Home")).toHaveAttribute("aria-current", "page");
     await expect(
       page.getByRole("button", { name: /Online, 0 not sent/ }),
     ).toContainText("All sent");
     await noSidewaysScroll(page, "the route");
+  });
+
+  test("J-01 home (2026-10-02): the next door is one tap, and what is still on the phone is said plainly", async ({
+    page,
+  }) => {
+    await openFieldApp(page);
+
+    const progress = page.getByRole("region", { name: "Today’s progress" });
+    await expect(progress.getByText("0/3")).toBeVisible();
+    const menu = page.getByRole("navigation", { name: "Menu" });
+    for (const name of ["Hand over", "Expense", "Sync", "Collections"])
+      await expect(menu.getByRole("link", { name })).toBeVisible();
+
+    // The first customer still to visit, in the Senior's order.
+    await page
+      .getByRole("link", { name: /^Next: Lakshmi Ammal · ₹500$/ })
+      .click();
+    const form = page.getByTestId("collect-ACC-2026-0091");
+    await form.getByRole("button", { name: /^Confirm/ }).click();
+
+    await expect(page.getByTestId("route")).toBeVisible();
+    await expect(progress.getByText("1/3")).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: "Sync, 1 not sent" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("1 collection is safe on this phone."),
+    ).toBeVisible();
+    // The next door has moved on to the next customer.
+    await expect(
+      page.getByRole("link", { name: /^Next: Lakshmi Ammal/ }),
+    ).toHaveCount(0);
+    await noSidewaysScroll(page, "the route home");
   });
 
   test("search and the To visit / Done filter narrow the list", async ({
@@ -504,7 +551,7 @@ test.describe("the Junior's field app at 360px", () => {
       .click();
     await expect(page.getByTestId("route")).toBeVisible();
 
-    await tab(page, "Collections").click();
+    await openFromMenu(page, "Collections");
     const recorded = page.getByTestId("collection-ACC-2026-0091");
     await expect(recorded).toContainText("Lakshmi Ammal");
     await expect(recorded).toContainText("As expected");
@@ -575,7 +622,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Collections").click();
+    await openFromMenu(page, "Collections");
     await page.getByRole("button", { name: "Show earlier days" }).click();
 
     const earlier = page.getByTestId("earlier-collections");
@@ -599,7 +646,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
 
     await expect(page.getByText("₹13,000.00")).toBeVisible();
     await expect(page.getByTestId("portfolio-CUS-00412")).toContainText(
@@ -625,7 +672,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
     await page.getByTestId("portfolio-CUS-00587").click();
 
     const summary = page.getByTestId("portfolio-summary");
@@ -678,7 +725,7 @@ test.describe("the Junior's field app at 360px", () => {
         },
       },
     });
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
 
     const cards = page.locator('[data-testid^="portfolio-CUS-"]');
     await expect(cards).toHaveCount(20);
@@ -742,5 +789,143 @@ test.describe("the Junior's field app at 360px", () => {
     );
     await page.getByRole("button", { name: "Back to route" }).click();
     await expect(page.getByTestId("route")).toBeVisible();
+  });
+});
+
+test.describe("J-11 field expense (ADR-0018) at 360px", () => {
+  const fieldExpense = {
+    id: "exp-1",
+    category: { id: "cat-fuel", name: "Fuel & travel" },
+    amount: "50.00",
+    businessDate: TODAY,
+    note: "Petrol for the round",
+    paidFrom: "CASH_IN_HAND",
+    from: { bankAccountId: null, name: "Ravi's cash" },
+    spender: { userId: "user-junior", name: "Ravi" },
+    line: { id: "line-7", name: "Market Road" },
+    status: "PENDING",
+    decidedBy: null,
+    decidedAt: null,
+    decisionNote: null,
+    recordedBy: { userId: "user-junior", name: "Ravi" },
+    createdAt: "2026-09-24T05:00:00.000Z",
+    canDecide: false,
+  };
+  const expenseAnswers: ApiAnswers = {
+    "/api/expense-categories": {
+      json: {
+        data: [{ id: "cat-fuel", name: "Fuel & travel", isActive: true }],
+      },
+    },
+    "/api/expenses": {
+      json: {
+        data: [
+          {
+            ...fieldExpense,
+            id: "exp-0",
+            amount: "30.00",
+            status: "REJECTED",
+            decisionNote: "Tea is not a business expense",
+          },
+        ],
+        nextCursor: null,
+        hasMore: false,
+        total: 1,
+        approvedTotal: "0.00",
+      },
+    },
+  };
+
+  test("Cash opens the expense screen; the Junior sends petrol for approval and sees why an earlier one was rejected", async ({
+    page,
+  }) => {
+    await openFieldApp(page, expenseAnswers);
+    // After the fake API, so this route wins for the write.
+    const sent: unknown[] = [];
+    await page.route("**/api/expenses/field", async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 201, json: fieldExpense });
+    });
+    await tab(page, "Cash").click();
+    await page
+      .getByRole("button", {
+        name: "Spent from the cash? Record a field expense",
+      })
+      .click();
+    await expect(page.getByTestId("expense")).toBeVisible();
+
+    const mine = page.getByRole("list", { name: "Your field expenses" });
+    await expect(mine.getByText("Rejected — hand it over")).toBeVisible();
+    await expect(mine.getByText("Tea is not a business expense")).toBeVisible();
+
+    await page
+      .getByRole("radiogroup", { name: "Expense type" })
+      .getByRole("radio", { name: "Fuel & travel" })
+      .click();
+    await page.getByRole("button", { name: "₹50" }).click();
+    await expect(page.getByLabel("Amount (₹)")).toHaveValue("50");
+    // The handover after approval, from today's cash position.
+    const preview = page.getByRole("note", { name: "Handover after approval" });
+    await expect(preview.getByText("₹8,450.00")).toBeVisible();
+    await expect(preview.getByText("₹8,400.00")).toBeVisible();
+    await page.getByLabel("Note").fill("Petrol for the round");
+    await page.getByRole("button", { name: "Send for approval" }).click();
+    await expect(
+      page.getByText("₹50.00 for fuel & travel sent for approval."),
+    ).toBeVisible();
+    expect(sent).toEqual([
+      { categoryId: "cat-fuel", amount: "50", note: "Petrol for the round" },
+    ]);
+    await noSidewaysScroll(page, "the expense screen");
+  });
+
+  test("an amount that is not money is refused on the phone and nothing is sent", async ({
+    page,
+  }) => {
+    await openFieldApp(page, expenseAnswers);
+    let posts = 0;
+    await page.route("**/api/expenses/field", async (route) => {
+      posts += 1;
+      await route.fulfill({ status: 201, json: fieldExpense });
+    });
+    await page.goto("/route#expense");
+    await page.getByRole("radio", { name: "Fuel & travel" }).click();
+    await page.getByLabel("Amount (₹)").fill("fifty");
+    await page.getByLabel("Note").fill("Petrol");
+    await page.getByRole("button", { name: "Send for approval" }).click();
+    await expect(
+      page.getByText("Enter the amount in rupees, like 50 or 49.50."),
+    ).toBeVisible();
+    expect(posts).toBe(0);
+  });
+
+  test("an approved expense shows as taken off what the Junior hands over", async ({
+    page,
+  }) => {
+    await openFieldApp(page, {
+      "/api/cash": {
+        json: {
+          items: [
+            {
+              lineId: "line-7",
+              lineName: "Market Road",
+              businessDate: TODAY,
+              hop: "JUNIOR_TO_SENIOR",
+              toHandOver: "8400.00",
+              expenses: "50.00",
+              receiver: { userId: "user-murugan", name: "Murugan" },
+              pending: null,
+            },
+          ],
+          officeReceivers: [],
+          recent: [],
+        },
+      },
+    });
+    await tab(page, "Cash").click();
+    await expect(
+      page.getByText("₹50.00 approved expenses taken off"),
+    ).toBeVisible();
+    await expect(page.getByText("₹8,400.00", { exact: true })).toBeVisible();
   });
 });

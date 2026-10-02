@@ -28,11 +28,13 @@ import {
   foundInScope,
   inScope,
 } from '../access/scope.js';
+import { roleHasPermission } from '../access/permissions.js';
 import { AuditWriter } from '../audit/audit.writer.js';
 import { LedgerService } from '../ledger/ledger.service.js';
+import { EventNotices } from '../notifications/event-notices.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
-import { DomainError } from '../platform/errors/errors.js';
+import { AuthorizationError, DomainError } from '../platform/errors/errors.js';
 import {
   type Page,
   type PageRequest,
@@ -40,6 +42,7 @@ import {
   toPage,
 } from '../platform/pagination.js';
 
+type Tx = Database['client'];
 type PreviewInput = RouteInput<typeof accountContract.previewAccount>['body'];
 type CreateInput = RouteInput<typeof accountContract.createAccount>['body'];
 type CloseInput = RouteInput<typeof accountContract.closeAccount>['body'];
@@ -64,7 +67,9 @@ const accountFields = {
   collectedAmount: true,
   outstandingAmount: true,
   isOverdue: true,
-  customer: { select: { name: true, sectorId: true } },
+  // The customer's line is the round that visits them today; `lineId` above
+  // is where the account was opened, and a transfer leaves it behind.
+  customer: { select: { name: true, sectorId: true, lineId: true } },
   line: { select: { name: true } },
 } as const satisfies Prisma.AccountLoanSelect;
 
@@ -160,6 +165,7 @@ export class AccountService {
     private readonly database: Database,
     private readonly audit: AuditWriter,
     private readonly ledger: LedgerService,
+    private readonly notices: EventNotices,
   ) {}
 
   /** S-04's live preview: exactly what `create` would store, saving nothing. */
@@ -271,9 +277,35 @@ export class AccountService {
 
       if (plan.kind === 'MID_TERM') {
         await this.postMidTermOpening(context, account, plan, today);
-        return this.get(context, account.id);
+        const created = await this.get(context, account.id);
+        // It joins the round at its first unpaid slot, not its original first.
+        const next = plan.slots.find((slot) => slot.status !== 'COLLECTED');
+        if (next) {
+          await this.notices.accountDisbursed({
+            actorUserId: context.userId,
+            accountLoanId: created.id,
+            accountCode: created.accountCode,
+            customerName: created.customerName,
+            lineId: plan.customer.lineId,
+            dailyAmount: created.dailyAmount,
+            collectionFrequency: created.collectionFrequency,
+            firstDueDate: next.dueDate,
+            midTerm: true,
+          });
+        }
+        return created;
       }
-      if (input.disburse) return this.disburse(context, account.id, today);
+      if (input.disburse) {
+        // "Save and disburse" releases money, which only the Super Admin may
+        // do (decided 2026-10-02); the route itself needs only account.create.
+        if (!roleHasPermission(context.role, 'account.disburse')) {
+          throw new AuthorizationError(
+            'PERMISSION_DENIED',
+            'Only the Super Admin can disburse; save the account as pending',
+          );
+        }
+        return this.disburse(context, account.id, today);
+      }
       return this.get(context, account.id);
     });
   }
@@ -314,6 +346,10 @@ export class AccountService {
           `Account ${account.accountCode} is planned for ${planned}; it can be disbursed on or after that day`,
         );
       }
+
+      // Before any write, so a refusal changes nothing. It takes the office
+      // cash lock first; nothing else takes it and then waits on an account.
+      await this.requireCashInHand(tx, account);
 
       // The status change is the guard against disbursing twice: a concurrent
       // disbursement waits on this row's lock, then finds it no longer PENDING
@@ -374,7 +410,19 @@ export class AccountService {
         before: { status: 'PENDING', disbursementDate: planned },
         after: { status: 'ACTIVE', disbursementDate: today },
       });
-      return this.get(context, account.id);
+      const disbursed = await this.get(context, account.id);
+      await this.notices.accountDisbursed({
+        actorUserId: context.userId,
+        accountLoanId: disbursed.id,
+        accountCode: disbursed.accountCode,
+        customerName: disbursed.customerName,
+        lineId: account.customer.lineId,
+        dailyAmount: disbursed.dailyAmount,
+        collectionFrequency: disbursed.collectionFrequency,
+        firstDueDate: parseCalendarDate(disbursed.firstCollectionDate),
+        midTerm: false,
+      });
+      return disbursed;
     });
   }
 
@@ -707,6 +755,40 @@ export class AccountService {
    * BR-18's disbursement on `businessDate`: debit the account's new receivable
    * `A`, credit office cash `I` and unearned profit `P`.
    */
+  /**
+   * A loan is paid out of the money the owner put in (decided 2026-10-02): a
+   * day-one disbursement takes `I` out of office cash, so it is refused when
+   * office cash holds less. The office-cash ledger row is locked to commit, so
+   * two disbursements cannot both spend the same rupees. A mid-term account is
+   * not checked — it was paid out before Rasi, and is history being entered.
+   */
+  private async requireCashInHand(
+    tx: Tx,
+    account: {
+      organizationId: string;
+      accountCode: string;
+      investedAmount: Prisma.Decimal;
+    },
+  ): Promise<void> {
+    const officeCash = await this.ledger.organizationAccount(
+      account.organizationId,
+      'CASH_AT_OFFICE',
+    );
+    await tx.$queryRaw`SELECT id FROM ledger_account WHERE id = ${officeCash} FOR UPDATE`;
+    const { balance } = await tx.ledgerAccount.findUniqueOrThrow({
+      where: { id: officeCash },
+      select: { balance: true },
+    });
+    const held = toMoney(balance.toString());
+    const needed = toMoney(account.investedAmount.toString());
+    if (held.lessThan(needed)) {
+      throw new DomainError(
+        'INSUFFICIENT_CASH_IN_HAND',
+        `Account ${account.accountCode} needs ₹${needed.toFixed(2)} paid out, but cash-in-hand holds ₹${held.toFixed(2)}; add capital first`,
+      );
+    }
+  }
+
   private async postDisbursement(
     context: RequestContext,
     account: {

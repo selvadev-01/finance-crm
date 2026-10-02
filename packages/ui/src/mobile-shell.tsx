@@ -38,7 +38,7 @@ function Root({ children }: { children: ReactNode }) {
   return (
     <div
       data-density="comfortable"
-      className="flex min-h-dvh flex-col bg-surface [--shell-bottom:calc(4rem+env(safe-area-inset-bottom))]"
+      className="flex min-h-dvh flex-col bg-surface [--shell-bottom:calc(5rem+env(safe-area-inset-bottom))]"
     >
       {/*
        * Small buttons ("Show more", a row's action) are touch-sized here too.
@@ -56,7 +56,7 @@ function Root({ children }: { children: ReactNode }) {
 function AppBar({ children }: { children: ReactNode }) {
   return (
     <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-surface-raised pt-[env(safe-area-inset-top)]">
-      <div className="flex h-14 items-center gap-2 px-[var(--page-padding)]">
+      <div className="flex h-16 items-center gap-2 px-[var(--page-padding)]">
         {children}
       </div>
     </header>
@@ -68,7 +68,7 @@ function Main({ children }: { children: ReactNode }) {
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-[var(--section-gap)] px-[var(--page-padding)] pt-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+      className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-[var(--section-gap)] px-[var(--page-padding)] pt-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))]"
     >
       {children}
     </main>
@@ -82,7 +82,7 @@ function TabBar({ children }: { children: ReactNode }) {
       aria-label="Console"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface-raised pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="mx-auto grid h-16 max-w-3xl auto-cols-fr grid-flow-col">
+      <ul className="mx-auto grid h-20 max-w-3xl auto-cols-fr grid-flow-col">
         {children}
       </ul>
     </nav>
@@ -90,11 +90,11 @@ function TabBar({ children }: { children: ReactNode }) {
 }
 
 const tab = cva(
-  "flex h-full w-full flex-col items-center justify-center gap-1 text-2xs font-medium transition-colors motion-reduce:transition-none",
+  "flex h-full w-full flex-col items-center justify-center gap-1 text-caption font-medium transition-colors motion-reduce:transition-none",
   {
     variants: {
       state: {
-        current: "text-accent",
+        current: "font-semibold text-accent",
         idle: "text-ink-subtle hover:text-ink",
       },
     },

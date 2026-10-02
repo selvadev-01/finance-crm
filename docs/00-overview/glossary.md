@@ -127,6 +127,25 @@ A single debit or credit line in the ledger. Every transaction has at least two 
 
 ---
 
+## Books screen terms
+
+**Simple Books (decided with the owner 2026-10-02).** The Books screens use everyday words, and show only a money summary, expenses, this month's profit, and owner money with other income — no bank anywhere. The balance sheet, cash book, journal and bank screens are hidden behind one switch, `BOOKS_SIMPLE` in `apps/web/lib/books-mode.ts`, not removed: the API and database are unchanged, and setting it to `false` brings them back. **These are screen labels only** — code, the API and the database keep the names on the left, as the rest of this glossary defines them. (Earlier the same day the screens used Tally-style words; the owner found them too hard, and the plain words replaced them.)
+
+| In code and docs                     | On screen                 |
+| ------------------------------------ | ------------------------- |
+| Office cash (`CASH_AT_OFFICE`)       | Cash in hand              |
+| Cash in hand of a Senior or Junior   | With collection staff     |
+| Loans receivable (`LOAN_RECEIVABLE`) | To collect from customers |
+| Capital (`capital_entry`)            | Money added by owner      |
+| Owner drawings (`OWNER_DRAWINGS`)    | Owner took money / out    |
+| Other income (`OTHER_INCOME`)        | Other income              |
+| Expense category                     | Expense type              |
+| Note on an entry                     | Note                      |
+| Disbursement (`DISBURSEMENT`)        | Loan given                |
+| Recent ledger transactions           | Latest entries            |
+
+---
+
 ## Technical
 
 **Outbox**

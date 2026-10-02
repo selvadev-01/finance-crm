@@ -52,7 +52,7 @@ import { CADENCE, cadenceOf } from "../../../../lib/cadence";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
 import { isZeroMoney, subtractMoney } from "../../../../lib/money";
-import { canManageOrganisation } from "../../../../lib/roles";
+import { canDisburse, canManageOrganisation } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 
@@ -163,7 +163,10 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       ? watched.disbursementDate
       : "";
   const midTerm = disbursementDate !== "" && disbursementDate < today;
-  const canDisburse = disbursementDate === today;
+  // Only the Super Admin pays money out (decided 2026-10-02); an Admin saves
+  // the account as pending and the owner disburses it from its page.
+  const ownerMayDisburse = canDisburse(me.role);
+  const disbursesToday = disbursementDate === today && ownerMayDisburse;
 
   const [preview, setPreview] = useState<{
     key: string;
@@ -393,13 +396,13 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
                         undone. "Save and disburse" is moved to the end of the
                         row by `order`, not by its place in the markup. */}
                     <SubmitButton
-                      tone={canDisburse ? "secondary" : "primary"}
+                      tone={disbursesToday ? "secondary" : "primary"}
                       value="create"
                       pendingLabel="Saving…"
                     >
                       Save as pending
                     </SubmitButton>
-                    {canDisburse ? (
+                    {disbursesToday ? (
                       <SubmitButton
                         value="disburse"
                         pendingLabel="Saving…"
@@ -412,10 +415,11 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
                 )}
                 {cancel}
               </FormActions>
-              {!midTerm && !canDisburse ? (
+              {!midTerm && !disbursesToday ? (
                 <p className="text-caption text-ink-muted">
-                  A future-dated account is saved as pending and disbursed on
-                  its day.
+                  {ownerMayDisburse
+                    ? "A future-dated account is saved as pending and disbursed on its day."
+                    : "Saved as pending. The Super Admin disburses it from the account page, out of cash-in-hand."}
                 </p>
               ) : null}
             </Form>

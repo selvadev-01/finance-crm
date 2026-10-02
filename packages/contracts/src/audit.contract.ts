@@ -31,6 +31,14 @@ export const AUDITED_TABLES = [
   "holiday",
   "organization",
   "setting",
+  "capital_entry",
+  "expense_category",
+  "bank_account",
+  "expense",
+  "bank_transfer",
+  "income_entry",
+  "drawing_entry",
+  "journal_entry",
   /** Not a table: a report, dashboard or list downloaded (M12), action `EXPORT`. */
   "export",
 ] as const;

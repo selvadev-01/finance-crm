@@ -4,7 +4,11 @@ import { SettingsModule } from '../settings/settings.module.js';
 import { OrganizationSignUpService } from './organization-sign-up.service.js';
 import { PasswordHasher } from './password-hasher.js';
 import { SignUpController } from './sign-up.controller.js';
-import { SignUpRateLimiter } from './sign-up-rate-limiter.js';
+import { Database } from '../platform/database/database.js';
+import {
+  PostgresSignUpRateLimiter,
+  SignUpRateLimiter,
+} from './sign-up-rate-limiter.js';
 import { StaffController } from './staff.controller.js';
 import { StaffAdminService } from './staff-admin.service.js';
 import { StaffDirectoryService } from './staff-directory.service.js';
@@ -24,7 +28,13 @@ import { StaffPasswordService } from './staff-password.service.js';
     StaffAdminService,
     StaffPasswordService,
     OrganizationSignUpService,
-    { provide: SignUpRateLimiter, useFactory: () => new SignUpRateLimiter() },
+    // ADR-0012: shared by every API process through PostgreSQL.
+    {
+      provide: SignUpRateLimiter,
+      inject: [Database],
+      useFactory: (database: Database) =>
+        new PostgresSignUpRateLimiter(database),
+    },
   ],
 })
 export class IdentityModule {}

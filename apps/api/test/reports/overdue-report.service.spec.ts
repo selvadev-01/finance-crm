@@ -1,4 +1,5 @@
 import type { OverdueReport } from '@repo/contracts';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { parseCalendarDate, toMoney } from '@repo/domain';
@@ -74,12 +75,14 @@ describe('OverdueReportService (US-087)', () => {
         linePeriods: openLinePeriod(options.lineId),
       },
     });
+    const invested = amount.times('0.85').toFixed(2);
+    await fundOfficeCash(w.database, w.owner, invested, SATURDAY);
     return w.accounts.create(
-      w.admin,
+      w.owner,
       {
         customerId: customer.id,
         accountAmount: amount.toFixed(2),
-        investedAmount: amount.times('0.85').toFixed(2),
+        investedAmount: invested,
         dailyAmount: options.daily,
         termDays: options.slots,
         collectionFrequency: 'DAILY',

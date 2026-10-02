@@ -15,6 +15,7 @@ import {
 import { AuditWriter } from '../audit/audit.writer.js';
 import { EmailOutbox } from '../email/email-outbox.js';
 import { welcomeEmail } from '../email/email-templates.js';
+import { STARTER_EXPENSE_CATEGORIES } from '../books/expense-category.service.js';
 import { isUniqueViolation } from '../organisation/prisma-errors.js';
 import {
   getRequestClient,
@@ -67,7 +68,7 @@ export class OrganizationSignUpService {
 
   async signUp(input: SignUpRequest): Promise<SignUpResult> {
     const address = getRequestClient()?.ipAddress ?? 'unknown';
-    if (!this.limiter.tryConsume(address)) {
+    if (!(await this.limiter.tryConsume(address))) {
       throw new RateLimitError(
         'SIGN_UP_RATE_LIMITED',
         'Too many sign-up attempts from this network. Try again in an hour.',
@@ -124,6 +125,14 @@ export class OrganizationSignUpService {
           currency: CURRENCY,
         },
         select: { id: true, name: true, slug: true },
+      });
+      // Books (ADR-0018): the starter expense categories, as the migration
+      // gave every organization that existed before.
+      await tx.expenseCategory.createMany({
+        data: STARTER_EXPENSE_CATEGORIES.map((name) => ({
+          organizationId: organization.id,
+          name,
+        })),
       });
       const userId = randomUUID();
       await tx.user.create({

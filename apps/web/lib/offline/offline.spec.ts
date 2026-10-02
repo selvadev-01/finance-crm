@@ -2,7 +2,13 @@ import type { RouteView } from "@repo/contracts";
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { type FieldDb, openFieldDb } from "./db";
+import {
+  DB_VERSION,
+  type FieldDb,
+  type Migration,
+  MIGRATIONS,
+  openFieldDb,
+} from "./db";
 import {
   backoffMs,
   drainOutbox,
@@ -644,5 +650,90 @@ describe("offline outbox (offline-sync.md, BR-13)", () => {
         (await listOutbox(db)).map((entry) => entry.payload.accountLoanId),
       ).toEqual(["acc-2"]);
     });
+  });
+});
+
+describe("outbox schema upgrades (offline-sync.md#service-worker-scope)", () => {
+  /** A future version 2: every queued entry gains a field, rewritten in place. */
+  const v2: Migration = async (_db, transaction) => {
+    let cursor = await transaction.objectStore("outbox").openCursor();
+    while (cursor) {
+      await cursor.update({
+        ...cursor.value,
+        customerName: `${cursor.value.customerName} (v2)`,
+      });
+      cursor = await cursor.continue();
+    }
+  };
+
+  async function queuedOnVersion1() {
+    const name = `test-${randomUUID()}`;
+    const db = await openFieldDb(name);
+    await record(db, "acc-1", "100");
+    await record(db, "acc-2", "250");
+    db.close();
+    return name;
+  }
+
+  it("the database's version is the number of migration steps", () => {
+    expect(DB_VERSION).toBe(MIGRATIONS.length);
+  });
+
+  it("an app update keeps every queued collection and may rewrite each one in the upgrade", async () => {
+    const name = await queuedOnVersion1();
+
+    const upgraded = await openFieldDb(name, {
+      migrations: [...MIGRATIONS, v2],
+    });
+    expect(upgraded.version).toBe(MIGRATIONS.length + 1);
+    const entries = await listOutbox(upgraded);
+    expect(entries.map((entry) => entry.payload.amount).sort()).toEqual([
+      "100",
+      "250",
+    ]);
+    expect(entries.every((entry) => entry.status === "QUEUED")).toBe(true);
+    expect(
+      entries.every((entry) => entry.customerName === "Lakshmi (v2)"),
+    ).toBe(true);
+    upgraded.close();
+  });
+
+  it("a step that throws aborts the upgrade: the old version and its queued collections are untouched", async () => {
+    const name = await queuedOnVersion1();
+    const broken: Migration = () => {
+      throw new Error("migration 2 is broken");
+    };
+
+    await expect(
+      openFieldDb(name, { migrations: [...MIGRATIONS, v2, broken] }),
+    ).rejects.toThrow("migration 2 is broken");
+
+    const reopened = await openFieldDb(name);
+    expect(reopened.version).toBe(MIGRATIONS.length);
+    const entries = await listOutbox(reopened);
+    expect(entries).toHaveLength(2);
+    // v2 ran in the same aborted transaction, so its rewrite was undone too.
+    expect(entries.every((entry) => entry.customerName === "Lakshmi")).toBe(
+      true,
+    );
+    reopened.close();
+  });
+
+  it("an open connection steps aside for a newer version instead of blocking its upgrade", async () => {
+    const name = await queuedOnVersion1();
+    let closed = 0;
+    const old = await openFieldDb(name, {
+      onClosedForUpgrade: () => {
+        closed += 1;
+      },
+    });
+
+    const upgraded = await openFieldDb(name, {
+      migrations: [...MIGRATIONS, v2],
+    });
+    expect(closed).toBe(1);
+    expect(await listOutbox(upgraded)).toHaveLength(2);
+    upgraded.close();
+    void old;
   });
 });

@@ -10,7 +10,7 @@
 
 ## Scope
 
-**In:** per-line day close, expected/collected/discrepancy reconciliation, cash handover Junior → Senior → Admin, denomination counts, disputes.
+**In:** per-line day close, expected/collected/discrepancy reconciliation, cash handover Junior → Senior → Admin, denomination counts, disputes, and capital put into the business, which funds office cash (US-032).
 
 **Out:** collection entry (M07), ledger postings (M09 — triggered from here).
 
@@ -18,7 +18,7 @@
 
 ## Owned entities
 
-`day_close` · `cash_handover` · `cash_denomination`
+`day_close` · `cash_handover` · `cash_denomination` · `capital_entry`
 
 ---
 
@@ -30,7 +30,8 @@ One `day_close` per line per business date (BR-16).
 expectedTotal    = Σ expected for that line's slots due that date
 collectedTotal   = Σ confirmed collections for that line on that date
 cashReceivedTotal = Σ acknowledged handovers
-discrepancy      = cashReceivedTotal − collectedTotal
+expenseTotal     = Σ approved field expenses the line's Juniors paid from that day's cash (ADR-0018)
+discrepancy      = cashReceivedTotal + expenseTotal − collectedTotal
 ```
 
 ```mermaid
@@ -101,6 +102,8 @@ Cash follows `collection.collectedByUserId`, not current line staffing (open que
 | Record denominations | Junior, Senior                       |
 | Acknowledge handover | Senior (own line), Admin+            |
 | Dispute handover     | Either party, Admin+                 |
+| Add capital          | Super Admin                          |
+| View capital         | Admin+ (as ledger entries)           |
 
 ---
 
@@ -127,6 +130,8 @@ In `apps/api/src/cash/`, through `packages/contracts/src/cash.contract.ts`. Stat
 | `GET /api/handovers`                              | `handover.acknowledge` | Handovers addressed to the caller                                                                               |
 | `POST /api/handovers/:id/acknowledge`             | `handover.acknowledge` | Receiver only (`403 NOT_THE_RECEIVER`); posts the ledger                                                        |
 | `POST /api/handovers/:id/dispute`                 | `handover.dispute`     | Sender, receiver or Admin, while pending                                                                        |
+| `GET /api/capital`                                | `ledger.view`          | Capital entries newest first, with the total put in and `CASH_AT_OFFICE` now                                    |
+| `POST /api/capital`                               | `capital.add`          | Super Admin only; `422 CAPITAL_DATE_IN_FUTURE` at the date field; posts the ledger                              |
 
 **Decided 2026-09-14:**
 
@@ -139,7 +144,16 @@ In `apps/api/src/cash/`, through `packages/contracts/src/cash.contract.ts`. Stat
 
 **State:** the view computes totals live; the row stores them at each close, reopen and acknowledgement. `TALLIED` when closed with cash received equal to collected and no handover pending; an acknowledgement or dispute re-tallies. A collection or approved correction on a closed date reopens it automatically (`DayCloseService.moneyWritten`, audited as automatic by the user whose write caused it). Closing takes the due accounts' row locks before the day's row, the same order a collection takes them, so the two cannot deadlock.
 
-**Not built:** notifications (M10) for close, discrepancy, reopen, submission and dispute; month-end lock; Admin resolution of a dispute beyond recounting.
+**Capital (US-032, decided 2026-09-24).** Office cash was credited by every disbursement and debited by nothing but handovers to the office, so it ran negative. A Super Admin now records money put into the business in `capital_entry` — amount, the business day it arrived (today by default, never in the future) and a required note saying where it came from. In the same transaction `CapitalService` posts a `CAPITAL` ledger transaction, debit `CASH_AT_OFFICE` and credit `CAPITAL`, and writes the audit entry. The table is append-only in the database, like the ledger it feeds, so a mistake is answered by a later entry. `CAPITAL` is its own transaction type, so no invested, collected or profit figure reads it. The console shows it on Books (`/books/money`, "Capital A/c"; moved from `/cash` on 2026-10-02) to Admins and above — cash-in-hand (flagged when below zero), the total put in and each entry — with **Add capital** for the Super Admin only. A loan is paid out only from it: a day-one disbursement is refused `INSUFFICIENT_CASH_IN_HAND` when cash-in-hand is short ([M05](M05-accounts.md)).
+
+**Field expenses (ADR-0018, built 2026-10-01).** A Junior (on `/route#expense`) or a Senior (on `/cash`) records cash they spent on the round; it waits `PENDING` and posts nothing. The hop it comes out of is stored on the row when it is asked for (`expense.hop`), so a later promotion never moves it. Someone other than the spender decides: a Junior's by the line's Senior or an Admin, a Senior's by an Admin (`POST /api/expenses/:id/decision`; `403 OWN_EXPENSE`, `403 EXPENSE_NEEDS_ADMIN`, `409 EXPENSE_ALREADY_DECIDED`). Approval posts debit the category's `EXPENSE`, credit the spender's `CASH_IN_HAND`. Then:
+
+- **Handover:** `systemAmount` is what the sender recorded (or, for a Senior, acknowledged) **less their approved field expenses** for that line and date; `GET /api/cash` shows both. An expense still pending is not subtracted — approve it before the count, or the count reads short.
+- **Day close:** the line's day stores `expenseTotal`, the Juniors' approved field expenses (`hop = JUNIOR_TO_SENIOR`), and `discrepancy = cashReceivedTotal + expenseTotal − collectedTotal`, which the database enforces. A Senior's own expense comes off only the office hop.
+- **A decision re-tallies a closed day** (`refreshTally`) rather than reopening it: no recorded money changed, only how the cash is accounted for. So a day closed ₹50 short becomes `TALLIED` the moment the ₹50 petrol is approved.
+- The discrepancy report (M12) counts the same expenses per Junior, so its rows still sum to the day close.
+
+**Not built:** a notification on a close with no discrepancy (by decision, [M10](M10-notifications.md)); month-end lock; Admin resolution of a dispute beyond recounting. Owner's drawings are in Books ([ADR-0018](../../02-architecture/adr/0018-books-expenses-banks-and-journals.md)).
 
 ## Risks
 

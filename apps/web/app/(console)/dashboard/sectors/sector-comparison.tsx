@@ -8,6 +8,8 @@ import {
 } from "@repo/contracts";
 import { dayOfWeek, parseCalendarDate, toBusinessDate } from "@repo/domain";
 import {
+  cn,
+  CodeChip,
   DataView,
   type DataViewColumn,
   DetailSkeleton,
@@ -23,6 +25,7 @@ import {
   Stat,
   StatGrid,
 } from "@repo/ui";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import {
@@ -40,12 +43,18 @@ import {
   StatusBadge,
 } from "../../../../components/status-badge";
 import { formatTimestamp } from "../../../../lib/format";
-import { isZeroMoney } from "../../../../lib/money";
+import { formatPerMille, isZeroMoney, perMille } from "../../../../lib/money";
 import { seesSectorTotals } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
-import { UNAVAILABLE, Unknown, WEEKDAYS } from "../dashboard-parts";
+import { Meter, UNAVAILABLE, Unknown, WEEKDAYS } from "../dashboard-parts";
+import {
+  FigureRow,
+  PhoneCard,
+  PhoneGreeting,
+  usePhoneLayout,
+} from "../phone-home";
 
 /** An empty date is today; it is left out of the URL. */
 export const SECTOR_COMPARISON_FILTERS = { date: "" };
@@ -63,6 +72,7 @@ export function SectorComparison({
   initial: Partial<typeof SECTOR_COMPARISON_FILTERS>;
 }) {
   const me = useSignedIn();
+  const phone = usePhoneLayout();
   const allowed = seesSectorTotals(me.role);
   const { filters, setFilter } = useListState(
     SECTOR_COMPARISON_FILTERS,
@@ -166,6 +176,54 @@ export function SectorComparison({
   }
 
   const view = query.data;
+  if (phone) {
+    return (
+      <>
+        <PhoneGreeting
+          name={me.name}
+          title="Sector comparison"
+          shown={shown}
+          today={today}
+          onDate={(value) => setFilter("date", value === today ? "" : value)}
+        >
+          {view.day.kind !== "WORKING" ? (
+            <StatusBadge kind="dayKind" value={view.day.kind} />
+          ) : null}
+          <span>updated {formatTimestamp(view.generatedAt, "clock")}</span>
+        </PhoneGreeting>
+        {view.setupNeeded === true ? (
+          <FormMessage tone="info">
+            There is no line to collect on yet, so every sector reads zero.
+          </FormMessage>
+        ) : null}
+        <PhoneCard title="Collection status" aria-label="Collection status">
+          <FigureRow
+            items={[
+              {
+                label: "Tallied",
+                value: view.tally ? (
+                  `${view.tally.tallied} of ${view.tally.collecting}`
+                ) : (
+                  <Unknown />
+                ),
+              },
+              {
+                label: "Extra",
+                value: view.tally ? view.tally.withExtra : <Unknown />,
+              },
+              {
+                label: "Low",
+                value: view.tally ? view.tally.withLow : <Unknown />,
+                tone:
+                  view.tally && view.tally.withLow > 0 ? "warning" : undefined,
+              },
+            ]}
+          />
+        </PhoneCard>
+        <SectorCards view={view} />
+      </>
+    );
+  }
   return (
     <>
       {header(view)}
@@ -372,6 +430,106 @@ function SectorTable({ view }: { view: Comparison }) {
         footer={<BusinessLine view={view} />}
       />
     </Section>
+  );
+}
+
+/**
+ * The phone layout (Stitch S-07b / C-02): one card per sector — the day's
+ * expected, collected and shortfall beside its lines, a bar for collected of
+ * expected, and its tally. A group that could not be read says so on the
+ * card, never zeros. The business line closes the list, as the table's
+ * footer does.
+ */
+function SectorCards({ view }: { view: Comparison }) {
+  const rows = view.sectors;
+  if (rows === null) {
+    return (
+      <FormMessage tone="critical">
+        The sectors couldn’t be read just now, so they are not compared.
+      </FormMessage>
+    );
+  }
+  const cell = (label: string, value: ReactNode, warning = false) => (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-2xs font-medium tracking-[0.08em] text-ink-muted uppercase">
+        {label}
+      </dt>
+      <dd
+        className={cn("text-heading", warning ? "text-warning" : "text-ink")}
+        data-numeric
+      >
+        {value}
+      </dd>
+    </div>
+  );
+  return (
+    <>
+      <ul aria-label="Sectors compared" className="flex flex-col gap-3">
+        {rows.map((row) => {
+          const today = row.today;
+          const share = today
+            ? perMille(today.collected, today.expected)
+            : null;
+          return (
+            <li key={row.sectorId}>
+              <Link
+                href={`/sectors/${row.sectorId}`}
+                className="flex flex-col gap-3 rounded-tile border border-border bg-surface-raised p-4 transition-colors hover:border-accent"
+              >
+                <span className="flex items-center justify-between gap-3 border-b border-border pb-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-heading text-ink">
+                      {row.name}
+                    </span>
+                    <CodeChip>{row.code}</CodeChip>
+                    {row.isActive ? null : <ActivityBadge isActive={false} />}
+                  </span>
+                  {today ? (
+                    <StatusBadge kind="sectorTally" value={today.tally} />
+                  ) : null}
+                </span>
+                {today ? (
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    {cell("Expected", formatCurrency(today.expected))}
+                    {cell("Collected", formatCurrency(today.collected))}
+                    {cell(
+                      "Shortfall",
+                      formatCurrency(today.shortfall),
+                      !isZeroMoney(today.shortfall),
+                    )}
+                    {cell(
+                      "Lines",
+                      row.structure ? row.structure.lines : <Unknown />,
+                    )}
+                  </dl>
+                ) : (
+                  <FormMessage tone="critical">
+                    {row.name}’s day couldn’t be read just now.
+                  </FormMessage>
+                )}
+                {share === null ? null : (
+                  <span className="flex flex-col gap-1.5 border-t border-border pt-3">
+                    <Meter
+                      share={share}
+                      label={`${row.name} collected of expected`}
+                    />
+                    <span className="text-caption text-ink-muted" data-numeric>
+                      {formatPerMille(share)} collected
+                      {row.structure
+                        ? ` · ${row.structure.customers} customers`
+                        : ""}
+                    </span>
+                  </span>
+                )}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <PhoneCard title="The business" aria-label="The business">
+        <BusinessLine view={view} />
+      </PhoneCard>
+    </>
   );
 }
 

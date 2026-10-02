@@ -6,7 +6,16 @@ import { randomUUID } from 'node:crypto';
 import { OverdueService } from '../../src/accounts/overdue.service.js';
 import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { IdempotencyPurgeService } from '../../src/collections/idempotency-purge.service.js';
+import { JobStatusRecorder } from '../../src/jobs/job-status.recorder.js';
+import { JobsService } from '../../src/jobs/jobs.service.js';
+import {
+  alertDeadJob,
+  runForOrganization,
+} from '../../src/jobs/scheduled-jobs.js';
+import type { AppConfig } from '../../src/platform/config/config.js';
+import { DomainError } from '../../src/platform/errors/errors.js';
 import { ReconciliationService } from '../../src/ledger/reconciliation.service.js';
+import { StaleSubscriptionService } from '../../src/notifications/stale-subscriptions.service.js';
 import type { SystemContext } from '../../src/platform/context/system-context.js';
 import { Database } from '../../src/platform/database/database.js';
 import { SettingReader } from '../../src/settings/setting-reader.js';
@@ -58,6 +67,11 @@ describe('scheduled job handlers (M14, US-095)', () => {
         testNotifications(database).notices,
       ),
       purge: new IdempotencyPurgeService(database),
+      stale: new StaleSubscriptionService(database),
+      database,
+      logger,
+      notices: testNotifications(database).notices,
+      recorder: new JobStatusRecorder(database),
     };
   }
 
@@ -280,6 +294,223 @@ describe('scheduled job handlers (M14, US-095)', () => {
       expect(
         await tx.idempotencyKey.findUnique({ where: { key: fresh.key } }),
       ).not.toBeNull();
+    });
+  });
+  describe('M10 deactivate-stale-subscriptions', () => {
+    const device = (tx: PrismaClient, userId: string, lastSeenAt: Date) =>
+      tx.pushSubscription.create({
+        data: {
+          userId,
+          provider: 'WEB_PUSH',
+          endpoint: `https://fcm.googleapis.com/fcm/send/${randomUUID()}`,
+          p256dh: 'p',
+          auth: 'a',
+          lastSeenAt,
+        },
+      });
+
+    it('deactivates a device unseen for 90 days, keeps a recent one, and leaves other organizations alone — twice over', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, system, stale } = await jobs(tx);
+        const other = await jobs(tx);
+        const now = new Date('2026-09-27T21:30:00Z');
+        const days = (n: number) => new Date(now.getTime() - n * 86_400_000);
+
+        const old = await device(tx, w.junior.userId, days(91));
+        const recent = await device(tx, w.junior.userId, days(10));
+        const elsewhere = await device(tx, other.w.junior.userId, days(200));
+
+        expect(await stale.deactivate(system, now)).toEqual({ deactivated: 1 });
+        expect(await stale.deactivate(system, now)).toEqual({ deactivated: 0 });
+
+        const active = async (id: string) =>
+          (await tx.pushSubscription.findUniqueOrThrow({ where: { id } }))
+            .isActive;
+        expect(await active(old.id)).toBe(false);
+        expect(await active(recent.id)).toBe(true);
+        expect(await active(elsewhere.id)).toBe(true);
+      });
+    });
+  });
+
+  describe('M14 dead-letter alert', () => {
+    it("a dead-lettered organization job alerts that organization's Admins, and is logged", async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, database, logger, notices, errors, recorder } =
+          await jobs(tx);
+        const other = await jobs(tx);
+
+        await alertDeadJob(
+          database,
+          notices,
+          logger,
+          'reconcile-balances',
+          { id: 'job-1', data: { organizationId: w.organizationId } },
+          recorder,
+        );
+        // The job status screen shows when it last failed for good.
+        const status = await tx.jobStatus.findUniqueOrThrow({
+          where: {
+            organizationId_job: {
+              organizationId: w.organizationId,
+              job: 'reconcile-balances',
+            },
+          },
+        });
+        expect(status.deadLetteredAt).not.toBeNull();
+
+        expect(errors).toEqual(['A scheduled job exhausted its retries']);
+        const [alert] = await tx.notification.findMany({
+          where: { userId: w.admin.userId, eventType: 'JOB_FAILED' },
+        });
+        expect(alert).toMatchObject({
+          category: 'ALERT',
+          title: 'Scheduled job failed · Nightly reconciliation',
+        });
+        for (const userId of [
+          w.senior.userId,
+          w.junior.userId,
+          other.w.admin.userId,
+        ]) {
+          expect(
+            await tx.notification.count({
+              where: { userId, eventType: 'JOB_FAILED' },
+            }),
+          ).toBe(0);
+        }
+      });
+    });
+
+    it('a dead-lettered trigger job belongs to no organization, so it is logged and nobody is notified', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, database, logger, notices, errors, recorder } =
+          await jobs(tx);
+
+        await alertDeadJob(
+          database,
+          notices,
+          logger,
+          'reconcile-balances',
+          { id: 'job-2', data: null },
+          recorder,
+        );
+
+        expect(errors).toEqual(['A scheduled job exhausted its retries']);
+        expect(
+          await tx.notification.count({
+            where: { userId: w.admin.userId, eventType: 'JOB_FAILED' },
+          }),
+        ).toBe(0);
+      });
+    });
+  });
+
+  describe('M14 job status', () => {
+    const config = {
+      WORKER_ENABLED: true,
+      JOBS_RECONCILE_CRON: '0 1 * * *',
+      JOBS_OVERDUE_CRON: '30 0 * * *',
+      JOBS_PURGE_KEYS_CRON: '0 2 * * *',
+      JOBS_STALE_SUBSCRIPTIONS_CRON: '0 3 * * 0',
+    } as AppConfig;
+
+    it('records a run as it starts and succeeds, and a failure with its code — never its message — then rethrows it', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, system, recorder } = await jobs(tx);
+        const logger = { info: () => undefined } as unknown as PinoLogger;
+        const status = (job: string) =>
+          tx.jobStatus.findUniqueOrThrow({
+            where: {
+              organizationId_job: { organizationId: w.organizationId, job },
+            },
+          });
+
+        let seenRunning = false;
+        await runForOrganization(
+          recorder,
+          logger,
+          'flag-overdue-accounts',
+          async () => {
+            seenRunning =
+              (await status('flag-overdue-accounts')).lastOutcome === 'RUNNING';
+          },
+          system,
+        );
+        expect(seenRunning).toBe(true);
+        const done = await status('flag-overdue-accounts');
+        expect(done).toMatchObject({
+          lastOutcome: 'SUCCEEDED',
+          lastError: null,
+        });
+        expect(done.lastSucceededAt).not.toBeNull();
+
+        const failure = new DomainError(
+          'LEDGER_MISMATCH',
+          'Account ACC-2026-00412 for Meenakshi Sundaram disagrees',
+        );
+        await expect(
+          runForOrganization(
+            recorder,
+            logger,
+            'reconcile-balances',
+            () => Promise.reject(failure),
+            system,
+          ),
+        ).rejects.toBe(failure);
+        const failed = await status('reconcile-balances');
+        expect(failed).toMatchObject({
+          lastOutcome: 'FAILED',
+          lastError: 'DomainError LEDGER_MISMATCH',
+          lastSucceededAt: null,
+        });
+      });
+    });
+
+    it('lists every scheduled job for the caller’s organization, never-run ones included, and nothing for a Senior', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { w, system, recorder, database } = await jobs(tx);
+        const other = await jobs(tx);
+        const logger = { info: () => undefined } as unknown as PinoLogger;
+        await runForOrganization(
+          recorder,
+          logger,
+          'purge-idempotency-keys',
+          () => Promise.resolve(),
+          system,
+        );
+        await runForOrganization(
+          recorder,
+          logger,
+          'dispatch-emails',
+          () => Promise.resolve(),
+          other.system,
+        );
+
+        const service = new JobsService(config, database);
+        const overview = await service.overview(w.admin);
+        expect(overview.workerEnabled).toBe(true);
+        expect(overview.jobs.map((job) => job.job)).toEqual([
+          'reconcile-balances',
+          'flag-overdue-accounts',
+          'purge-idempotency-keys',
+          'dispatch-notifications',
+          'dispatch-emails',
+          'deactivate-stale-subscriptions',
+        ]);
+        const byName = new Map(overview.jobs.map((job) => [job.job, job]));
+        expect(byName.get('purge-idempotency-keys')).toMatchObject({
+          schedule: '0 2 * * *',
+          lastOutcome: 'SUCCEEDED',
+        });
+        // The other organization's run is not ours.
+        expect(byName.get('dispatch-emails')).toMatchObject({
+          lastOutcome: null,
+          lastStartedAt: null,
+        });
+
+        const senior = await service.overview(w.senior);
+        expect(senior.jobs.every((job) => job.lastOutcome === null)).toBe(true);
+      });
     });
   });
 });

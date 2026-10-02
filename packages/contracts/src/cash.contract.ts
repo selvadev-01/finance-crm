@@ -113,8 +113,13 @@ export const cashPositionSchema = z.object({
       lineName: z.string(),
       businessDate: calendarDateSchema,
       hop: handoverHopSchema,
-      /** Recorded and not yet covered by an acknowledged handover. */
+      /**
+       * Recorded, less approved field expenses, and not yet covered by an
+       * acknowledged handover.
+       */
       toHandOver: moneyStringSchema,
+      /** Approved field expenses the caller paid from this day's cash (ADR-0018). */
+      expenses: moneyStringSchema,
       /** The line's Senior for a Junior; null on the office hop (the Senior picks). */
       receiver: z.object({ userId: idSchema, name: z.string() }).nullable(),
       pending: handoverSchema.nullable(),
@@ -159,7 +164,9 @@ export const dayCloseSchema = z.object({
   collectedTotal: signedMoneyStringSchema,
   /** Σ acknowledged Junior → Senior handovers. */
   cashReceivedTotal: moneyStringSchema,
-  /** cashReceived − collected. */
+  /** Σ approved field expenses the line's Juniors paid from the day's cash (ADR-0018). */
+  expenseTotal: moneyStringSchema,
+  /** cashReceived + expenses − collected. */
   discrepancy: signedMoneyStringSchema,
   closedAt: z.string().nullable(),
   closedByName: z.string().nullable(),

@@ -7,7 +7,8 @@ import { EmailOutbox } from '../../src/email/email-outbox.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import { OrganizationSignUpService } from '../../src/identity/organization-sign-up.service.js';
 import { PasswordHasher } from '../../src/identity/password-hasher.js';
-import { SignUpRateLimiter } from '../../src/identity/sign-up-rate-limiter.js';
+import { STARTER_EXPENSE_CATEGORIES } from '../../src/books/expense-category.service.js';
+import { MemorySignUpRateLimiter } from '../../src/identity/sign-up-rate-limiter.js';
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
 import { withRollback } from '../with-rollback.js';
@@ -32,7 +33,7 @@ describe('OrganizationSignUpService (US-006)', () => {
 
   function service(
     tx: PrismaClient,
-    limiter = new SignUpRateLimiter({ limit: 100, windowMs: 60_000 }),
+    limiter = new MemorySignUpRateLimiter({ limit: 100, windowMs: 60_000 }),
     email: AppConfig['EMAIL_PROVIDER'] = 'NONE',
   ) {
     const database = new Database(tx);
@@ -184,9 +185,25 @@ describe('OrganizationSignUpService (US-006)', () => {
     });
   });
 
+  it('starts the business with the starter expense categories (ADR-0018)', async () => {
+    await withRollback(prisma, async (tx) => {
+      const { organizationId } = await service(tx).signUp(request());
+      const names = (
+        await tx.expenseCategory.findMany({
+          where: { organizationId },
+          orderBy: { name: 'asc' },
+        })
+      ).map((row) => row.name);
+      expect(names).toEqual([...STARTER_EXPENSE_CATEGORIES].sort());
+    });
+  });
+
   it('queues a welcome email with the sign-in link when email is configured, and none otherwise', async () => {
     await withRollback(prisma, async (tx) => {
-      const limiter = new SignUpRateLimiter({ limit: 100, windowMs: 60_000 });
+      const limiter = new MemorySignUpRateLimiter({
+        limit: 100,
+        windowMs: 60_000,
+      });
       const input = request({ name: 'Lakshmi <Owner>' });
       const { organizationId, slug } = await service(
         tx,
@@ -220,7 +237,10 @@ describe('OrganizationSignUpService (US-006)', () => {
 
   it('refuses once the address has used its attempts (429), and writes nothing', async () => {
     await withRollback(prisma, async (tx) => {
-      const limiter = new SignUpRateLimiter({ limit: 1, windowMs: 60_000 });
+      const limiter = new MemorySignUpRateLimiter({
+        limit: 1,
+        windowMs: 60_000,
+      });
       await service(tx, limiter).signUp(request());
 
       const input = request();

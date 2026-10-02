@@ -38,7 +38,7 @@ The Junior's service worker keeps its own narrower scope and does not change.
 
 A plain browser tab with no choice is never interrupted. It shows the computer layout, which still folds to a drawer below 768px, as before.
 
-**The Junior is never asked.** The field app is phone-only by design and keeps its own chrome: a status strip and no tab bar.
+**The Junior is never asked.** The field app is phone-only by design and keeps its own chrome: a status strip and its own bottom navigation of hash views (Route, Customers, Collections, Cash, Profile), not the console's tab bar. _(Corrected 2026-10-02: this sentence said "no tab bar", which the field app had not matched since its J-01 screens.)_
 
 ## Consequences
 

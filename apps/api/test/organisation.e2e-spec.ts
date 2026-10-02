@@ -360,10 +360,12 @@ describe('organisation (M03, e2e)', () => {
       });
       const juniorCookie = await signIn(app, junior);
 
-      await http()
-        .get('/api/lines')
-        .set('Cookie', juniorCookie)
-        .expect(200, { data: [], nextCursor: null, hasMore: false });
+      await http().get('/api/lines').set('Cookie', juniorCookie).expect(200, {
+        data: [],
+        nextCursor: null,
+        hasMore: false,
+        total: 0,
+      });
 
       const response = await as('ADMIN')
         .post(`/api/lines/${line.body.id}/junior-assignment`, {

@@ -541,6 +541,7 @@ describe('M12 reports (US-084, US-085, US-086, US-087, discrepancy, e2e)', () =>
         handedOver: '0.00',
         acknowledged: '0.00',
         awaiting: '0.00',
+        expenses: '0.00',
         short: '0.00',
         over: '0.00',
         net: '0.00',

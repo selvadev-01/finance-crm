@@ -186,16 +186,22 @@ export function DayCloseScreen({
         <Stat
           label="Cash received"
           hint={
-            view.handovers.some(
-              (handover) =>
-                handover.hop === "JUNIOR_TO_SENIOR" &&
-                handover.status === "ACKNOWLEDGED",
-            ) ? (
-              <Discrepancy amount={view.discrepancy} />
-            ) : (
-              // Nothing handed over yet is not a shortage.
-              "not handed over yet"
-            )
+            <>
+              {view.handovers.some(
+                (handover) =>
+                  handover.hop === "JUNIOR_TO_SENIOR" &&
+                  handover.status === "ACKNOWLEDGED",
+              ) || !isZeroMoney(view.expenseTotal) ? (
+                <Discrepancy amount={view.discrepancy} />
+              ) : (
+                // Nothing handed over yet is not a shortage.
+                "not handed over yet"
+              )}
+              {/* ADR-0018: spent with approval, so counted beside the cash. */}
+              {!isZeroMoney(view.expenseTotal)
+                ? ` · ${formatCurrency(view.expenseTotal)} field expenses`
+                : null}
+            </>
           }
         >
           {formatCurrency(view.cashReceivedTotal)}

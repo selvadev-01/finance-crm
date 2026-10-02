@@ -1,6 +1,8 @@
 import {
   AddressBook,
+  BookOpenText,
   ChartBar,
+  House,
   MapTrifold,
   Money,
   Path,
@@ -56,6 +58,13 @@ export const NAV: NavGroup[] = [
         icon: ChartBar,
         shownTo: seesReports,
       },
+      // ADR-0018: the business's own money — Admins and above.
+      {
+        href: "/books",
+        label: "Books",
+        icon: BookOpenText,
+        shownTo: canManageOrganisation,
+      },
     ],
   },
   {
@@ -104,22 +113,16 @@ export function navFor(role: Role): NavGroup[] {
   })).filter((group) => group.items.length > 0);
 }
 
-/** The phone layout's four tabs, in order; everything else is under "More". */
-export const TAB_HREFS = [
-  "/dashboard",
-  "/collections",
-  "/customers",
-  "/cash",
-] as const;
-
 /**
- * The dashboard tab is named for what it shows each role
- * (navigation-ia.md#landing-by-role): the business, today's work, one line.
+ * The phone layout's four tabs per role, in order; everything else is under
+ * "More". The Stitch screens in "Rasi Mobile, all roles" (2026-10-02) shape
+ * each bar for the work: the owner's books, the Admin's cash, the Senior's
+ * cash before their customers.
  */
-const DASHBOARD_TAB_LABEL: Record<Exclude<Role, "JUNIOR">, string> = {
-  SUPER_ADMIN: "Overview",
-  ADMIN: "Today",
-  SENIOR: "My line",
+export const TAB_HREFS: Record<Exclude<Role, "JUNIOR">, readonly string[]> = {
+  SUPER_ADMIN: ["/dashboard", "/collections", "/customers", "/books"],
+  ADMIN: ["/dashboard", "/collections", "/customers", "/cash"],
+  SENIOR: ["/dashboard", "/collections", "/cash", "/customers"],
 };
 
 /** The phone layout for a role: its tabs, and the groups under "More". */
@@ -129,17 +132,16 @@ export function mobileNav(role: Exclude<Role, "JUNIOR">): {
 } {
   const groups = navFor(role);
   const items = groups.flatMap((group) => group.items);
-  const tabs = TAB_HREFS.flatMap((href) => {
+  const hrefs = TAB_HREFS[role];
+  const tabs = hrefs.flatMap((href) => {
     const item = items.find((each) => each.href === href);
     if (!item) return [];
+    // Every role's home is "Home", with a house (the designs' first tab).
     return [
-      href === "/dashboard"
-        ? { ...item, label: DASHBOARD_TAB_LABEL[role] }
-        : item,
+      href === "/dashboard" ? { ...item, label: "Home", icon: House } : item,
     ];
   });
-  const isTab = (item: NavItem) =>
-    (TAB_HREFS as readonly string[]).includes(item.href);
+  const isTab = (item: NavItem) => hrefs.includes(item.href);
   const more = groups
     .map((group) => ({
       ...group,

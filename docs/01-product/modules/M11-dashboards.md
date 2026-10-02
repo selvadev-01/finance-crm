@@ -277,6 +277,72 @@ Both account lists are **as of now**, whatever date is shown: a target date move
 
 Tier 1: 7 specs (`test/dashboards/dashboard-trend.service.spec.ts`). HTTP: 2 specs in `dashboards.e2e-spec.ts`, plus the 5 harness cells.
 
+## As built — ledger figures on the dashboards (2026-10-02)
+
+The business-wide dashboards now show the ledger beside the day's collections. **No API route was added and no RBAC cell changed**: the screens read the Books statements the Super Admin and Admin can already see (`ledger.view`, the same audience as `money.businessTotals`), so a dashboard figure and its Books page cannot disagree.
+
+- **S-07 redesigned** (`business-overview.tsx`, after the Stitch screen "Super Admin Dashboard (Compact)") as a compact, money-first page for the owner:
+  - **Hero:** total funds is the balance sheet's `equity.total` on the date (capital + profit kept − drawings), with its change against the balance sheet on the day before the month began. Beside it: to collect (`loansReceivable`), cash and bank (office, banks and cash with staff), and profit this month (the P&L's `netProfit` from the first of the month to the date).
+  - **Four cards:** collected today, with a sparkline from the trend; pending today; overdue loans, from the overdue report's `summary`, which is a position now, not dated; and expenses this month, with the field expenses waiting from Books' overview.
+  - **Where your money is:** a donut of the balance sheet's assets. "Lent out" is the receivables less the profit not yet earned in them, so the four parts add up to the total funds whenever the books balance. A badge says whether they do.
+  - **Also on the page:** the existing trend card, a P&L card for the month, sectors with rings, and "Needs your attention". The attention list is Books' pending field expenses plus S-20's own attention list (`GET /api/dashboards/operations`).
+  - **§17's structural and all-time figures** close the page in one strip, so nothing US-080 specified was dropped.
+- **S-20 redesigned** (`operations-dashboard.tsx`, after the Stitch screen "Today's operations"):
+  - **Teal hero:** a ring for collected against expected, then lines closed, pending (BR-16 per line), extra, and corrections waiting with how many are the caller's to decide.
+  - **"Needs attention" and "Quick actions":** the attention list is US-082's own, plus Books' field expenses waiting. The quick actions are add customer, new account, approve corrections and record expense; each tile shows only to a role that may use it.
+  - **"Lines today":** a pending column per line, and the Senior with the Junior count in one cell. It sits beside the trend.
+  - **Bottom row:** sectors with a bar each, "Books today" (cash and bank, with staff, the month's profit and expenses, and whether the books balance, from the balance sheet and P&L), and customers and accounts with all-time invested and profit.
+  - The earlier "Books" section (`ledger-position.tsx`) was removed in favour of that card.
+- **S-19 redesigned** (`line-dashboard.tsx`, after the Stitch Senior line dashboard):
+  - **Teal hero:** rings for collected, cash in hand (acknowledged of collected) and phones synced, then short or surplus, and the cash still with Juniors (collected less acknowledged).
+  - **Four cards:** expected; collected, with visits and a sparkline; short, with how many paid less; not visited.
+  - **"My Juniors":** visits, collected, handed over and the **signed** difference come from the discrepancy report's rows for the line and day (`GET /api/reports/discrepancy`, `report.view`, BR-17), so they are the report's figures. An "Acknowledge" link opens the day close when cash is waiting, and "Review dispute" when a handover is disputed. If that read fails, those two columns show "—" and the rest of the page stands.
+  - **"Waiting on you":** corrections, handovers to acknowledge or disputed, customers not visited, and phones still to send.
+  - **Lower row:** today's exceptions, accounts finishing soon and overdue accounts as compact cards, and a line-trend strip.
+  - The primary action reads "Close the day" while the day is open.
+  - Not built from the design: visits *due* per Junior, because customers are not assigned to a Junior in Rasi, so only visits done are shown.
+- **Shared parts.** The three dashboards share `dashboard-visuals.tsx`: KPI card, sparkline, compact figure, hero stat, ring and action list. They also share one mapping from US-082's attention items to rows, so S-07 and S-20 name and link each item the same way.
+- **Phone homes** (`phone-home.tsx`, after the Stitch screens in "Rasi Mobile, all roles": "S-00 Super Admin Home", "Rasi Admin Home (Android M3)", "Rasi Senior Home (Android M3)").
+  - In the phone layout (ADR-0016's `rasi.device.layout = mobile`), each console role's `/dashboard` becomes an app-style home. The computer layout is unchanged.
+  - **Order:** a greeting with a date chip (a real date input), the teal summary, a grid of menu tiles, what needs the person, then compact cards.
+  - **Super Admin:** total funds; a today strip with pending, overdue and sectors tallied; needs your attention; menu; sectors.
+  - **Admin:** the day hero; menu; needs attention; each line as a card; a "New customer" button above the tab bar.
+  - **Senior:** line rings; menu; waiting on you; each Junior as a card with handed over, signed difference and "Acknowledge ₹…"; exceptions; finishing soon; overdue; "Close the day" held above the tab bar.
+  - **Menu tiles** come from `lib/home-menu.ts`. A tile a role may not use is absent, as in the navigation; this is wayfinding, not access control.
+  - The Senior's Handovers and Day close tiles open their own line's day close.
+  - **Badges** are the counts the page already read: approvals, handovers waiting, field expenses waiting.
+  - **Same data, same rules:** each phone home reads the same queries as the computer page, with the same "—" for an unknown figure.
+  - **Sector comparison on a phone** (`/dashboard/sectors`, Stitch S-07b / C-02):
+    - a collection-status card (tallied, extra, low);
+    - one card per sector: expected, collected, shortfall and lines in a 2 × 2 grid, a bar for collected of expected, customers, and the sector's real tally;
+    - the business line closes the list.
+    - The design's "On track" and "Sync error" labels were not used: the tally is §19's own.
+  - **Junior home** (`app/route/route-screen.tsx`, Stitch "J-01 Rasi Junior Home", 2026-10-02):
+    - the route's progress card became the teal summary: a visited ring, collected against what is due, left to visit, not sent;
+    - a "Next: customer · ₹amount" button opens the first customer still to visit, in the Senior's order;
+    - large menu tiles open the field app's existing hash views (Hand over, Expense, Sync with its unsent count, Collections, Customers, Alerts), so each opens offline as before;
+    - an amber note says how many collections are safe on the phone.
+    - Search, filters and the customer list are unchanged below.
+    - The field app's own five-tab bottom navigation (Route, Customers, Collections, Cash, Profile) is kept as it was. The design's different tab set was not adopted, by decision (2026-10-02).
+  - **Not built:** an Accounts tile, because there is no accounts list page.
+- **Layout.** "Lines today" with the trend (S-20) and "My Juniors" with "Waiting on you" (S-19) sit side by side only from the 2xl breakpoint; below it the table takes the full width, so no column is cut off.
+- **Each source is read on its own.** One that fails shows "—" or its own retry and leaves the rest of the page standing (S-07's rule).
+- **Hero figures** use `formatCompactCurrency` (₹52.96 L, ₹1.25 Cr), computed in exact paise in `apps/web/lib/money.ts`. The full amount stays in a tooltip and for screen readers.
+- **Not built from the design:**
+  - the Today / Month / Year switch, because nothing reads a period yet;
+  - sparklines on the pending, overdue and expense cards, because no series exists for them;
+  - the deep-teal sidebar, because the console shell (ADR-0015) is shared by every page.
+
+Browser: `layout-tests/dashboards.spec.ts` adds five tests, writing nothing:
+
+- S-07's hero, change chip, donut, P&L and attention list, against fixtures that balance;
+- on S-07, a failed balance sheet leaves the day's collections standing;
+- S-20's hero, quick actions, Books card and attention list;
+- S-19's per-Junior cash, with a ₹220 short difference shown signed and the "Acknowledge" link named with its amount;
+- on S-19, a failed discrepancy read leaves the Juniors listed with no acknowledge action.
+
+All three dashboards still fit 360, 768 and 1280 (17 of 17). Web unit: `changePerMille` and `formatCompactCurrency` in `lib/money.spec.ts`.
+
 ## Risks
 
 | Risk                                       | Mitigation                                                                        |

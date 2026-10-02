@@ -24,7 +24,7 @@ import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { ConflictError, DomainError } from '../platform/errors/errors.js';
 import { HandoverViews } from './handover-views.js';
-import { lineDayFigures } from './line-day-figures.js';
+import { cashDiscrepancy, lineDayFigures } from './line-day-figures.js';
 
 type Tx = Prisma.TransactionClient;
 type Decimal = ReturnType<typeof toMoney>;
@@ -156,7 +156,8 @@ export class DayCloseService {
       expectedTotal: totals.expected.toFixed(2),
       collectedTotal: totals.collected.toFixed(2),
       cashReceivedTotal: totals.cashReceived.toFixed(2),
-      discrepancy: totals.cashReceived.minus(totals.collected).toFixed(2),
+      expenseTotal: totals.expenses.toFixed(2),
+      discrepancy: cashDiscrepancy(totals).toFixed(2),
       closedAt: row?.closedAt?.toISOString() ?? null,
       closedByName: row?.closedByUserId
         ? (names.get(row.closedByUserId) ?? 'Unknown staff')
@@ -221,7 +222,7 @@ export class DayCloseService {
       const pending = await tx.cashHandover.count({
         where: { dayCloseId: row.id, status: 'PENDING' },
       });
-      const discrepancy = totals.cashReceived.minus(totals.collected);
+      const discrepancy = cashDiscrepancy(totals);
       const status =
         discrepancy.isZero() && pending === 0 ? 'TALLIED' : 'CLOSED';
       await tx.dayClose.update({
@@ -334,8 +335,10 @@ export class DayCloseService {
   }
 
   /**
-   * After a handover is acknowledged: the stored cash figure moves, and a
-   * closed day becomes `TALLIED` — or stops being — as the cash now stands.
+   * After a handover is acknowledged or a field expense decided: the stored
+   * cash figure moves, and a closed day becomes `TALLIED` — or stops being —
+   * as the cash now stands. Unlike a collection (BR-16a) this does not reopen
+   * the day: no recorded money changed, only how the cash is accounted for.
    */
   async refreshTally(tx: Tx, dayCloseId: string): Promise<void> {
     const row = await tx.dayClose.findUniqueOrThrow({
@@ -349,7 +352,7 @@ export class DayCloseService {
     const pending = await tx.cashHandover.count({
       where: { dayCloseId, status: 'PENDING' },
     });
-    const discrepancy = totals.cashReceived.minus(totals.collected);
+    const discrepancy = cashDiscrepancy(totals);
     const status = !(CLOSED as readonly string[]).includes(row.status)
       ? row.status
       : discrepancy.isZero() && pending === 0
@@ -575,11 +578,13 @@ function stored(totals: {
   expected: Decimal;
   collected: Decimal;
   cashReceived: Decimal;
+  expenses: Decimal;
 }) {
   return {
     expectedTotal: totals.expected.toFixed(2),
     collectedTotal: totals.collected.toFixed(2),
     cashReceivedTotal: totals.cashReceived.toFixed(2),
-    discrepancy: totals.cashReceived.minus(totals.collected).toFixed(2),
+    expenseTotal: totals.expenses.toFixed(2),
+    discrepancy: cashDiscrepancy(totals).toFixed(2),
   };
 }

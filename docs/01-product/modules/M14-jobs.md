@@ -113,7 +113,11 @@ In `apps/api/src/jobs/`. Status is in the [backlog](../../06-delivery/backlog.md
 - **Transactional enqueue.** `JobQueue.enqueue(tx, name, data)` passes pg-boss a `db` executor that runs its insert through the Prisma transaction. Nothing enqueues yet: M10 writes its outbox rows in the event's transaction and drains them on a schedule instead, which keeps the same guarantee.
 - **`detect-missed-collections` is not scheduled**: missed slots are marked when a line closes (M08).
 
-**Not built:** the job status and dead-letter screens, replay and manual trigger, the dead-letter Admin alert, `deactivate-stale-subscriptions`, `archive-audit-partitions`.
+**Built 2026-09-24:** the **dead-letter alert** — a per-organization job that exhausts its retries raises `JOB_FAILED` (ALERT) to that organization's Admins and Super Admins, in its own transaction, as well as logging (`alertDeadJob` in `scheduled-jobs.ts`); a trigger job belongs to no organization and is only logged. And **`deactivate-stale-subscriptions`**, weekly on Sunday at 03:00 IST (`JOBS_STALE_SUBSCRIPTIONS_CRON`): `StaleSubscriptionService` (M10) deactivates each of the organization's push subscriptions unseen for 90 days and expires its pending pushes, as a `410` does. Both proven in `test/jobs/job-handlers.spec.ts`; neither has been seen firing on the live worker.
+
+**Job status (2026-09-24, decided with the business: our own table, read-only).** `job_status` keeps one row per organization and job — the latest start, finish and outcome, the failure's class and stable code (never its message, which can carry data), when it last succeeded, and when it was last dead-lettered — rather than a row per run, since two jobs run every minute. The worker records each per-organization run around the handler (`runForOrganization`): RUNNING, then SUCCEEDED, or FAILED and rethrown so pg-boss still retries. `alertDeadJob` stamps the dead-lettered time. The job names and crons live in one place, `schedule.ts`, shared by the worker and `GET /api/jobs` (`job.view`, Admin+), so a job that never ran is still listed. The console shows it at `/settings/jobs`: each job in words, its last run and outcome, a dead-letter named, a schedule overridden on the server shown as its cron, and a warning when this server does not run the worker.
+
+**Not built:** replay and manual trigger (not asked for), `archive-audit-partitions`.
 
 ## Risks
 

@@ -23,7 +23,8 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "seed": "node --env-file=../../.env dist/seed/run.js",
-    "email:test": "node --env-file=../../.env dist/email/send-test-email.js"
+    "email:test": "node --env-file=../../.env dist/email/send-test-email.js",
+    "push:test": "node --env-file=../../.env dist/notifications/send-test-push.js"
   },
   "dependencies": {
     "@better-auth/core": "1.7.4",

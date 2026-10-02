@@ -22,6 +22,7 @@ import { InvestmentReportService } from '../../src/reports/investment-report.ser
 import { LineWiseReportService } from '../../src/reports/line-wise-report.service.js';
 import { OverdueReportService } from '../../src/reports/overdue-report.service.js';
 import { SettingReader } from '../../src/settings/setting-reader.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { at, cashWorld, SATURDAY } from '../cash/world.js';
 import { createStaff } from '../db-constraints/fixtures.js';
 import { testNotifications } from '../notifications/notices.js';
@@ -44,7 +45,12 @@ export async function businessWorld(tx: PrismaClient) {
   const audit = new AuditWriter(database);
   const ledger = new LedgerService(database);
   const { notices } = testNotifications(database);
-  const accounts = new AccountService(database, audit, ledger);
+  const accounts = new AccountService(
+    database,
+    audit,
+    ledger,
+    testNotifications(database).notices,
+  );
   const collections = new CollectionService(
     database,
     audit,
@@ -102,12 +108,14 @@ export async function businessWorld(tx: PrismaClient) {
         linePeriods: openLinePeriod(lineId),
       },
     });
+    const invested = toMoney(daily).times(17).toFixed(2);
+    await fundOfficeCash(database, w.owner, invested, SATURDAY);
     return accounts.create(
-      w.admin,
+      w.owner,
       {
         customerId: customer.id,
         accountAmount: toMoney(daily).times(20).toFixed(2),
-        investedAmount: toMoney(daily).times(17).toFixed(2),
+        investedAmount: invested,
         dailyAmount: daily,
         termDays: 20,
         collectionFrequency: 'DAILY',

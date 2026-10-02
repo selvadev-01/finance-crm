@@ -152,7 +152,7 @@ Codes stay immutable; only names change. The decision was the permanence: a code
 
 - `/sectors` and `/sectors/:id` (S-13) are for Admin and Super Admin only.
 - `/lines` and `/lines/:id` (S-12) are also open to a Senior, who sees their own line read-only. The line detail shows today's staffing and the assignment history.
-- The §14 figures are stated as unavailable until M05, M07 and M09 exist; the page never shows zeros in their place.
+- The §14 figures (2026-09-24) come from the line-wise report (US-084) for today and that line: customers and accounts, account value, invested and profit, and today's expected, collected, pending and extra. A group the API could not read is shown as unavailable, never as zero.
 - `/team` and `/team/:id` (S-14) show each person's line today and their history.
 - The S-15 assign dialog opens from a line or from a person. It has no default effective date; "Use today" is an explicit button. After saving, it says which assignments were closed and names any line left without a Senior.
 

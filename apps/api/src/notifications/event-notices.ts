@@ -18,6 +18,19 @@ const DATE = new Intl.DateTimeFormat('en-IN', {
 const dateText = (date: CalendarDate) =>
   DATE.format(new Date(`${date}T00:00:00Z`));
 
+/** M14's scheduled jobs, as an Admin would name them. */
+const JOB_NAMES: Record<string, string> = {
+  'reconcile-balances': 'Nightly reconciliation',
+  'flag-overdue-accounts': 'Overdue accounts',
+  'purge-idempotency-keys': 'Sync key clean-up',
+  'dispatch-notifications': 'Push delivery',
+  'dispatch-emails': 'Email delivery',
+  'deactivate-stale-subscriptions': 'Stale device clean-up',
+};
+
+/** An instalment's cadence in words (BR-04, US-030b). */
+const PER = { DAILY: 'a day', WEEKLY: 'a week', MONTHLY: 'a month' } as const;
+
 /**
  * The events the rest of the system raises (M10), each with its recipients,
  * category and words in one place (decided 2026-09-14):
@@ -150,6 +163,76 @@ export class EventNotices {
   }
 
   /**
+   * ADR-0018: a field expense waits for someone other than its spender. A
+   * Junior's goes to the line's Senior and the Admins; a Senior's own to the
+   * Admins only — the same people the API lets decide it.
+   */
+  async expenseRequested(event: {
+    actorUserId: string;
+    organizationId: string;
+    lineId: string;
+    lineName: string;
+    hop: 'JUNIOR_TO_SENIOR' | 'SENIOR_TO_OFFICE';
+    category: string;
+    amount: string;
+    note: string;
+  }): Promise<void> {
+    const tx = this.database.client;
+    const admins = await this.recipients.admins(tx, event.organizationId);
+    const senior =
+      event.hop === 'JUNIOR_TO_SENIOR'
+        ? await this.recipients.seniorOf(
+            tx,
+            event.lineId,
+            toBusinessDate(new Date()),
+          )
+        : null;
+    const spender = await this.recipients.nameOf(tx, event.actorUserId);
+    await this.notifications.raise({
+      recipients: [senior, ...admins],
+      actorUserId: event.actorUserId,
+      category: 'WARNING',
+      eventType: 'EXPENSE_REQUESTED',
+      title: `Expense to approve · ${event.lineName}`,
+      body: `${spender} spent ${rupees(event.amount)} on ${event.category.toLowerCase()} from collected cash: ${event.note}`,
+      link: {
+        entityType: 'expense',
+        entityId: null,
+        url: '/cash#field-expenses',
+      },
+    });
+  }
+
+  /** ADR-0018: the spender hears the decision, and a rejection's reason. */
+  async expenseDecided(event: {
+    actorUserId: string;
+    spenderUserId: string;
+    expenseId: string;
+    approved: boolean;
+    category: string;
+    amount: string;
+    note: string | null;
+  }): Promise<void> {
+    const tx = this.database.client;
+    const by = await this.recipients.nameOf(tx, event.actorUserId);
+    await this.notifications.raise({
+      recipients: [event.spenderUserId],
+      actorUserId: event.actorUserId,
+      category: event.approved ? 'SUCCESS' : 'WARNING',
+      eventType: 'EXPENSE_DECIDED',
+      title: `Expense ${event.approved ? 'approved' : 'rejected'} · ${rupees(event.amount)}`,
+      body: event.approved
+        ? `${by} approved your ${event.category.toLowerCase()} expense; it comes off what you hand over`
+        : `${by} rejected your ${event.category.toLowerCase()} expense: ${event.note ?? ''}. Hand that cash over with the rest`,
+      link: {
+        entityType: 'expense',
+        entityId: event.expenseId,
+        url: '/route#expense',
+      },
+    });
+  }
+
+  /**
    * US-020 (§12 "new customer"): the Senior of the line the customer joins
    * hears that someone new is on their round. The Admin who onboarded them
    * is not told of their own action.
@@ -180,6 +263,48 @@ export class EventNotices {
         entityType: 'customer',
         entityId: event.customerId,
         url: `/customers/${event.customerId}`,
+      },
+    });
+  }
+
+  /**
+   * US-032 (decided 2026-09-24): a disbursed account is a new visit on the
+   * round, so the Senior of the customer's line today hears what to collect
+   * and from when. A mid-term account (US-030a) joins the round the same way
+   * and says so. The Admin who disbursed is not told of their own action.
+   */
+  async accountDisbursed(event: {
+    actorUserId: string;
+    accountLoanId: string;
+    accountCode: string;
+    customerName: string;
+    lineId: string;
+    dailyAmount: string;
+    collectionFrequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+    firstDueDate: CalendarDate;
+    midTerm: boolean;
+  }): Promise<void> {
+    const tx = this.database.client;
+    const senior = await this.recipients.seniorOf(
+      tx,
+      event.lineId,
+      toBusinessDate(new Date()),
+    );
+    const by = await this.recipients.nameOf(tx, event.actorUserId);
+    const instalment = `${rupees(event.dailyAmount)} ${PER[event.collectionFrequency]} from ${dateText(event.firstDueDate)}`;
+    await this.notifications.raise({
+      recipients: [senior],
+      actorUserId: event.actorUserId,
+      category: 'INFORMATION',
+      eventType: 'ACCOUNT_DISBURSED',
+      title: `${event.midTerm ? 'Running account added' : 'Account disbursed'} · ${event.accountCode}`,
+      body: event.midTerm
+        ? `${by} entered ${event.customerName}'s running account: ${instalment}`
+        : `${by} disbursed ${event.customerName}'s account: ${instalment}`,
+      link: {
+        entityType: 'account_loan',
+        entityId: event.accountLoanId,
+        url: `/accounts/${event.accountLoanId}`,
       },
     });
   }
@@ -465,6 +590,30 @@ export class EventNotices {
         entityId: null,
         url: `/reports/overdue?line=${event.lineId}`,
       },
+    });
+  }
+
+  /**
+   * M14: a scheduled job for this organization failed five times and was
+   * dead-lettered. An ALERT to Admins and Super Admins — what it stops (a
+   * night's reconciliation, overdue flags, push delivery) is silent otherwise.
+   * There is no job screen yet (M14), so it links home.
+   */
+  async jobFailed(event: {
+    organizationId: string;
+    job: string;
+    lastError: string | null;
+  }): Promise<void> {
+    await this.notifications.raise({
+      recipients: await this.recipients.admins(
+        this.database.client,
+        event.organizationId,
+      ),
+      category: 'ALERT',
+      eventType: 'JOB_FAILED',
+      title: `Scheduled job failed · ${JOB_NAMES[event.job] ?? event.job}`,
+      body: `It failed five times and has stopped retrying.${event.lastError ? ` Last error: ${event.lastError.slice(0, 200)}` : ''} Tell whoever runs the server.`,
+      link: { entityType: 'job', entityId: null, url: '/home' },
     });
   }
 

@@ -346,11 +346,27 @@ export function chennaiDataset(runId: string) {
     correctedAmount: "40",
     reason: "Customer paid ₹40; I typed ₹30 in the rain.",
   };
-  /** ₹390 as counted: 1 × 200, 1 × 100, 1 × 50, 2 × 20. */
+  /**
+   * The money the loans are paid from (decided 2026-10-02): the owner puts
+   * it in before anything is lent.
+   */
+  const capital = {
+    amount: "100000",
+    note: "Opening capital from the owner",
+  };
+  /**
+   * US-102, ADR-0018: Selvi pays for petrol from the day's cash; Murugan
+   * approves it, so she hands over ₹50 less and the day still tallies.
+   */
+  const fieldExpense = {
+    category: "Fuel & travel",
+    amount: "50",
+    note: "Petrol for the Royapuram round",
+  };
+  /** ₹340 as counted — ₹390 collected less the ₹50 petrol: 1 × 200, 1 × 100, 2 × 20. */
   const handoverCounts: [denomination: number, count: number][] = [
     [200, 1],
     [100, 1],
-    [50, 1],
     [20, 2],
   ];
 
@@ -366,10 +382,22 @@ export function chennaiDataset(runId: string) {
     visits,
     notDueToday,
     correction,
+    capital,
+    fieldExpense,
     handoverCounts,
     expected: {
+      /**
+       * 1,00,000 put in, less the seven loans paid out today (8,500 + 4,250
+       * + 17,000 + 8,500 + 12,750 + 8,500 + 8,500 = 68,000) and the mid-term
+       * account's 8,500, booked from the office as it was lent before Rasi.
+       * The day's cash stays with the Senior, so none of it is back yet.
+       */
+      cashInHand: "23500.00",
       expectedTotal: "700.00",
       collectedTotal: "390.00",
+      /** Collected less the approved field expense. */
+      cashReceivedTotal: "340.00",
+      expenseTotal: "50.00",
       /** Outstanding after the day, per account. */
       outstanding: {
         "anbu-1": "9900.00",

@@ -777,6 +777,55 @@ Scenario: Cached balances are verified
 
 ---
 
+## E11 — Books (ADR-0018)
+
+The business's own money beside the loan book: what it spends, where it banks, what the owner takes out and puts in, and the statements that add it up.
+
+### US-100 · Expense categories and bank accounts · P1
+
+```gherkin
+Scenario: The owner shapes the lists
+  Given a new business has the starter expense categories
+  When the Super Admin adds "Electricity", renames "Rent" and retires "Interest paid"
+  Then "Interest paid" can no longer be chosen, and what was spent under it stays in the books
+  And a bank account holding money cannot be retired
+```
+
+### US-101 · Record an office expense · P1
+
+```gherkin
+Scenario: Rent paid from office cash
+  Given office cash is 10,000
+  When an Admin records rent of 3,000 paid from office cash
+  Then office cash is 7,000 and the Rent expense is 3,000
+```
+
+### US-102 · Record a field expense · P1
+
+```gherkin
+Scenario: Petrol from collected cash
+  Given a Junior collected 4,320 today
+  When they record 50 of petrol and their Senior approves it
+  Then they owe 4,270 at handover, and a handover of 4,270 tallies the day
+  And nobody approves an expense they spent themselves
+```
+
+### US-103 · Move money between cash and the bank · P1
+
+Deposit office cash into a bank account, withdraw it back, and pay an expense from the bank.
+
+### US-104 · Owner drawings and other income · P2
+
+The Super Admin records money taken out of the business; an Admin records income that is not a collection.
+
+### US-105 · Statements · P1
+
+Profit and loss over a range, a balance sheet as of a date, and any account's statement with a running balance — the cash book being office cash's or a bank's — each exportable to Excel, CSV and PDF.
+
+### US-106 · Manual journal · P2
+
+The Super Admin posts a balanced correcting entry, refused on the loan receivables, profit accounts and staff cash in hand.
+
 ## Summary
 
 | Epic                         | Stories | P0     |

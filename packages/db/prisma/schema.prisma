@@ -229,6 +229,14 @@ enum LedgerAccountType {
   /// What a written-off account cost the business (US-035). Debit-normal,
   /// like the expense it is. Added 2026-09-20.
   WRITE_OFF_LOSS
+  /// Books (ADR-0018, added 2026-09-25): one per expense category, debit-normal.
+  EXPENSE
+  /// One per bank account the business keeps, debit-normal like cash.
+  BANK
+  /// Income that is not a collection, credit-normal. One per organization.
+  OTHER_INCOME
+  /// Money the owner took out of the business, debit-normal. One per organization.
+  OWNER_DRAWINGS
 }
 
 enum Direction {
@@ -242,6 +250,15 @@ enum LedgerTransactionType {
   HANDOVER
   ADJUSTMENT
   WRITE_OFF
+  /// Added 2026-09-24 (migration capital_transaction_type): money the owner
+  /// puts into the business, sourced to a `capital_entry` (US-032).
+  CAPITAL
+  /// Books (ADR-0018, added 2026-09-25).
+  EXPENSE
+  BANK_TRANSFER
+  DRAWINGS
+  OTHER_INCOME
+  JOURNAL
 }
 
 enum NotificationCategory {
@@ -275,6 +292,16 @@ enum NotificationEvent {
   /// Added 2026-09-20 (migration account_overdue_event): BR-05 overdue, to
   /// the line's Senior as a WARNING.
   ACCOUNT_OVERDUE
+  /// Added 2026-09-24 (migration account_disbursed_event): US-032, to the
+  /// Senior of the customer's line as INFORMATION.
+  ACCOUNT_DISBURSED
+  /// Added 2026-09-24 (migration job_failed_event): M14, a scheduled job
+  /// dead-lettered, to the organization's Admins as an ALERT.
+  JOB_FAILED
+  /// Added 2026-10-01 (migration expense_notification_events, ADR-0018): a
+  /// field expense to approve, and its decision back to the spender.
+  EXPENSE_REQUESTED
+  EXPENSE_DECIDED
 }
 
 enum PushProvider {
@@ -350,6 +377,15 @@ model Organization {
   accountLoans   AccountLoan[]
   staffProfiles  StaffProfile[]
   holidays       Holiday[]
+  capitalEntries CapitalEntry[]
+  expenses       Expense[]
+  bankTransfers  BankTransfer[]
+  drawingEntries DrawingEntry[]
+  incomeEntries  IncomeEntry[]
+  journalEntries JournalEntry[]
+  jobStatuses    JobStatus[]
+  expenseCategories ExpenseCategory[]
+  bankAccounts      BankAccount[]
   settings       Setting[]
   ledgerAccounts LedgerAccount[]
   auditLogs      AuditLog[]
@@ -432,6 +468,7 @@ model Line {
   accountLoans        AccountLoan[]
   collections         Collection[]
   dayCloses           DayClose[]
+  expenses            Expense[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -758,7 +795,10 @@ model DayClose {
   collectedTotal    Decimal @db.Decimal(14, 2)
   /// Σ acknowledged handovers.
   cashReceivedTotal Decimal @db.Decimal(14, 2)
-  /// cashReceivedTotal - collectedTotal.
+  /// Σ approved field expenses the line's Juniors paid from that day's cash
+  /// (ADR-0018): money spent, not missing.
+  expenseTotal      Decimal @default(0) @db.Decimal(14, 2)
+  /// cashReceivedTotal + expenseTotal - collectedTotal.
   discrepancy       Decimal @db.Decimal(14, 2)
 
   /// TALLIED is CLOSED with discrepancy = 0 and every handover acknowledged.
@@ -878,6 +918,10 @@ model LedgerAccount {
   ownerUserId    String?
   /// Required for LOAN_RECEIVABLE.
   accountLoanId  String?
+  /// Required for EXPENSE: the category it totals (ADR-0018).
+  expenseCategoryId String?
+  /// Required for BANK: the bank account it mirrors (ADR-0018).
+  bankAccountId     String?
   normalBalance  Direction
   /// Cache. Rebuilt and verified by the nightly reconciliation job.
   balance        Decimal           @default(0) @db.Decimal(14, 2)
@@ -886,11 +930,17 @@ model LedgerAccount {
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   accountLoan  AccountLoan?  @relation(fields: [accountLoanId], references: [id])
+  expenseCategory ExpenseCategory? @relation(fields: [expenseCategoryId], references: [id], onDelete: Restrict)
+  bankAccount     BankAccount?     @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
   entries      LedgerEntry[]
 
   @@unique([ownerUserId], map: "ledger_account_cash_in_hand_owner_key", where: raw("(\"accountType\" = 'CASH_IN_HAND'::\"LedgerAccountType\")"))
-  @@unique([organizationId, accountType], map: "ledger_account_organization_singleton_key", where: raw("(\"accountType\" = ANY (ARRAY['CASH_AT_OFFICE'::\"LedgerAccountType\", 'CAPITAL'::\"LedgerAccountType\", 'UNEARNED_PROFIT'::\"LedgerAccountType\", 'EARNED_PROFIT'::\"LedgerAccountType\", 'WRITE_OFF_LOSS'::\"LedgerAccountType\"]))"))
+  @@unique([organizationId, accountType], map: "ledger_account_organization_singleton_key", where: raw("(\"accountType\" = ANY (ARRAY['CASH_AT_OFFICE'::\"LedgerAccountType\", 'CAPITAL'::\"LedgerAccountType\", 'UNEARNED_PROFIT'::\"LedgerAccountType\", 'EARNED_PROFIT'::\"LedgerAccountType\", 'WRITE_OFF_LOSS'::\"LedgerAccountType\", 'OTHER_INCOME'::\"LedgerAccountType\", 'OWNER_DRAWINGS'::\"LedgerAccountType\"]))"))
   @@unique([accountLoanId], map: "ledger_account_loan_receivable_key", where: raw("(\"accountType\" = 'LOAN_RECEIVABLE'::\"LedgerAccountType\")"))
+  @@unique([expenseCategoryId], map: "ledger_account_expense_category_key", where: raw("(\"accountType\" = 'EXPENSE'::\"LedgerAccountType\")"))
+  @@unique([bankAccountId], map: "ledger_account_bank_account_key", where: raw("(\"accountType\" = 'BANK'::\"LedgerAccountType\")"))
+  @@index([expenseCategoryId])
+  @@index([bankAccountId])
   @@index([organizationId])
   @@index([accountType])
   @@index([ownerUserId])
@@ -1070,6 +1120,280 @@ model EmailOutbox {
 }
 
 /// Sundays are NOT stored here — they are excluded by rule, not by data (BR-02).
+/// What the business spends on (ADR-0018, added 2026-09-25). A starter list
+/// per organization, which the Super Admin adds to or retires; never deleted,
+/// since its ledger account (EXPENSE) keeps it. CHECK
+/// expense_category_name_not_blank_check and a unique index on the lower-cased
+/// name per organization (migration constraints_books_foundation).
+model ExpenseCategory {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  /// A retired category takes no new expenses; its history stays.
+  isActive       Boolean @default(true)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  expenses       Expense[]
+  ledgerAccounts LedgerAccount[]
+
+  @@index([organizationId])
+  @@map("expense_category")
+}
+
+/// A bank account the business keeps (ADR-0018, added 2026-09-25). Its money
+/// lives in a BANK ledger account. Retired, never deleted. CHECKs
+/// bank_account_name_not_blank_check and bank_account_last4_check, and a
+/// unique index on the lower-cased name per organization (migration
+/// constraints_books_foundation).
+model BankAccount {
+  id             String  @id @default(cuid())
+  organizationId String
+  /// "SBI Mylapore current account".
+  name           String
+  /// The account number's last four digits, to tell two apart; never the whole number.
+  last4          String?
+  isActive       Boolean @default(true)
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  expenses       Expense[]
+  transfersOut   BankTransfer[] @relation("BankTransferFrom")
+  transfersIn    BankTransfer[] @relation("BankTransferTo")
+  drawingEntries DrawingEntry[]
+  incomeEntries  IncomeEntry[]
+  ledgerAccounts LedgerAccount[]
+
+  @@index([organizationId])
+  @@map("bank_account")
+}
+
+/// The latest run of each scheduled job for one organization (M14, decided
+/// 2026-09-24): one row per (organization, job), upserted as the job starts,
+/// finishes or fails, and stamped when it is dead-lettered. The latest state,
+/// not a history — two jobs run every minute, and the screen asks only "is it
+/// working, and when did it last fail for good". Rows are the worker's to
+/// write; nothing else changes them. CHECK job_status_outcome_check (migration
+/// job_status).
+model JobStatus {
+  organizationId  String
+  /// The scheduled job's name — `reconcile-balances`, `dispatch-emails`, ….
+  job             String
+  lastStartedAt   DateTime  @db.Timestamptz(3)
+  lastFinishedAt  DateTime? @db.Timestamptz(3)
+  /// RUNNING, SUCCEEDED or FAILED — the latest attempt's.
+  lastOutcome     String
+  /// The failure's class and stable code, never its message (which can carry data).
+  lastError       String?
+  lastSucceededAt DateTime? @db.Timestamptz(3)
+  /// When it last exhausted its retries (M14 dead-letter).
+  deadLetteredAt  DateTime? @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@id([organizationId, job])
+  @@map("job_status")
+}
+
+/// A fixed-window rate-limit counter shared by every API process (ADR-0012,
+/// added 2026-09-24). `key` carries its limiter's prefix and the client
+/// address — `sign-up:203.0.113.7`. Belongs to no organization: it guards
+/// public routes, before any organization exists. Rows are disposable; each
+/// limiter deletes its own expired windows. CHECK
+/// rate_limit_window_count_positive_check (migration rate_limit_window).
+model RateLimitWindow {
+  key         String   @id
+  windowStart DateTime @db.Timestamptz(3)
+  count       Int
+
+  @@map("rate_limit_window")
+}
+
+/// Money the owner puts into the business (US-032, M08, decided 2026-09-24).
+/// The source row of a `CAPITAL` ledger transaction — debit `CASH_AT_OFFICE`,
+/// credit `CAPITAL` — written in the same database transaction, so office
+/// cash is funded rather than running negative as accounts are disbursed.
+///
+/// Append-only, like the ledger it feeds: a mistake is corrected by a later
+/// entry, never by editing this one. CHECKs capital_entry_amount_positive_check
+/// and capital_entry_note_not_blank_check, trigger capital_entry_append_only
+/// (migration constraints_capital_entry).
+model CapitalEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  amount         Decimal  @db.Decimal(14, 2)
+  /// The business day the money arrived. Never in the future (the service).
+  businessDate   DateTime @db.Date
+  /// Where it came from — required, since the ledger shows only the amount.
+  note           String
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, businessDate])
+  @@map("capital_entry")
+}
+
+/// Where an expense was paid from (ADR-0018).
+enum ExpensePaidFrom {
+  OFFICE_CASH
+  BANK
+  /// A field expense: from the cash a Senior or Junior is holding.
+  CASH_IN_HAND
+}
+
+/// An expense's approval. Office expenses are APPROVED when recorded; a field
+/// expense waits PENDING until someone other than the spender decides it.
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Every expense the business pays (ADR-0018, added 2026-09-25). Posts DR
+/// EXPENSE[category] / CR the account it was paid from — office cash or a
+/// bank when recorded, the spender's cash in hand when approved. Never
+/// deleted; only its status moves, PENDING → APPROVED or REJECTED, once.
+/// CHECKs and trigger expense_guard (migration constraints_books_money).
+model Expense {
+  id                String          @id @default(cuid())
+  organizationId    String
+  expenseCategoryId String
+  amount            Decimal         @db.Decimal(14, 2)
+  /// The business day it was spent. Never in the future (the service).
+  businessDate      DateTime        @db.Date
+  /// What it was for — required; the ledger shows only the amount.
+  note              String
+  paidFrom          ExpensePaidFrom
+  /// Required when paid from a bank, absent otherwise.
+  bankAccountId     String?
+  /// A field expense: who spent it, and on which line's round.
+  spenderUserId     String?
+  lineId            String?
+  /// A field expense: whose handover it comes out of, fixed when it is
+  /// requested — a Junior's lowers the line's tally, a Senior's only what they
+  /// take to the office. A later promotion never moves an old expense.
+  hop               HandoverHop?
+  status            ExpenseStatus
+  decidedByUserId   String?
+  decidedAt         DateTime?       @db.Timestamptz(3)
+  decisionNote      String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String
+
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  expenseCategory ExpenseCategory @relation(fields: [expenseCategoryId], references: [id])
+  bankAccount     BankAccount?    @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  line            Line?           @relation(fields: [lineId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, businessDate])
+  @@index([expenseCategoryId])
+  @@index([bankAccountId])
+  @@index([lineId, businessDate])
+  @@index([spenderUserId, businessDate])
+  @@map("expense")
+}
+
+/// Money moved between office cash and a bank, or between two banks
+/// (ADR-0018). A null side is office cash. Append-only. CHECKs and trigger
+/// (migration constraints_books_money).
+model BankTransfer {
+  id                String   @id @default(cuid())
+  organizationId    String
+  amount            Decimal  @db.Decimal(14, 2)
+  businessDate      DateTime @db.Date
+  note              String
+  fromBankAccountId String?
+  toBankAccountId   String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  fromBankAccount BankAccount? @relation("BankTransferFrom", fields: [fromBankAccountId], references: [id], onDelete: Restrict)
+  toBankAccount   BankAccount? @relation("BankTransferTo", fields: [toBankAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, businessDate])
+  @@index([fromBankAccountId])
+  @@index([toBankAccountId])
+  @@map("bank_transfer")
+}
+
+/// Money the owner took out of the business (ADR-0018) — capital's mirror.
+/// Paid from office cash, or from a bank when `bankAccountId` is set.
+/// Append-only (migration constraints_books_money).
+model DrawingEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  amount         Decimal  @db.Decimal(14, 2)
+  businessDate   DateTime @db.Date
+  note           String
+  bankAccountId  String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  bankAccount  BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, businessDate])
+  @@index([bankAccountId])
+  @@map("drawing_entry")
+}
+
+/// A manual journal (ADR-0018 slice 5): the Super Admin's correcting entry,
+/// for what no business event records. The header only — its lines are the
+/// ledger entries of the one JOURNAL transaction that names it as source.
+/// Append-only (migration constraints_books_journal).
+model JournalEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  businessDate   DateTime @db.Date
+  /// Why the entry was needed — required; an accountant reads it later.
+  note           String
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, businessDate])
+  @@map("journal_entry")
+}
+
+/// Income that is not a collection — a processing fee, bank interest
+/// (ADR-0018). Received into office cash, or a bank when `bankAccountId` is
+/// set. Append-only (migration constraints_books_money).
+model IncomeEntry {
+  id             String   @id @default(cuid())
+  organizationId String
+  amount         Decimal  @db.Decimal(14, 2)
+  businessDate   DateTime @db.Date
+  note           String
+  bankAccountId  String?
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  bankAccount  BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, businessDate])
+  @@index([bankAccountId])
+  @@map("income_entry")
+}
+
 model Holiday {
   id             String   @id @default(cuid())
   organizationId String

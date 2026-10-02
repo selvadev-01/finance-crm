@@ -36,10 +36,13 @@ type ExportQuery<Route extends RouteDefinition> =
 export function ExportMenu<Route extends RouteDefinition & { file: true }>({
   route,
   query,
+  params,
   disabled = false,
 }: {
   route: Route;
   query: ExportQuery<Route>;
+  /** The path's ids, for a file route that has them (one account's statement). */
+  params?: Record<string, string>;
   disabled?: boolean;
 }) {
   const [pending, setPending] = useState<ExportFormat | null>(null);
@@ -48,6 +51,7 @@ export function ExportMenu<Route extends RouteDefinition & { file: true }>({
     setPending(format);
     try {
       const result = await downloadFile({ baseUrl: "" }, route, {
+        ...(params ? { params } : {}),
         query: { ...query, format },
       } as RouteRequest<Route>);
       if (!result.ok) {

@@ -15,7 +15,9 @@ import {
   collectorDayKey,
   type HandoverFact,
   readCollectedByCollectorDay,
+  readCollectorDayKey,
   readDayCloseStatuses,
+  readExpensesByCollectorDay,
   readHandoversByCollectorDay,
 } from '../cash/line-day-figures.js';
 import {
@@ -65,6 +67,7 @@ interface Row {
     handedOver: Decimal;
     acknowledged: Decimal;
     awaiting: Decimal;
+    expenses: Decimal;
     difference: Decimal;
     state: DiscrepancyState;
     handovers: HandoverFact[];
@@ -135,14 +138,35 @@ export class DiscrepancyReportService {
 
     const figure = <T>(group: string, read: () => Promise<T>) =>
       figureOrNull(this.logger, context, group, read);
-    const collected = await readCollectedByCollectorDay(tx, lineIds, from, to, {
+    const recorded = await readCollectedByCollectorDay(tx, lineIds, from, to, {
       collectedByUserId: query.collectedByUserId,
     });
-    const handovers = await figure('handovers', () =>
-      readHandoversByCollectorDay(tx, lineIds, from, to, {
+    // The handovers and field expenses are one group: a row judged without
+    // either would be judged wrong, so both are read or the cash is null.
+    const cashFacts = await figure('handovers', async () => ({
+      handovers: await readHandoversByCollectorDay(tx, lineIds, from, to, {
         collectedByUserId: query.collectedByUserId,
       }),
+      expenses: await readExpensesByCollectorDay(tx, lineIds, from, to, {
+        collectedByUserId: query.collectedByUserId,
+      }),
+    }));
+    const handovers = cashFacts?.handovers ?? null;
+    const expenses = cashFacts?.expenses ?? null;
+    // A Junior whose approved expenses fell on a day they collected nothing
+    // still answers for that cash, so the day has a row (collected zero) and
+    // the rows go on summing to the day close.
+    const seen = new Set(
+      recorded.map((row) =>
+        collectorDayKey(row.lineId, row.businessDate, row.userId),
+      ),
     );
+    const collected = [
+      ...recorded,
+      ...[...(expenses?.keys() ?? [])]
+        .filter((key) => !seen.has(key))
+        .map((key) => ({ ...readCollectorDayKey(key), collected: ZERO() })),
+    ];
     const statuses = await figure('dayCloses', () =>
       readDayCloseStatuses(tx, lineIds, from, to),
     );
@@ -164,9 +188,13 @@ export class DiscrepancyReportService {
           collectedByName: names.get(row.userId) ?? 'Unknown staff',
           collected: row.collected,
           cash:
-            handovers === null
+            handovers === null || expenses === null
               ? null
-              : cashOf(row.collected, handovers.get(key) ?? []),
+              : cashOf(
+                  row.collected,
+                  handovers.get(key) ?? [],
+                  expenses.get(key) ?? ZERO(),
+                ),
           dayCloseStatus:
             statuses === null
               ? null
@@ -268,7 +296,11 @@ function after(rows: Row[], page: PageRequest): Row[] {
  *   afternoon.
  * - `TALLIED` — every rupee recorded was counted and acknowledged.
  */
-function cashOf(collected: Decimal, handovers: HandoverFact[]) {
+function cashOf(
+  collected: Decimal,
+  handovers: HandoverFact[],
+  expenses: Decimal,
+) {
   const sum = (of: (row: HandoverFact) => boolean) =>
     handovers
       .filter(of)
@@ -276,12 +308,14 @@ function cashOf(collected: Decimal, handovers: HandoverFact[]) {
   const acknowledged = sum((row) => row.status === 'ACKNOWLEDGED');
   const awaiting = sum((row) => row.status === 'PENDING');
   const handedOver = acknowledged.plus(awaiting);
-  const difference = handedOver.minus(collected);
+  // ADR-0018: cash spent on the round with approval is accounted for.
+  const difference = handedOver.plus(expenses).minus(collected);
   const counted = handovers.some((row) => row.status !== 'DISPUTED');
   return {
     handedOver,
     acknowledged,
     awaiting,
+    expenses,
     difference,
     state: stateOf(handovers, difference, counted, awaiting),
     handovers,
@@ -328,6 +362,7 @@ function cashStrings(
     handedOver: cash.handedOver.toFixed(2),
     acknowledged: cash.acknowledged.toFixed(2),
     awaiting: cash.awaiting.toFixed(2),
+    expenses: cash.expenses.toFixed(2),
     difference: cash.difference.toFixed(2),
     state: cash.state,
     handovers: cash.handovers.map((row): DiscrepancyHandover => ({
@@ -378,6 +413,7 @@ function summaryOf(rows: Row[], cashKnown: boolean): DiscrepancySummary {
           handedOver: sum((cash) => cash.handedOver).toFixed(2),
           acknowledged: sum((cash) => cash.acknowledged).toFixed(2),
           awaiting: sum((cash) => cash.awaiting).toFixed(2),
+          expenses: sum((cash) => cash.expenses).toFixed(2),
           short: short.toFixed(2),
           over: over.toFixed(2),
           net: over.minus(short).toFixed(2),

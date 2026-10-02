@@ -456,10 +456,15 @@ export const discrepancyCashSchema = z.object({
   /** Σ declared of the pending ones: counted, not yet acknowledged. */
   awaiting: moneyStringSchema,
   /**
-   * BR-17's discrepancy: `handedOver − collected`, **signed** — negative when
-   * the Junior is short, positive when they handed over more than Rasi
-   * recorded. Never an absolute value: which way it points is the whole
-   * question.
+   * Σ their approved field expenses for the line and day (ADR-0018): cash
+   * spent on the round with approval, so not missing.
+   */
+  expenses: moneyStringSchema,
+  /**
+   * BR-17's discrepancy: `handedOver + expenses − collected`, **signed** —
+   * negative when the Junior is short, positive when they handed over more
+   * than Rasi recorded. Never an absolute value: which way it points is the
+   * whole question.
    */
   difference: signedMoneyStringSchema,
   state: discrepancyStateSchema,
@@ -506,6 +511,8 @@ export const discrepancySummarySchema = z.object({
       handedOver: moneyStringSchema,
       acknowledged: moneyStringSchema,
       awaiting: moneyStringSchema,
+      /** Σ approved field expenses the rows count as spent (ADR-0018). */
+      expenses: moneyStringSchema,
       /** Σ of the rows that are short, as a positive amount. */
       short: moneyStringSchema,
       /** Σ of the rows that are over, as a positive amount. */

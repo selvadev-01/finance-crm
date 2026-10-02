@@ -16,8 +16,35 @@ export interface LineDayFigures {
   collected: Decimal;
   /** Σ acknowledged Junior → Senior handovers for the line's day. */
   cashReceived: Decimal;
+  /** Σ approved field expenses the line's Juniors paid from the day's cash (ADR-0018). */
+  expenses: Decimal;
   /** Slots due that date on active or completed accounts, marked MISSED at close. */
   missed: number;
+}
+
+/**
+ * The approved field expenses that count against a line's day (ADR-0018):
+ * paid from a **Junior's** cash on the round — the hop the day close tallies.
+ * A Senior's own field expense comes out of the office hop instead, and is
+ * subtracted only from what they take to the office.
+ */
+export const juniorFieldExpenses = {
+  paidFrom: 'CASH_IN_HAND',
+  hop: 'JUNIOR_TO_SENIOR',
+  status: 'APPROVED',
+} as const satisfies Prisma.ExpenseWhereInput;
+
+/**
+ * BR-17 for a line's day: what arrived as cash, plus what was spent from it
+ * with approval, less what was recorded. Negative is short. The one formula
+ * the day close stores and shows (`day_close_discrepancy_derivation_check`).
+ */
+export function cashDiscrepancy(figures: {
+  cashReceived: Decimal;
+  expenses: Decimal;
+  collected: Decimal;
+}): Decimal {
+  return figures.cashReceived.plus(figures.expenses).minus(figures.collected);
 }
 
 /**
@@ -44,6 +71,7 @@ export async function lineDayFigures(
         expected: toMoney('0'),
         collected: toMoney('0'),
         cashReceived: toMoney('0'),
+        expenses: toMoney('0'),
         missed: 0,
       },
     ]),
@@ -97,6 +125,16 @@ export async function lineDayFigures(
     if (line) {
       line.cashReceived = line.cashReceived.plus(row.declaredAmount.toString());
     }
+  }
+
+  const spent = await tx.expense.groupBy({
+    by: ['lineId'],
+    where: { ...juniorFieldExpenses, lineId: { in: ids }, businessDate: day },
+    _sum: { amount: true },
+  });
+  for (const row of spent) {
+    const line = row.lineId ? figures.get(row.lineId) : undefined;
+    if (line) line.expenses = toMoney((row._sum.amount ?? 0).toString());
   }
   return figures;
 }
@@ -312,6 +350,47 @@ export async function readCollectedByCollectorDay(
     userId: group.collectedByUserId,
     collected: toMoney((group._sum.amount ?? 0).toString()),
   }));
+}
+
+/**
+ * Σ each Junior's approved field expenses per line and business date over a
+ * range, keyed by {@link collectorDayKey} — `lineDayFigures`' `expenses` at
+ * the collector's grain and with the same predicate, so a line-day's Juniors
+ * add up to its figure (M12, the discrepancy report).
+ */
+export async function readExpensesByCollectorDay(
+  tx: Tx,
+  lineIds: readonly string[],
+  from: CalendarDate,
+  to: CalendarDate,
+  filters: { collectedByUserId?: string | undefined } = {},
+): Promise<Map<string, Decimal>> {
+  const byKey = new Map<string, Decimal>();
+  if (lineIds.length === 0) return byKey;
+  const groups = await tx.expense.groupBy({
+    by: ['lineId', 'businessDate', 'spenderUserId'],
+    where: {
+      ...juniorFieldExpenses,
+      lineId: { in: [...lineIds] },
+      businessDate: { gte: toUtcMidnight(from), lte: toUtcMidnight(to) },
+      ...(filters.collectedByUserId === undefined
+        ? {}
+        : { spenderUserId: filters.collectedByUserId }),
+    },
+    _sum: { amount: true },
+  });
+  for (const group of groups) {
+    if (!group.lineId || !group.spenderUserId) continue;
+    byKey.set(
+      collectorDayKey(
+        group.lineId,
+        fromUtcMidnight(group.businessDate),
+        group.spenderUserId,
+      ),
+      toMoney((group._sum.amount ?? 0).toString()),
+    );
+  }
+  return byKey;
 }
 
 /** One Junior → Senior handover as the discrepancy report reads it (BR-17). */

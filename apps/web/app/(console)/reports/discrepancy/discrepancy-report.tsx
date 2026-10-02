@@ -370,7 +370,15 @@ function columnsFor(manages: boolean): DataViewColumn<Row>[] {
         row.cash === null ? (
           <Unknown />
         ) : (
-          <span data-numeric>{formatCurrency(row.cash.handedOver)}</span>
+          <span className="inline-flex flex-col items-end" data-numeric>
+            {formatCurrency(row.cash.handedOver)}
+            {/* ADR-0018: spent with approval, counted beside the cash. */}
+            {row.cash.expenses !== "0.00" ? (
+              <span className="text-caption text-ink-muted">
+                + {formatCurrency(row.cash.expenses)} expenses
+              </span>
+            ) : null}
+          </span>
         ),
     }),
     moneyColumn<Row>({

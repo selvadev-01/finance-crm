@@ -96,7 +96,7 @@ Staff who become non-`ACTIVE` after signing in are refused on their next request
 
 **`POST /api/organizations`.** Body: `organizationName`, `name`, `email` (stored lower-case), `phone` (an Indian mobile, stored E.164) and `password` (10–128 characters). **No slug is sent.**
 
-1. **Rate limit.** Five attempts an hour per client address, counted once the form has passed validation. Past that, `429 SIGN_UP_RATE_LIMITED`. The counter is in process memory: per process, and reset on restart.
+1. **Rate limit.** Five attempts an hour per client address, counted once the form has passed validation. Past that, `429 SIGN_UP_RATE_LIMITED`. The counter is the `rate_limit_window` table (2026-09-24, `PostgresSignUpRateLimiter`): one row per address, opened or counted by a single upsert, so every API process shares one window and a restart keeps it. Each run deletes its own expired windows. The attempt is counted in its own transaction, before the sign-up's, so a sign-up that then fails has still used it. HTTP tests get `MemorySignUpRateLimiter` from `createTestApp`.
 2. **Availability.** An email that already has a user is `409 EMAIL_TAKEN`; a mobile already on a staff profile is `409 PHONE_TAKEN`. Both are checked before the transaction. A race that reaches the unique index is checked again, so it gets the same answers.
 3. **Slug**, generated from the business name:
    - Folded to ASCII (NFKD, marks dropped), lowercased, with non-alphanumerics becoming single hyphens, cut to 48 characters. `Śrī Lakshmi Finance & Co.` → `sri-lakshmi-finance-co`.

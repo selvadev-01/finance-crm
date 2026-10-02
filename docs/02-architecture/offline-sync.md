@@ -169,6 +169,8 @@ Scoped to the Junior's routes only. The admin console is not burdened with offli
 **Update strategy:** new versions activate on next launch, never mid-session.
 
 > A service worker updating while a Junior is mid-route could swap the outbox implementation underneath queued entries. The outbox schema is versioned, and migrations run on activation before any drain.
+>
+> **As built (2026-09-24):** the steps are `MIGRATIONS` in `apps/web/lib/offline/db.ts`, applied in order inside one upgrade transaction when the database opens. To change the schema, append a step; never edit one that has shipped, since a phone may be on any earlier version. A step that throws aborts the whole upgrade, so the phone stays on its old version with its outbox intact, and the open fails with that step's error. A connection still open on the old version closes when a newer one asks, so an upgrade is never left blocked. A tab still running old code then fails to reopen until it reloads. That is safe, because everything it saved is already in the outbox.
 
 ---
 

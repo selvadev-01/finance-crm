@@ -58,8 +58,9 @@ export async function addStaff(
   await dialog.getByLabel("Email").fill(staff.email);
   await dialog.getByLabel("Mobile number").fill(staff.phone);
   await dialog.getByLabel("Role").selectOption(role);
-  // The hint says blank means today, but the form refuses a blank date
-  // (found by this suite, 2026-09-22), so the date is always given.
+  // Blank means today; the journey gives the date so assignments starting on
+  // it are never refused as before the join. The blank case is proven in
+  // `layout-tests/team.spec.ts`.
   await dialog.getByLabel("Joined on").fill(joinedOn);
   await dialog.getByRole("button", { name: "Create staff member" }).click();
 
@@ -205,15 +206,45 @@ export async function createAccount(
   // The preview is the API's own schedule; wait for it before saving.
   await expect(page.getByText("First collection")).toBeVisible();
 
+  // The Admin saves every day-one account as pending: only the Super Admin
+  // pays money out (decided 2026-10-02), with `disburseAccount`.
   const submit =
-    account.kind === "mid-term"
-      ? "Save mid-term account"
-      : account.kind === "pending"
-        ? "Save as pending"
-        : "Save and disburse";
+    account.kind === "mid-term" ? "Save mid-term account" : "Save as pending";
   await page.getByRole("button", { name: submit }).click();
   await page.waitForURL(/\/accounts\/(?!new)[^/?]+$/);
   return idFrom(page.url());
+}
+
+/** US-032 from the account page: the Super Admin pays it out of cash-in-hand. */
+export async function disburseAccount(
+  page: Page,
+  accountId: string,
+  accountCode: string,
+): Promise<void> {
+  await page.goto(`/accounts/${accountId}`);
+  await page.getByRole("button", { name: "Disburse", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: `Disburse ${accountCode}` });
+  // The dialog reads cash-in-hand before it lets the loan go.
+  await expect(dialog.getByText("After this loan")).toBeVisible();
+  await dialog.getByRole("button", { name: `Disburse ${accountCode}` }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Disburse", exact: true }),
+  ).toHaveCount(0);
+}
+
+/** US-032 on Books: the owner puts money into the business. */
+export async function addCapital(
+  page: Page,
+  capital: { amount: string; note: string },
+): Promise<void> {
+  await page.goto("/books/money");
+  await page.getByRole("button", { name: "Add money" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add money" });
+  await dialog.getByLabel("Amount (₹)").fill(capital.amount);
+  await dialog.getByLabel("Note").fill(capital.note);
+  await dialog.getByRole("button", { name: "Add money" }).click();
+  await expect(dialog).toBeHidden();
 }
 
 export function idFrom(url: string): string {

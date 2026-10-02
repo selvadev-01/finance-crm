@@ -272,7 +272,8 @@ Constraints: `decidedByUserId` and `decidedAt` are both null exactly when `decis
 | `expectedTotal`     | `Decimal`           | No   | Σ expected for slots due that date (BR-16)                                                                                                  |
 | `collectedTotal`    | `Decimal`           | No   | Σ confirmed collections                                                                                                                     |
 | `cashReceivedTotal` | `Decimal`           | No   | Σ acknowledged handovers                                                                                                                    |
-| `discrepancy`       | `Decimal`           | No   | `cashReceivedTotal − collectedTotal`                                                                                                        |
+| `expenseTotal`      | `Decimal`           | No   | Σ approved field expenses of the line's Juniors that date (ADR-0018, 2026-10-01); default 0                                                 |
+| `discrepancy`       | `Decimal`           | No   | `cashReceivedTotal + expenseTotal − collectedTotal`                                                                                         |
 | `status`            | `DayCloseStatus`    | No   | `OPEN` \| `CLOSED` \| `REOPENED` \| `TALLIED`                                                                                               |
 | `closedByUserId`    | `String`            | Yes  |                                                                                                                                             |
 | `closedAt`          | `DateTime`          | Yes  |                                                                                                                                             |
@@ -280,7 +281,7 @@ Constraints: `decidedByUserId` and `decidedAt` are both null exactly when `decis
 
 `TALLIED` is `CLOSED` with `discrepancy = 0` and every handover acknowledged.
 
-Constraints: `discrepancy = cashReceivedTotal - collectedTotal`; `expectedTotal >= 0`; `cashReceivedTotal >= 0`; `CLOSED` and `TALLIED` require `closedAt`; `TALLIED` requires `discrepancy = 0`. "Every handover acknowledged" spans tables and is _service-enforced_. `collectedTotal` has no floor: a negative adjustment dated today for an earlier collection can take it below zero.
+Constraints: `discrepancy = cashReceivedTotal + expenseTotal - collectedTotal` (redefined by `constraints_field_expenses`, 2026-10-01); `expectedTotal >= 0`; `cashReceivedTotal >= 0`; `expenseTotal >= 0`; `CLOSED` and `TALLIED` require `closedAt`; `TALLIED` requires `discrepancy = 0`. "Every handover acknowledged" spans tables and is _service-enforced_. `collectedTotal` has no floor: a negative adjustment dated today for an earlier collection can take it below zero.
 
 ### `cash_handover`
 
@@ -328,6 +329,20 @@ Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the
 
 Σ `subtotal` must equal the handover's `declaredAmount` — a **deferred** constraint trigger checks it at commit, after any insert, update or delete of a denomination and any change to `declaredAmount`.
 
+### `capital_entry`
+
+Money put into the business (US-032, M08, added 2026-09-24). The source row of a `CAPITAL` ledger transaction — debit `CASH_AT_OFFICE`, credit `CAPITAL` — written in the same database transaction.
+
+| Column            | Type                | Null | Notes                                                        |
+| ----------------- | ------------------- | ---- | ------------------------------------------------------------ |
+| `organizationId`  | `String`            | No   | FK → `organization.id`                                       |
+| `amount`          | `Decimal(14,2)`     | No   | `> 0`                                                        |
+| `businessDate`    | `DateTime @db.Date` | No   | The day the money arrived; never in the future (the service) |
+| `note`            | `String`            | No   | Where the money came from — not blank                        |
+| `createdByUserId` | `String`            | No   | The Super Admin who recorded it                              |
+
+Indexed on `(organizationId, businessDate)`. Checks (migration `constraints_capital_entry`): `capital_entry_amount_positive_check`, `capital_entry_note_not_blank_check`. **Append-only**: the trigger `capital_entry_append_only` rejects UPDATE and DELETE, as the ledger's do — a mistake is answered by a later entry.
+
 ---
 
 ## Ledger
@@ -336,29 +351,101 @@ Unique on `(cashHandoverId, denomination)`. Checks: `denomination` is one of the
 
 ### `ledger_account`
 
-| Column           | Type                | Null | Notes                                                                                                                            |
-| ---------------- | ------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `organizationId` | `String`            | No   | FK → `organization.id` (added 2026-09-13)                                                                                        |
-| `accountType`    | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` \| `WRITE_OFF_LOSS` |
-| `ownerUserId`    | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                                      |
-| `accountLoanId`  | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                                                   |
-| `normalBalance`  | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                                              |
-| `balance`        | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                                              |
+| Column              | Type                | Null | Notes                                                                                                                                                                                                                  |
+| ------------------- | ------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organizationId`    | `String`            | No   | FK → `organization.id` (added 2026-09-13)                                                                                                                                                                              |
+| `accountType`       | `LedgerAccountType` | No   | `CASH_IN_HAND` \| `CASH_AT_OFFICE` \| `LOAN_RECEIVABLE` \| `CAPITAL` \| `UNEARNED_PROFIT` \| `EARNED_PROFIT` \| `WRITE_OFF_LOSS` \| `EXPENSE` \| `BANK` \| `OTHER_INCOME` \| `OWNER_DRAWINGS` (the last four ADR-0018) |
+| `ownerUserId`       | `String`            | Yes  | Required for `CASH_IN_HAND`                                                                                                                                                                                            |
+| `accountLoanId`     | `String`            | Yes  | Required for `LOAN_RECEIVABLE`                                                                                                                                                                                         |
+| `expenseCategoryId` | `String`            | Yes  | Required for `EXPENSE` (ADR-0018). FK → `expense_category.id`, restrict                                                                                                                                                |
+| `bankAccountId`     | `String`            | Yes  | Required for `BANK` (ADR-0018). FK → `bank_account.id`, restrict                                                                                                                                                       |
+| `normalBalance`     | `Direction`         | No   | `DEBIT` \| `CREDIT`                                                                                                                                                                                                    |
+| `balance`           | `Decimal`           | No   | Cache; rebuilt and verified nightly                                                                                                                                                                                    |
 
-One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT`, `EARNED_PROFIT` and `WRITE_OFF_LOSS` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
+One `CASH_IN_HAND` per staff member, one `LOAN_RECEIVABLE` per account, one `EXPENSE` per expense category and one `BANK` per bank account, created automatically. `CASH_AT_OFFICE`, `CAPITAL`, `UNEARNED_PROFIT`, `EARNED_PROFIT`, `WRITE_OFF_LOSS`, `OTHER_INCOME` and `OWNER_DRAWINGS` exist **once per organization** (partial unique `ledger_account_organization_singleton_key`), created on first use.
 
-Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE`, `LOAN_RECEIVABLE` and `WRITE_OFF_LOSS` — an expense, like the assets — and `CREDIT` for the rest; partial uniques make the two per-owner accounts one each.
+Constraints: `ownerUserId` is set if and only if `accountType = CASH_IN_HAND`; `accountLoanId` if and only if `LOAN_RECEIVABLE`; `expenseCategoryId` if and only if `EXPENSE`; `bankAccountId` if and only if `BANK`; a category or bank is the account's own organization's (trigger `ledger_account_reference_same_organization`); `normalBalance` is `DEBIT` for `CASH_IN_HAND`, `CASH_AT_OFFICE`, `LOAN_RECEIVABLE`, `WRITE_OFF_LOSS`, `EXPENSE`, `BANK` and `OWNER_DRAWINGS`, and `CREDIT` for the rest; partial uniques make each keyed account one per owner, loan, category or bank.
+
+### `expense_category`
+
+What the business spends on (ADR-0018, added 2026-09-25). A starter list per organization — Salary, Rent, Fuel & travel, Phone & internet, Stationery & printing, Bank charges, Interest paid, Miscellaneous — that the Super Admin adds to, renames and retires. Never deleted.
+
+| Column           | Type      | Null | Notes                                                                   |
+| ---------------- | --------- | ---- | ----------------------------------------------------------------------- |
+| `organizationId` | `String`  | No   | FK → `organization.id`                                                  |
+| `name`           | `String`  | No   | Not blank; unique per organization ignoring case and surrounding spaces |
+| `isActive`       | `Boolean` | No   | Default `true`; a retired one takes no new expenses                     |
+
+### `bank_account`
+
+A bank account the business keeps (ADR-0018, added 2026-09-25). Its money is a `BANK` ledger account. Never deleted, and not retired while it holds money (service-enforced).
+
+| Column           | Type      | Null | Notes                                                           |
+| ---------------- | --------- | ---- | --------------------------------------------------------------- |
+| `organizationId` | `String`  | No   | FK → `organization.id`                                          |
+| `name`           | `String`  | No   | Not blank; unique per organization ignoring case and spaces     |
+| `last4`          | `String`  | Yes  | Four digits (`bank_account_last4_check`), never the full number |
+| `isActive`       | `Boolean` | No   | Default `true`                                                  |
+
+### `expense`
+
+Every expense the business pays (ADR-0018, added 2026-10-01). An office expense — paid from office cash or a bank by an Admin — is recorded `APPROVED` and posted at once: debit the category's `EXPENSE` account, credit `CASH_AT_OFFICE` or the `BANK` account (`EXPENSE` transaction). A field expense is paid from a collector's cash in hand, waits `PENDING`, and posts against their `CASH_IN_HAND` only when approved (slice 3).
+
+| Column              | Type                | Null | Notes                                                                                                                                                                 |
+| ------------------- | ------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organizationId`    | `String`            | No   | FK → `organization.id`                                                                                                                                                |
+| `expenseCategoryId` | `String`            | No   | FK → `expense_category.id`, restrict                                                                                                                                  |
+| `amount`            | `Decimal(14,2)`     | No   | `> 0`                                                                                                                                                                 |
+| `businessDate`      | `DateTime @db.Date` | No   | The day it was paid; never in the future (the service)                                                                                                                |
+| `note`              | `String`            | No   | What it was for — not blank                                                                                                                                           |
+| `paidFrom`          | `ExpensePaidFrom`   | No   | `OFFICE_CASH` \| `BANK` \| `CASH_IN_HAND`                                                                                                                             |
+| `bankAccountId`     | `String`            | Yes  | Set if and only if `paidFrom = BANK`. FK → `bank_account.id`, restrict                                                                                                |
+| `spenderUserId`     | `String`            | Yes  | Set if and only if `CASH_IN_HAND`: whose cash paid it                                                                                                                 |
+| `lineId`            | `String`            | Yes  | Set if and only if `CASH_IN_HAND`: the line's round. FK, restrict                                                                                                     |
+| `hop`               | `HandoverHop`       | Yes  | Set if and only if `CASH_IN_HAND`: `JUNIOR_TO_SENIOR` for a Junior's (counts in the line's day), `SENIOR_TO_OFFICE` for a Senior's; fixed when asked for (2026-10-01) |
+| `status`            | `ExpenseStatus`     | No   | `PENDING` \| `APPROVED` \| `REJECTED`; an office expense is `APPROVED`                                                                                                |
+| `decidedByUserId`   | `String`            | Yes  | Set with `decidedAt` once decided; never the spender                                                                                                                  |
+| `decidedAt`         | `DateTime`          | Yes  |                                                                                                                                                                       |
+| `decisionNote`      | `String`            | Yes  |                                                                                                                                                                       |
+| `createdByUserId`   | `String`            | No   | Who recorded it                                                                                                                                                       |
+
+Checks (migration `constraints_books_money`): `expense_amount_positive_check`, `expense_note_not_blank_check`, `expense_bank_check`, `expense_field_check`, `expense_office_approved_check`, `expense_decided_check` (decided exactly when not `PENDING`), `expense_not_self_decided_check`. The trigger `expense_guard` rejects DELETE, any change to the money, the date, the source or the spender, and any status change but the one decision out of `PENDING`. `books_entry_same_organization` keeps the category, bank and line in the row's organization. Migration `constraints_field_expenses` (2026-10-01) adds `expense_hop_check` and makes `hop` part of the source `expense_guard` never lets change.
+
+### `bank_transfer`, `drawing_entry`, `income_entry`
+
+The business's own money moving (ADR-0018, added 2026-10-01). Each is the source row of one ledger transaction written in the same database transaction, and is **append-only** (trigger `books_entry_append_only`) — a mistake is answered by a later entry.
+
+| Table           | Where the money goes                                                               | Posting                                                      |
+| --------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `bank_transfer` | `fromBankAccountId` → `toBankAccountId`; a null side is office cash                | `BANK_TRANSFER`: debit the receiving place, credit the other |
+| `drawing_entry` | Out of office cash, or the bank in `bankAccountId` — the owner takes it            | `DRAWINGS`: debit `OWNER_DRAWINGS`, credit the place         |
+| `income_entry`  | Into office cash, or the bank in `bankAccountId` — income that is not a collection | `OTHER_INCOME`: debit the place, credit `OTHER_INCOME`       |
+
+Each has `organizationId`, `amount` (`Decimal(14,2)`, `> 0`), `businessDate` (never in the future), `note` (not blank) and `createdByUserId`; bank references are FKs to `bank_account.id` with restrict and must be the row's own organization's (`books_entry_same_organization`). `bank_transfer_sides_check` refuses office cash to office cash and a bank to itself.
+
+### `journal_entry`
+
+The Super Admin's manual journal (ADR-0018 slice 5, added 2026-10-01). The header only: its lines are the entries of the one `JOURNAL` ledger transaction whose source is this row, written in the same database transaction. The service lets a journal touch only `CASH_AT_OFFICE`, `BANK`, `EXPENSE`, `OTHER_INCOME`, `CAPITAL`, `OWNER_DRAWINGS` and `WRITE_OFF_LOSS`.
+
+| Column            | Type                | Null | Notes                             |
+| ----------------- | ------------------- | ---- | --------------------------------- |
+| `organizationId`  | `String`            | No   | FK → `organization.id`            |
+| `businessDate`    | `DateTime @db.Date` | No   | Never in the future (the service) |
+| `note`            | `String`            | No   | Why it was needed — not blank     |
+| `createdByUserId` | `String`            | No   | The Super Admin who posted it     |
+
+Checks (migration `constraints_books_journal`): `journal_entry_note_not_blank_check`. **Append-only** (trigger `journal_entry_append_only`): a wrong journal is answered by another.
 
 ### `ledger_transaction`
 
-| Column            | Type                    | Null | Notes                                                                       |
-| ----------------- | ----------------------- | ---- | --------------------------------------------------------------------------- |
-| `transactionType` | `LedgerTransactionType` | No   | `DISBURSEMENT` \| `COLLECTION` \| `HANDOVER` \| `ADJUSTMENT` \| `WRITE_OFF` |
-| `sourceTable`     | `String`                | No   | Polymorphic reference, no FK (see ERD §4)                                   |
-| `sourceId`        | `String`                | No   |                                                                             |
-| `businessDate`    | `DateTime @db.Date`     | No   |                                                                             |
-| `eventAt`         | `DateTime`              | No   | When the event occurred, not when recorded                                  |
-| `description`     | `String`                | No   |                                                                             |
+| Column            | Type                    | Null | Notes                                                                                                                                                                                                 |
+| ----------------- | ----------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transactionType` | `LedgerTransactionType` | No   | `DISBURSEMENT` \| `COLLECTION` \| `HANDOVER` \| `ADJUSTMENT` \| `WRITE_OFF` \| `CAPITAL` (US-032, 2026-09-24) \| `EXPENSE` \| `BANK_TRANSFER` \| `DRAWINGS` \| `OTHER_INCOME` \| `JOURNAL` (ADR-0018) |
+| `sourceTable`     | `String`                | No   | Polymorphic reference, no FK (see ERD §4)                                                                                                                                                             |
+| `sourceId`        | `String`                | No   |                                                                                                                                                                                                       |
+| `businessDate`    | `DateTime @db.Date`     | No   |                                                                                                                                                                                                       |
+| `eventAt`         | `DateTime`              | No   | When the event occurred, not when recorded                                                                                                                                                            |
+| `description`     | `String`                | No   |                                                                                                                                                                                                       |
 
 ### `ledger_entry`
 
@@ -378,15 +465,15 @@ A **deferred** constraint trigger enforces Σ debits = Σ credits per transactio
 
 ### `notification`
 
-| Column      | Type                   | Null | Notes                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------- | ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`    | `String`               | No   | Recipient                                                                                                                                                                                                                                                                                                                                                                                           |
-| `category`  | `NotificationCategory` | No   | `INFORMATION` \| `SUCCESS` \| `WARNING` \| `ALERT` (PDF §24)                                                                                                                                                                                                                                                                                                                                        |
-| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` \| `NO_PAYMENT_COLLECTION` \| `HANDOVER_SUBMITTED` \| `HANDOVER_DISPUTED` \| `DAY_REOPENED` \| `RECONCILIATION_MISMATCH` \| `HOLIDAY_DECLARED` \| `HOLIDAY_REMOVED` (five added by M10, 2026-09-15; the last two by US-093, 2026-09-17) |
-| `title`     | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `body`      | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `payload`   | `Json`                 | Yes  | Deep-link context — `entityType`, `entityId` and `url`                                                                                                                                                                                                                                                                                                                                              |
-| `readAt`    | `DateTime`             | Yes  |                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Column      | Type                   | Null | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------- | ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`    | `String`               | No   | Recipient                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `category`  | `NotificationCategory` | No   | `INFORMATION` \| `SUCCESS` \| `WARNING` \| `ALERT` (PDF §24)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `eventType` | `NotificationEvent`    | No   | `NEW_ASSIGNMENT` \| `LOW_COLLECTION` \| `EXTRA_COLLECTION` \| `MISSED_COLLECTION` \| `ACCOUNT_COMPLETED` \| `DAY_CLOSE_DISCREPANCY` \| `APPROVAL_REQUESTED` \| `NO_PAYMENT_COLLECTION` \| `HANDOVER_SUBMITTED` \| `HANDOVER_DISPUTED` \| `DAY_REOPENED` \| `RECONCILIATION_MISMATCH` \| `HOLIDAY_DECLARED` \| `HOLIDAY_REMOVED` \| `NEW_CUSTOMER` \| `HANDOVER_ACKNOWLEDGED` \| `ACCOUNT_OVERDUE` \| `ACCOUNT_DISBURSED` \| `JOB_FAILED` \| `EXPENSE_REQUESTED` \| `EXPENSE_DECIDED` (five added by M10, 2026-09-15; two by US-093, 2026-09-17; three on 2026-09-20; `ACCOUNT_DISBURSED` by US-032 and `JOB_FAILED` by M14, 2026-09-24; the two expense events by ADR-0018, 2026-10-01) |
+| `title`     | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `body`      | `String`               | No   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `payload`   | `Json`                 | Yes  | Deep-link context — `entityType`, `entityId` and `url`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `readAt`    | `DateTime`             | Yes  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 Constraint: `title` and `body` are not blank. Written in the transaction of the event that raises it ([M10 as built](../01-product/modules/M10-notifications.md#as-built)); rows cascade with their user.
 
@@ -502,6 +589,33 @@ The attempts the API **refused** ([ADR-0014](../02-architecture/adr/0014-securit
 | `userAgent`      | `String`            | Yes  |                                                                                                                                           |
 
 Constraints (migration `constraints_security_event`, 2026-09-19): `security_event_status_refusal_check` (`status BETWEEN 400 AND 499`); `security_event_method_check`; `security_event_path_check` (starts with `/`); `security_event_code_not_blank_check`; `security_event_target_table_not_blank_check`; `security_event_target_id_not_blank_check`; `security_event_target_table_needs_id_check`. Indexed on `(organizationId, createdAt)`, `actorUserId` and `code`.
+
+### `job_status`
+
+The latest run of each scheduled job for one organization (M14, added 2026-09-24). Primary key `(organizationId, job)`; no `id` or `createdAt`. Written only by the worker.
+
+| Column            | Type       | Null | Notes                                                   |
+| ----------------- | ---------- | ---- | ------------------------------------------------------- |
+| `organizationId`  | `String`   | No   | FK → `organization.id`                                  |
+| `job`             | `String`   | No   | The scheduled job's name, `reconcile-balances` …        |
+| `lastStartedAt`   | `DateTime` | No   |                                                         |
+| `lastFinishedAt`  | `DateTime` | Yes  | Null while running                                      |
+| `lastOutcome`     | `String`   | No   | `RUNNING`                                               | `SUCCEEDED` | `FAILED` (`job_status_outcome_check`) |
+| `lastError`       | `String`   | Yes  | The failure's class and stable code — never its message |
+| `lastSucceededAt` | `DateTime` | Yes  |                                                         |
+| `deadLetteredAt`  | `DateTime` | Yes  | When it last exhausted its retries                      |
+
+### `rate_limit_window`
+
+A fixed-window rate-limit counter shared by every API process ([ADR-0012](../02-architecture/adr/0012-organization-sign-up.md), added 2026-09-24). Has none of the common columns and no organization: it guards public routes, before any organization exists.
+
+| Column        | Type       | Null | Notes                                                                     |
+| ------------- | ---------- | ---- | ------------------------------------------------------------------------- |
+| `key`         | `String`   | No   | Primary key: the limiter's prefix and the client address, `sign-up:…`     |
+| `windowStart` | `DateTime` | No   | When the current window opened                                            |
+| `count`       | `Int`      | No   | Attempts in the window, `>= 1` (`rate_limit_window_count_positive_check`) |
+
+Rows are disposable: each limiter deletes its own expired windows as it runs.
 
 ### `idempotency_key`
 

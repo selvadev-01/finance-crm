@@ -13,6 +13,9 @@ describe("the Settings tabs", () => {
       "/settings/notifications",
       "/settings/audit",
       "/settings/security",
+      "/settings/expense-categories",
+      "/settings/bank-accounts",
+      "/settings/jobs",
     ]);
   });
 
@@ -22,6 +25,9 @@ describe("the Settings tabs", () => {
       "/settings/notifications",
       "/settings/audit",
       "/settings/security",
+      "/settings/expense-categories",
+      "/settings/bank-accounts",
+      "/settings/jobs",
     ]);
   });
 

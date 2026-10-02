@@ -111,7 +111,7 @@ export function NotificationsScreen({ connected }: { connected: boolean }) {
         <div className={cn(cardClass, "overflow-hidden")}>
           <NotificationList
             notifications={notifications}
-            linkable={false}
+            links="none"
             onChanged={() => void load()}
           />
         </div>

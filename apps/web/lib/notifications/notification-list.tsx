@@ -53,17 +53,18 @@ function byDay(notifications: NotificationView[]) {
 /**
  * The notification centre's list (US-070), grouped by day, shared by the console and the
  * Junior's field app. Unread rows are marked by weight and a dot, not colour
- * alone. `linkable` is false for the Junior, whose deep links point at console
- * pages they cannot open — tapping marks it read instead.
+ * alone. `links="none"` is the Junior's: their deep links point at console
+ * pages they cannot open, so tapping marks it read instead.
  */
 export function NotificationList({
   notifications,
-  linkable,
+  links,
   onChanged,
   onFollowLink,
 }: {
   notifications: NotificationView[];
-  linkable: boolean;
+  /** `follow`: a row opens its subject. `none`: a row only marks itself read. */
+  links: "follow" | "none";
   onChanged: () => void;
   /**
    * Called when a deep link is followed, so the surface the list is in can get
@@ -143,7 +144,7 @@ export function NotificationList({
                 );
                 return (
                   <li key={notification.id} className="flex flex-col gap-1">
-                    {linkable && notification.link ? (
+                    {links === "follow" && notification.link ? (
                       <Link
                         href={notification.link.url}
                         className={cn(rowClass, "hover:bg-surface-sunken/70")}

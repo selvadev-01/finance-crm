@@ -6,6 +6,9 @@ import { CollectionsModule } from '../collections/collections.module.js';
 import { LedgerModule } from '../ledger/ledger.module.js';
 import { APP_CONFIG, type AppConfig } from '../platform/config/config.js';
 import { JobQueue } from './job-queue.js';
+import { JobStatusRecorder } from './job-status.recorder.js';
+import { JobsController } from './jobs.controller.js';
+import { JobsService } from './jobs.service.js';
 import { ScheduledJobs } from './scheduled-jobs.js';
 
 /**
@@ -21,7 +24,8 @@ import { ScheduledJobs } from './scheduled-jobs.js';
  */
 @Module({
   imports: [LedgerModule, AccountsModule, CollectionsModule],
-  providers: [JobQueue, ScheduledJobs],
+  controllers: [JobsController],
+  providers: [JobQueue, JobStatusRecorder, JobsService, ScheduledJobs],
   exports: [JobQueue],
 })
 export class JobsModule implements OnApplicationBootstrap {

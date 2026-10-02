@@ -3,6 +3,9 @@ import { PageHeader } from "@repo/ui";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { REPORT_CARD_CLASS } from "./report-card";
+import { TrialBalanceLink } from "./trial-balance-link";
+
 export const metadata: Metadata = { title: "Reports · Rasi" };
 
 interface ReportEntry {
@@ -51,7 +54,8 @@ const REPORTS: readonly ReportEntry[] = [
 /**
  * Reports index (S-22–26). Super Admins and Admins read every line; a Senior
  * reads their own line, which each report enforces through the API. A Junior
- * never reaches the console.
+ * never reaches the console. The trial balance (M09) is listed for Admins
+ * only, since the ledger is theirs alone.
  */
 export default function ReportsPage() {
   return (
@@ -63,10 +67,7 @@ export default function ReportsPage() {
       <ul className="grid gap-3 md:grid-cols-2">
         {REPORTS.map((report) => (
           <li key={report.href}>
-            <Link
-              href={report.href}
-              className="group flex h-full flex-col gap-1.5 rounded-surface border border-border bg-surface-raised p-4 shadow-raised transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
+            <Link href={report.href} className={REPORT_CARD_CLASS}>
               <span className="flex items-center justify-between gap-3 text-heading text-ink">
                 {report.title}
                 <ArrowRight
@@ -81,6 +82,7 @@ export default function ReportsPage() {
             </Link>
           </li>
         ))}
+        <TrialBalanceLink />
       </ul>
     </>
   );

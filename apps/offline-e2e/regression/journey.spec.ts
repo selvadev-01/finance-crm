@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { chennaiDataset, type LineKey, type SectorKey } from "./data";
 import {
+  addCapital,
   addStaff,
   assignToLine,
   completeForcedPasswordChange,
@@ -13,6 +14,7 @@ import {
   createCustomer,
   createLine,
   createSector,
+  disburseAccount,
   signIn,
 } from "./helpers";
 import {
@@ -28,7 +30,7 @@ import {
  * playwright.regression.config.ts.
  *
  * Prisma is used only to read (account codes, and the books at the end) and
- * for the one recorded shortcut in the Admin step: moving the first slot of
+ * for the one recorded shortcut in the Super Admin's disbursing step: moving the first slot of
  * the accounts disbursed today to today (BR-03 makes it tomorrow), so the
  * Junior's route has work on it — the same shortcut the offline suite takes.
  */
@@ -112,6 +114,33 @@ test.describe.serial("regression: a business day in Chennai", () => {
     );
     await page.goto("/team");
     await expect(page.getByText(data.admin.name).first()).toBeVisible();
+
+    // US-100: the category the Junior's petrol goes under. Only the business
+    // and its owner are written directly, so the starter list a sign-up would
+    // give it is not there; the owner adds what the day needs.
+    await page.goto("/settings/expense-categories");
+    await page
+      .getByRole("button", { name: "Add expense type" })
+      .first()
+      .click();
+    const add = page.getByRole("dialog", { name: "Add an expense type" });
+    await add.getByLabel("Name").fill(data.fieldExpense.category);
+    await add.getByRole("button", { name: "Add expense type" }).click();
+    await expect(add).toBeHidden();
+    await expect(
+      page
+        .getByRole("list", { name: "Expense types" })
+        .getByText(data.fieldExpense.category),
+    ).toBeVisible();
+
+    // US-032 (decided 2026-10-02): the money every loan is paid from, put in
+    // before anything is lent.
+    await addCapital(page, data.capital);
+    await expect(
+      page
+        .getByRole("region", { name: "Money added by owner" })
+        .getByText(data.capital.note),
+    ).toBeVisible();
   });
 
   test("Admin builds the business: staff, sectors, lines, customers, accounts", async () => {
@@ -175,12 +204,36 @@ test.describe.serial("regression: a business day in Chennai", () => {
           where: { id },
           select: { accountCode: true, status: true },
         });
+        // A mid-term account is history being entered; every other waits for
+        // the Super Admin to pay it out.
         expect(row.status, account.key).toBe(
-          account.kind === "pending" ? "PENDING" : "ACTIVE",
+          account.kind === "mid-term" ? "ACTIVE" : "PENDING",
         );
         made.accounts[account.key] = { id, code: row.accountCode };
         await expect(page.getByText(row.accountCode).first()).toBeVisible();
       }
+    }
+    // US-032: only the Super Admin disburses — the Admin is not offered it.
+    const first = data.customers
+      .flatMap((customer) => customer.accounts)
+      .find((account) => account.kind === "disburse")!;
+    await page.goto(`/accounts/${made.accounts[first.key]!.id}`);
+    await expect(
+      page.getByText("Waiting for the Super Admin to disburse"),
+    ).toBeVisible();
+  });
+
+  test("Super Admin pays the loans out of the capital", async () => {
+    test.setTimeout(4 * 60_000);
+    const page = ownerPage;
+    for (const account of data.customers
+      .flatMap((customer) => customer.accounts)
+      .filter((each) => each.kind === "disburse")) {
+      await disburseAccount(
+        page,
+        made.accounts[account.key]!.id,
+        code(account.key),
+      );
     }
 
     // The recorded shortcut (see the file comment): today's route has work.
@@ -333,11 +386,58 @@ test.describe.serial("regression: a business day in Chennai", () => {
     await expect(card).toHaveCount(0);
   });
 
+  test("Junior pays for petrol from the cash, and the Senior approves it", async () => {
+    const page = juniorPage;
+    await page.goto("/route#expense");
+    await expect(page.getByTestId("expense")).toBeVisible();
+    await page
+      .getByRole("radiogroup", { name: "Expense type" })
+      .getByRole("radio", { name: data.fieldExpense.category })
+      .click();
+    await page
+      .getByRole("button", { name: `₹${data.fieldExpense.amount}` })
+      .click();
+    // J-11 reads today's cash position: ₹390 to hand over, ₹340 once approved.
+    const preview = page.getByRole("note", { name: "Handover after approval" });
+    await expect(preview.getByText("₹390.00")).toBeVisible();
+    await expect(preview.getByText("₹340.00")).toBeVisible();
+    await page.getByLabel("Note").fill(data.fieldExpense.note);
+    await page.getByRole("button", { name: "Send for approval" }).click();
+    await expect(
+      page.getByText("₹50.00 for fuel & travel sent for approval."),
+    ).toBeVisible();
+
+    // US-102: the line's Senior decides it on Cash; approving posts it.
+    const desk = seniorPage;
+    await desk.goto("/cash");
+    const waiting = desk
+      .getByRole("list", { name: "Field expenses pending approval" })
+      .getByRole("listitem")
+      .filter({ hasText: data.fieldExpense.note });
+    await expect(waiting).toBeVisible();
+    await waiting.getByRole("button", { name: "Approve" }).click();
+    await expect(waiting).toHaveCount(0);
+
+    // The Junior sees it approved. Already on `/route#expense`, a `goto` would
+    // be a same-document hash change and read nothing; reload, as she would
+    // by opening the screen again.
+    await page.reload();
+    await expect(page.getByTestId("expense")).toBeVisible();
+    await expect(
+      page
+        .getByRole("list", { name: "Your field expenses" })
+        .getByText("Approved"),
+    ).toBeVisible();
+  });
+
   test("Junior counts the cash and hands it to the Senior", async () => {
     const page = juniorPage;
     await page.goto("/route#handover");
     const day = page.getByTestId(`cash-${today}`);
     await expect(day).toBeVisible();
+    await expect(
+      day.getByText("₹50.00 approved expenses taken off"),
+    ).toBeVisible();
     for (const [denomination, count] of data.handoverCounts) {
       await day
         .getByLabel(
@@ -345,7 +445,8 @@ test.describe.serial("regression: a business day in Chennai", () => {
         )
         .fill(String(count));
     }
-    // ₹390 counted against ₹390 recorded, correction included.
+    // ₹340 counted against ₹390 recorded (correction included) less the ₹50
+    // approved petrol.
     await expect(day.getByText("Matches")).toBeVisible();
     await day
       .getByRole("button", {
@@ -434,10 +535,44 @@ test.describe.serial("regression: a business day in Chennai", () => {
     });
     expect(money(dayClose.expectedTotal)).toBe(data.expected.expectedTotal);
     expect(money(dayClose.collectedTotal)).toBe(data.expected.collectedTotal);
+    // ADR-0018: received + expenses − collected = 0.
     expect(money(dayClose.cashReceivedTotal)).toBe(
-      data.expected.collectedTotal,
+      data.expected.cashReceivedTotal,
     );
+    expect(money(dayClose.expenseTotal)).toBe(data.expected.expenseTotal);
+    expect(money(dayClose.discrepancy)).toBe("0.00");
     expect(dayClose.status).toBe("TALLIED");
+
+    // US-102: the petrol is approved and posted once — DR its category's
+    // EXPENSE account, CR Selvi's cash in hand.
+    const petrol = await prisma.expense.findFirstOrThrow({
+      where: { organizationId: fixture.organizationId },
+      select: { id: true, status: true, amount: true, paidFrom: true },
+    });
+    expect(petrol).toMatchObject({
+      status: "APPROVED",
+      paidFrom: "CASH_IN_HAND",
+    });
+    expect(money(petrol.amount)).toBe("50.00");
+    const posting = await prisma.ledgerTransaction.findMany({
+      where: { sourceTable: "expense", sourceId: petrol.id },
+      select: {
+        transactionType: true,
+        entries: {
+          select: {
+            direction: true,
+            ledgerAccount: { select: { accountType: true } },
+          },
+        },
+      },
+    });
+    expect(posting).toHaveLength(1);
+    expect(posting[0]!.transactionType).toBe("EXPENSE");
+    expect(
+      posting[0]!.entries
+        .map((entry) => `${entry.direction} ${entry.ledgerAccount.accountType}`)
+        .sort(),
+    ).toEqual(["CREDIT CASH_IN_HAND", "DEBIT EXPENSE"]);
 
     const handover = await prisma.cashHandover.findFirstOrThrow({
       where: { dayCloseId: dayClose.id },
@@ -461,9 +596,21 @@ test.describe.serial("regression: a business day in Chennai", () => {
       "collection",
       "cash_handover",
       "day_close",
+      "expense_category",
+      "expense",
+      "capital_entry",
     ]) {
       expect(tables.has(table), table).toBe(true);
     }
+
+    // US-032 (decided 2026-10-02): every loan came out of the capital put in.
+    const office = await prisma.ledgerAccount.findFirstOrThrow({
+      where: {
+        organizationId: fixture.organizationId,
+        accountType: "CASH_AT_OFFICE",
+      },
+    });
+    expect(money(office.balance)).toBe(data.expected.cashInHand);
   });
 });
 

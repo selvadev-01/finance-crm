@@ -49,6 +49,7 @@ import {
 import { CollectScreen, type RecordAtDoor } from "./collect-screen";
 import { CollectionsScreen } from "./collections-screen";
 import { CorrectScreen } from "./correct-screen";
+import { ExpenseScreen } from "./expense-screen";
 import { CustomerPortfolioScreen } from "./customer-portfolio-screen";
 import { CustomersScreen } from "./customers-screen";
 import { backToRoute, isTab, parseView, useView } from "./hash-view";
@@ -339,7 +340,8 @@ export function FieldRoute() {
       view.name !== "sync" &&
       view.name !== "handover" &&
       view.name !== "notifications" &&
-      view.name !== "correct" ? (
+      view.name !== "correct" &&
+      view.name !== "expense" ? (
         // The screens that need signal say so in their own words.
         <Banner tone="neutral" icon={<CloudSlash size={20} weight="regular" />}>
           No signal. Collections save on this phone and send by themselves when
@@ -379,6 +381,8 @@ export function FieldRoute() {
           />
         ) : view.name === "correct" ? (
           <CorrectScreen connected={connected} />
+        ) : view.name === "expense" ? (
+          <ExpenseScreen connected={connected} />
         ) : view.name === "notifications" ? (
           <NotificationsScreen connected={connected} />
         ) : view.name === "sync" ? (
@@ -430,6 +434,7 @@ export function FieldRoute() {
           />
         ) : (
           <RouteScreen
+            name={me.name}
             local={local}
             businessDate={businessDate}
             connected={connected}

@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { AccountSettlement } from '../collections/account-settlement.js';
 import { LedgerModule } from '../ledger/ledger.module.js';
+import { CapitalController } from './capital.controller.js';
+import { CapitalService } from './capital.service.js';
 import { CashController } from './cash.controller.js';
 import { DayCloseService } from './day-close.service.js';
 import { DeviceSyncService } from './device-sync.service.js';
@@ -15,9 +17,10 @@ import { HandoverService } from './handover.service.js';
  */
 @Module({
   imports: [LedgerModule],
-  controllers: [CashController],
+  controllers: [CashController, CapitalController],
   providers: [
     AccountSettlement,
+    CapitalService,
     DayCloseService,
     DeviceSyncService,
     HandoverService,

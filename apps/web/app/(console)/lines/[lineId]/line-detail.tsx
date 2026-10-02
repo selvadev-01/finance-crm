@@ -43,6 +43,7 @@ import { useListState } from "../../../../lib/use-list-state";
 import { useSignedIn } from "../../../../lib/use-me";
 import { usePagedQuery } from "../../../../lib/use-paged-query";
 import { AssignDialog } from "../../_organisation/assign-dialog";
+import { LineFigures } from "./line-figures";
 import { VisitingOrderSection } from "./visiting-order-section";
 import {
   DeactivateDialog,
@@ -54,7 +55,7 @@ type Open = "rename" | "deactivate" | "assign-senior" | "assign-junior" | null;
 /** The date lookup, in the URL so an answer can be sent to someone (US-015). */
 export const LINE_FILTERS = { on: "" };
 
-/** A line: today's staff and its assignment history (US-011, US-014, US-015). */
+/** A line: today's staff, its money (§14) and its assignment history (US-011, US-014, US-015). */
 export function LineDetail({
   lineId,
   initial,
@@ -236,13 +237,7 @@ export function LineDetail({
         <VisitingOrderSection lineId={record.id} />
       ) : null}
 
-      <Section title="Collections and money">
-        <p className="text-body text-ink-muted">
-          Account value, invested amount, profit, and expected and actual daily
-          collection appear here once accounts and collections are recorded.
-          Until then nothing is shown, rather than zeros.
-        </p>
-      </Section>
+      <LineFigures lineId={record.id} />
 
       <Section
         title={

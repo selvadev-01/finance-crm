@@ -18,11 +18,24 @@ describe("choosing the console layout for a device", () => {
     expect(decideLayout(null, true)).toEqual({ kind: "ask" });
   });
 
-  it("does not interrupt a browser tab: it shows the computer layout", () => {
+  it("does not interrupt a browser tab: a computer gets the computer layout", () => {
     expect(decideLayout(null, false)).toEqual({
       kind: "use",
       layout: "desktop",
     });
+  });
+
+  it("opens a phone's browser tab in the phone layout, unasked", () => {
+    expect(decideLayout(null, false, true)).toEqual({
+      kind: "use",
+      layout: "mobile",
+    });
+    // A choice made on this phone still wins, and the installed app still asks.
+    expect(decideLayout("desktop", false, true)).toEqual({
+      kind: "use",
+      layout: "desktop",
+    });
+    expect(decideLayout(null, true, true)).toEqual({ kind: "ask" });
   });
 
   it("treats anything but the two layouts in storage as no choice", () => {

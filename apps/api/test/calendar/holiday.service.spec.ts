@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@repo/db';
 import { openLinePeriod } from '../database.js';
+import { testNotifications } from '../notifications/notices.js';
 import { parseCalendarDate } from '@repo/domain';
 import { randomUUID } from 'node:crypto';
 
@@ -86,9 +87,11 @@ async function holidayWorld(tx: PrismaClient) {
     }));
   const loan = (id: string) =>
     tx.accountLoan.findUniqueOrThrow({ where: { id } });
+  // `w.account` disburses, which tells the Senior (US-032) — setup, not
+  // what these tests are about.
   const notices = (userId: string) =>
     tx.notification.findMany({
-      where: { userId },
+      where: { userId, eventType: { not: 'ACCOUNT_DISBURSED' } },
       orderBy: { createdAt: 'asc' },
     });
   const sector = async (isActive = true) =>
@@ -350,6 +353,7 @@ describe('HolidayService (US-093, US-034)', () => {
         database,
         new AuditWriter(database),
         new LedgerService(database),
+        testNotifications(database).notices,
       );
       // Disbursed on Wed 14 January: first collection due Thu 15.
       const pending = await accounts.create(

@@ -217,6 +217,89 @@ export function collectionScope(
   return { lineId: context.currentLineId };
 }
 
+/**
+ * Capital put into the business (US-032) belongs to no line: the whole
+ * organization's for Super Admin and Admin, nothing for anyone else — a
+ * Senior reading it could infer business-wide figures (M09).
+ */
+export function capitalScope(
+  context: RequestContext,
+): Prisma.CapitalEntryWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  return NO_ROWS;
+}
+
+/**
+ * The raw ledger (M09) is the organization's, read by Super Admin and Admin
+ * only — for a raw query that cannot take a `where` object.
+ */
+export function seesOrganizationLedger(context: RequestContext): boolean {
+  return seesEverything(context);
+}
+
+/**
+ * Expense categories (ADR-0018): the organization's, for every role — a
+ * Junior picks one when recording petrol.
+ */
+export function expenseCategoryScope(
+  context: RequestContext,
+): Prisma.ExpenseCategoryWhereInput {
+  return { organizationId: context.organizationId };
+}
+
+/** Bank accounts (ADR-0018): the organization's, for Admins and above. */
+export function bankAccountScope(
+  context: RequestContext,
+): Prisma.BankAccountWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  return { organizationId: { in: [] } };
+}
+
+/**
+ * Expenses (ADR-0018): every one of the organization's for Admins; for a
+ * Senior, the field expenses spent on their current line; for a Junior, their
+ * own. Office and bank expenses are never a Senior's or Junior's to see.
+ */
+export function expenseScope(
+  context: RequestContext,
+): Prisma.ExpenseWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  if (context.role === 'JUNIOR')
+    return {
+      organizationId: context.organizationId,
+      spenderUserId: context.userId,
+    };
+  if (context.currentLineId === null) return NO_ROWS;
+  return {
+    organizationId: context.organizationId,
+    lineId: context.currentLineId,
+  };
+}
+
+/**
+ * The business's own money — transfers, other income, drawings (ADR-0018):
+ * the organization's, for Admins and above only, like the ledger it is.
+ */
+export function booksScope(context: RequestContext): {
+  organizationId: string | { in: string[] };
+} {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  return { organizationId: { in: [] } };
+}
+
+/** Scheduled jobs' latest runs (M14): the organization's, for Admins and above. */
+export function jobStatusScope(
+  context: RequestContext,
+): Prisma.JobStatusWhereInput {
+  if (seesEverything(context))
+    return { organizationId: context.organizationId };
+  return { organizationId: { in: [] } };
+}
+
 /** Combines a scope predicate with a query's own filter. Both must hold. */
 export function inScope<Where extends object>(
   scope: Where,

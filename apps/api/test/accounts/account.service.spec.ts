@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@repo/db';
+import { fundOfficeCash } from './fund-office-cash.js';
 import { openLinePeriod } from '../database.js';
+import { testNotifications } from '../notifications/notices.js';
 import { dayOfWeek, parseCalendarDate } from '@repo/domain';
 import { randomUUID } from 'node:crypto';
 
@@ -61,6 +63,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
       database,
       new AuditWriter(database),
       new LedgerService(database),
+      testNotifications(database).notices,
     );
     const terms = (overrides: object = {}) => ({
       customerId: customer.id,
@@ -73,7 +76,22 @@ describe('AccountService (US-030, US-031, US-032)', () => {
       disburse: false,
       ...overrides,
     });
-    return { organizationId, sector, line, context, customer, service, terms };
+    // Only the Super Admin pays a loan out, from money already put in
+    // (decided 2026-10-02); `fund` is the owner adding that capital first.
+    const owner: RequestContext = { ...context, role: 'SUPER_ADMIN' };
+    const fund = (amount = '8500') =>
+      fundOfficeCash(database, owner, amount, SATURDAY);
+    return {
+      organizationId,
+      sector,
+      line,
+      context,
+      owner,
+      fund,
+      customer,
+      service,
+      terms,
+    };
   }
 
   const sum = (values: string[]) =>
@@ -522,9 +540,10 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('refuses once the account is disbursed — the amounts are fixed from then on', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { context, owner, fund, service, terms } = await world(tx);
+        await fund();
         const account = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );
@@ -603,9 +622,12 @@ describe('AccountService (US-030, US-031, US-032)', () => {
   describe('disbursement (US-032, BR-18)', () => {
     it('activates the account and posts receivable 10,000 against office cash 8,500 and unearned profit 1,500, balanced', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, owner, fund, service, terms } =
+          await world(tx);
+        // The Admin creates it; the owner puts in 8,500 and pays it out.
         const pending = await service.create(context, terms(), SATURDAY);
-        const active = await service.disburse(context, pending.id, SATURDAY);
+        await fund('8500');
+        const active = await service.disburse(owner, pending.id, SATURDAY);
         expect(active.status).toBe('ACTIVE');
 
         const transaction = await tx.ledgerTransaction.findFirstOrThrow({
@@ -640,7 +662,9 @@ describe('AccountService (US-030, US-031, US-032)', () => {
         );
         expect(balances).toEqual({
           LOAN_RECEIVABLE: '10000.00',
-          CASH_AT_OFFICE: '-8500.00',
+          // The owner's 8,500 went straight out as the loan.
+          CAPITAL: '8500.00',
+          CASH_AT_OFFICE: '0.00',
           UNEARNED_PROFIT: '1500.00',
         });
         expect(
@@ -653,9 +677,10 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('"Save and disburse" does both in one call', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { owner, fund, service, terms } = await world(tx);
+        await fund();
         const account = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );
@@ -671,19 +696,21 @@ describe('AccountService (US-030, US-031, US-032)', () => {
     it('a second account reuses the organization’s office and profit accounts; another organization gets its own', async () => {
       await withRollback(prisma, async (tx) => {
         const first = await world(tx);
+        await first.fund('17000');
         await first.service.create(
-          first.context,
+          first.owner,
           first.terms({ disburse: true }),
           SATURDAY,
         );
         await first.service.create(
-          first.context,
+          first.owner,
           first.terms({ disburse: true }),
           SATURDAY,
         );
         const second = await world(tx);
+        await second.fund();
         await second.service.create(
-          second.context,
+          second.owner,
           second.terms({ disburse: true }),
           SATURDAY,
         );
@@ -703,20 +730,22 @@ describe('AccountService (US-030, US-031, US-032)', () => {
             accountType: 'CASH_AT_OFFICE',
           },
         });
-        expect(office.balance.toFixed(2)).toBe('-17000.00');
+        // 17,000 put in, two loans of 8,500 paid out of it.
+        expect(office.balance.toFixed(2)).toBe('0.00');
       });
     });
 
     it('refuses an account that is not pending, and one planned for a later day', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { context, owner, fund, service, terms } = await world(tx);
+        await fund();
         const active = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );
         await expect(
-          service.disburse(context, active.id, SATURDAY),
+          service.disburse(owner, active.id, SATURDAY),
         ).rejects.toMatchObject({
           code: 'ACCOUNT_NOT_PENDING',
         });
@@ -727,7 +756,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           SATURDAY,
         );
         await expect(
-          service.disburse(context, later.id, SATURDAY),
+          service.disburse(owner, later.id, SATURDAY),
         ).rejects.toMatchObject({
           code: 'DISBURSEMENT_DATE_IN_FUTURE',
         });
@@ -736,11 +765,12 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('a pending account disbursed after its planned day is re-dated to today, with its schedule regenerated', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { context, owner, fund, service, terms } = await world(tx);
         const pending = await service.create(context, terms(), SATURDAY);
+        await fund();
         // Disbursed on Wednesday 7 January instead.
         const active = await service.disburse(
-          context,
+          owner,
           pending.id,
           parseCalendarDate('2026-01-07'),
         );
@@ -758,6 +788,42 @@ describe('AccountService (US-030, US-031, US-032)', () => {
         expect(posted.businessDate.toISOString().slice(0, 10)).toBe(
           '2026-01-07',
         );
+      });
+    });
+
+    it('refuses a loan the office cannot pay out — ₹8,499 in cash-in-hand against ₹8,500 invested — and posts nothing', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, owner, fund, service, terms } = await world(tx);
+        const pending = await service.create(context, terms(), SATURDAY);
+        await fund('8499');
+
+        await expect(
+          service.disburse(owner, pending.id, SATURDAY),
+        ).rejects.toMatchObject({
+          code: 'INSUFFICIENT_CASH_IN_HAND',
+          status: 422,
+        });
+        expect(
+          await tx.ledgerTransaction.count({
+            where: { sourceId: pending.id, transactionType: 'DISBURSEMENT' },
+          }),
+        ).toBe(0);
+
+        // One more rupee in, and the same loan goes out.
+        await fund('1');
+        const active = await service.disburse(owner, pending.id, SATURDAY);
+        expect(active.status).toBe('ACTIVE');
+      });
+    });
+
+    it('"Save and disburse" by an Admin is refused: only the Super Admin pays money out', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, fund, service, terms } = await world(tx);
+        await fund();
+
+        await expect(
+          service.create(context, terms({ disburse: true }), SATURDAY),
+        ).rejects.toMatchObject({ code: 'PERMISSION_DENIED', status: 403 });
       });
     });
   });
@@ -805,9 +871,11 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('Scenario: written off before a rupee arrives — the receivable and its unearned profit clear, and the 8,500 put out is the loss', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, owner, fund, service, terms } =
+          await world(tx);
+        await fund();
         const account = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );
@@ -824,7 +892,8 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           // Nothing is owed and no profit is expected any more; what the
           // business paid out and did not get back is the loss.
           LOAN_RECEIVABLE: '0.00',
-          CASH_AT_OFFICE: '-8500.00',
+          CAPITAL: '8500.00',
+          CASH_AT_OFFICE: '0.00',
           UNEARNED_PROFIT: '0.00',
           WRITE_OFF_LOSS: '8500.00',
         });
@@ -866,9 +935,11 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('defaulting stops collection but posts nothing — the money is still owed', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, owner, fund, service, terms } =
+          await world(tx);
+        await fund();
         const account = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );
@@ -884,7 +955,8 @@ describe('AccountService (US-030, US-031, US-032)', () => {
         expect(await balancesOf(tx, organizationId)).toEqual({
           // Exactly the disbursement, untouched: the receivable stands.
           LOAN_RECEIVABLE: '10000.00',
-          CASH_AT_OFFICE: '-8500.00',
+          CAPITAL: '8500.00',
+          CASH_AT_OFFICE: '0.00',
           UNEARNED_PROFIT: '1500.00',
         });
         expect(
@@ -902,7 +974,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('a pending account cannot be closed, and neither can one that is already closed', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { context, owner, fund, service, terms } = await world(tx);
         const pending = await service.create(context, terms(), SATURDAY);
         await expect(
           service.close(
@@ -913,8 +985,9 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           ),
         ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_ACTIVE' });
 
+        await fund();
         const active = await service.create(
-          context,
+          owner,
           terms({ disburse: true }),
           SATURDAY,
         );

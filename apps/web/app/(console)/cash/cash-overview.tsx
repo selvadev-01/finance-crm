@@ -24,6 +24,7 @@ import { canManageOrganisation } from "../../../lib/roles";
 import { useApiQuery } from "../../../lib/use-api-query";
 import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
+import { FieldExpensesSection } from "./field-expenses-section";
 import { HandoverList, HandToOfficeDialog } from "./handover-parts";
 
 /**
@@ -120,6 +121,13 @@ export function CashOverview({
                           </span>
                           <span className="text-caption text-ink-muted">
                             <Money amount={item.toHandOver} /> to hand over
+                            {item.expenses !== "0.00" ? (
+                              <>
+                                {" "}
+                                · <Money amount={item.expenses} /> approved
+                                expenses taken off
+                              </>
+                            ) : null}
                           </span>
                         </span>
                         {item.pending ? (
@@ -181,6 +189,16 @@ export function CashOverview({
           </p>
         ) : null}
       </Section>
+
+      {/* ADR-0018: field expenses to decide; a Senior also records their own. */}
+      {manages || me.role === "SENIOR" ? (
+        <FieldExpensesSection
+          canRequest={me.role === "SENIOR" && me.currentLineId !== null}
+          onChanged={() => {
+            if (me.role === "SENIOR") position.reload();
+          }}
+        />
+      ) : null}
 
       {officeItem && position.status === "ready" ? (
         <HandToOfficeDialog

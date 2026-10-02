@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { openLinePeriod } from '../database.js';
 import { parseCalendarDate, toMoney } from '@repo/domain';
 import type { PinoLogger } from 'nestjs-pino';
@@ -53,7 +54,12 @@ describe('OperationsDashboardService (US-082)', () => {
     const ledger = new LedgerService(database);
     const settlement = new AccountSettlement(database);
     const { notices } = testNotifications(database);
-    const accounts = new AccountService(database, audit, ledger);
+    const accounts = new AccountService(
+      database,
+      audit,
+      ledger,
+      testNotifications(database).notices,
+    );
     const collections = new CollectionService(
       database,
       audit,
@@ -115,13 +121,16 @@ describe('OperationsDashboardService (US-082)', () => {
       });
 
     /** A = 20 × D, I = 17 × D: ₹500 a day is the PDF's 10,000 / 8,500 / 1,500. */
-    const account = async (name: string, lineId: string, daily: string) =>
-      accounts.create(
-        w.admin,
+    const account = async (name: string, lineId: string, daily: string) => {
+      const invested = toMoney(daily).times(17).toFixed(2);
+      // The owner funds the loan and pays it out (decided 2026-10-02).
+      await fundOfficeCash(w.database, w.owner, invested, SATURDAY);
+      return accounts.create(
+        w.owner,
         {
           customerId: (await customer(name, lineId)).id,
           accountAmount: toMoney(daily).times(20).toFixed(2),
-          investedAmount: toMoney(daily).times(17).toFixed(2),
+          investedAmount: invested,
           dailyAmount: daily,
           termDays: 20,
           collectionFrequency: 'DAILY',
@@ -130,6 +139,7 @@ describe('OperationsDashboardService (US-082)', () => {
         },
         SATURDAY,
       );
+    };
 
     const collect = async (
       junior: RequestContext,

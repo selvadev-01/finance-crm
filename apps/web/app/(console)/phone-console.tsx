@@ -24,6 +24,13 @@ import { NotificationPanel } from "../../lib/notifications/notification-panel";
 import { ROLE_LABEL } from "../../lib/roles";
 import { LayoutDialog } from "./layout-chooser";
 
+/** The chip beside a tab's title: the owner is the owner, not a "Super Admin". */
+const ROLE_CHIP: Record<Exclude<Me["role"], "JUNIOR">, string> = {
+  SUPER_ADMIN: "Owner",
+  ADMIN: "Admin",
+  SENIOR: "Senior",
+};
+
 /**
  * The console in the phone layout (ADR-0016, docs/05-ux/stitch-mobile): an app
  * bar with the area and the bell, the page, and four tabs plus "More". The
@@ -72,26 +79,45 @@ export function PhoneConsole({
       </a>
       <MobileShell.AppBar>
         {atTabRoot ? (
-          <Link
-            href="/dashboard"
-            aria-label="Rasi, dashboard"
-            className="grid size-[var(--spacing-touch)] shrink-0 place-items-center rounded-tile bg-accent text-heading font-semibold text-accent-ink"
-          >
-            <span aria-hidden>R</span>
-          </Link>
+          // A tab's own page (Stitch "Rasi Mobile, all roles"): who is
+          // signed in, the area, and their role — a native app's top bar.
+          <>
+            <Link
+              href="/profile"
+              aria-label={`${me.name}, my profile`}
+              className="grid size-10 shrink-0 place-items-center rounded-pill border border-border bg-accent-subtle text-label font-semibold text-accent"
+            >
+              <span aria-hidden>{initials}</span>
+            </Link>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-title leading-tight text-ink">
+                  {area}
+                </span>
+                <span className="shrink-0 rounded-control bg-accent-subtle px-1.5 py-0.5 text-2xs font-semibold tracking-wider text-accent uppercase">
+                  {ROLE_CHIP[me.role]}
+                </span>
+              </span>
+              <span className="truncate text-caption leading-none text-ink-muted">
+                {me.name} · {ROLE_LABEL[me.role]}
+              </span>
+            </span>
+          </>
         ) : (
-          <Button
-            tone="ghost"
-            aria-label="Back"
-            className="-ml-2 w-[var(--spacing-touch)] px-0"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft aria-hidden size={22} />
-          </Button>
+          <>
+            <Button
+              tone="ghost"
+              aria-label="Back"
+              className="-ml-2 w-[var(--spacing-touch)] px-0"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft aria-hidden size={22} />
+            </Button>
+            <span className="min-w-0 flex-1 truncate text-heading text-ink">
+              {area}
+            </span>
+          </>
         )}
-        <span className="min-w-0 flex-1 truncate text-heading text-ink">
-          {area}
-        </span>
         <GlobalSearch role={me.role} trigger="icon" />
         {/*
          * The bell opens the centre itself (S-21). On a phone that is a sheet
