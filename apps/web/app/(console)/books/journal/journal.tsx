@@ -40,6 +40,7 @@ import {
 } from "@repo/ui";
 import { useState } from "react";
 
+import { EntryLines } from "../../../../components/entry-lines";
 import { Pager } from "../../../../components/pager";
 import { LoadFailed } from "../../../../components/query-state";
 import { apiWrite } from "../../../../lib/api-write";
@@ -305,49 +306,14 @@ function EntryCard({ entry }: { entry: JournalEntry }) {
           </span>
         </span>
       </header>
-      <div className="overflow-x-auto rounded-control border border-border">
-        <table className="w-full text-caption">
-          <caption className="sr-only">Lines of the entry</caption>
-          <thead>
-            <tr className="bg-surface-sunken text-2xs font-medium tracking-[0.08em] text-ink-muted uppercase">
-              <th scope="col" className="px-3 py-1.5 text-left">
-                Particulars
-              </th>
-              <th scope="col" className="px-3 py-1.5 text-right">
-                Dr
-              </th>
-              <th scope="col" className="px-3 py-1.5 text-right">
-                Cr
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {entry.lines.map((line, index) => (
-              <tr key={index} className="border-t border-border">
-                <th
-                  scope="row"
-                  className={cn(
-                    "px-3 py-1.5 text-left font-normal text-ink",
-                    line.direction === "CREDIT" && "pl-8",
-                  )}
-                >
-                  {line.name}
-                </th>
-                <td className="px-3 py-1.5 text-right text-ink" data-numeric>
-                  {line.direction === "DEBIT"
-                    ? formatCurrency(line.amount)
-                    : ""}
-                </td>
-                <td className="px-3 py-1.5 text-right text-ink" data-numeric>
-                  {line.direction === "CREDIT"
-                    ? formatCurrency(line.amount)
-                    : ""}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <EntryLines
+        caption="Lines of the entry"
+        lines={entry.lines.map((line) => ({
+          particulars: line.name,
+          direction: line.direction,
+          amount: line.amount,
+        }))}
+      />
     </article>
   );
 }

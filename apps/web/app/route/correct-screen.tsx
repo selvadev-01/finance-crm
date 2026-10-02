@@ -10,19 +10,23 @@ import {
 import { type CollectionListItem, collectionContract } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
-  Button,
   cn,
-  Field,
+  Form,
+  FormField,
   FormMessage,
+  FormRootError,
   formatCurrency,
   Input,
   Skeleton,
+  SubmitButton,
   Textarea,
+  useZodForm,
 } from "@repo/ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "../../lib/api-client";
 import { apiWrite } from "../../lib/api-write";
+import { applyWriteFailure } from "../../lib/form-errors";
 import { Banner, cardClass, FieldPage, Section } from "./app-chrome";
 
 /**
@@ -200,64 +204,63 @@ function RequestForm({
   entry: CollectionListItem;
   onSent: (message: string) => void;
 }) {
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function send() {
-    setPending(true);
-    setProblem(null);
-    try {
-      const result = await apiWrite(collectionContract.requestCorrection, {
-        params: { collectionId: entry.id },
-        body: { correctedAmount: amount, reason },
-      });
-      if (!result.ok) {
-        setPending(false);
-        return setProblem(result.form ?? "The request was not sent.");
-      }
-      onSent(
-        `Sent to your Senior: ${entry.customerName}, ${formatCurrency(entry.amount)} to ${formatCurrency(amount)}. Nothing changes until they approve it.`,
-      );
-    } catch {
-      setPending(false);
-      setProblem("No signal. Try again where you have it.");
-    }
-  }
+  const form = useZodForm(collectionContract.requestCorrection.body, {
+    defaultValues: { correctedAmount: "", reason: "" },
+  });
 
   return (
-    <section className={cn(cardClass, "flex flex-col gap-3 p-4")}>
+    <Form
+      form={form}
+      onSubmit={async (body) => {
+        const result = await apiWrite(collectionContract.requestCorrection, {
+          params: { collectionId: entry.id },
+          body,
+        });
+        if (!result.ok) {
+          return applyWriteFailure(form.setError, result, {
+            fields: ["correctedAmount", "reason"],
+            fallback: "The request was not sent.",
+          });
+        }
+        onSent(
+          `Sent to your Senior: ${entry.customerName}, ${formatCurrency(entry.amount)} to ${formatCurrency(body.correctedAmount)}. Nothing changes until they approve it.`,
+        );
+      }}
+      className={cn(cardClass, "flex flex-col gap-3 p-4")}
+    >
       <h2 className="text-base font-semibold text-ink" data-numeric>
         {entry.customerName} · {formatCurrency(entry.amount)}
       </h2>
-      <Field label="What you actually collected (₹)">
+      <FormField
+        name="correctedAmount"
+        label="What you actually collected (₹)"
+        rewrite={(message) =>
+          message.startsWith("must be an amount")
+            ? "Enter the amount in rupees, like 100 or 100.50."
+            : message
+        }
+      >
         <Input
           inputMode="decimal"
           autoComplete="off"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
           className="h-14 text-right text-xl font-semibold"
           data-numeric
         />
-      </Field>
-      <Field label="Why" hint="Required. Your Senior sees it.">
-        <Textarea
-          rows={3}
-          maxLength={500}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
-      </Field>
-      {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
-      <Button
-        tone="primary"
-        className="h-14 w-full rounded-pill text-base font-semibold"
-        onClick={() => void send()}
-        disabled={pending || amount === "" || reason.trim() === ""}
+      </FormField>
+      <FormField
+        name="reason"
+        label="Why"
+        hint="Required. Your Senior sees it."
       >
-        {pending ? "Sending…" : "Ask to correct"}
-      </Button>
-    </section>
+        <Textarea rows={3} maxLength={500} />
+      </FormField>
+      <FormRootError />
+      <SubmitButton
+        pendingLabel="Sending…"
+        className="h-14 w-full rounded-pill text-base font-semibold"
+      >
+        Ask to correct
+      </SubmitButton>
+    </Form>
   );
 }

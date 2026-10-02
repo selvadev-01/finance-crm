@@ -8,19 +8,23 @@ import {
   Phone,
   Receipt,
 } from "@phosphor-icons/react/dist/ssr";
-import type { RouteView } from "@repo/contracts";
+import { recordCollectionBodySchema, type RouteView } from "@repo/contracts";
 import {
   Button,
   cn,
   Dialog,
-  Field,
+  Form,
+  FormField,
   FormMessage,
+  FormRootError,
   formatCurrency,
   Input,
   type InputProps,
   Textarea,
+  useZodForm,
 } from "@repo/ui";
 import { useRef, useState } from "react";
+import { useWatch } from "react-hook-form";
 
 import {
   amountProblem,
@@ -157,18 +161,20 @@ function AccountForm({
   /** `page`: the only account, its buttons in a sticky bar at the foot. */
   layout: "page" | "card";
 }) {
-  const [amount, setAmount] = useState(account.expectedAmount);
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const form = useZodForm(doorSchema(account.outstandingAmount), {
+    defaultValues: { amount: account.expectedAmount, note: "" },
+  });
   const [confirmingNoPayment, setConfirmingNoPayment] = useState(false);
   const [saving, setSaving] = useState(false);
   const state = local.rowState[account.accountLoanId] ?? "PENDING";
-  const typed = amount.replace(/[\s,₹]/g, "");
+  const typed = (
+    useWatch({ control: form.control, name: "amount" }) ?? ""
+  ).replace(/[\s,]/g, "");
+  const amountError = form.formState.errors.amount;
   // A typed 0 is not confirmable (it points to No payment), so it names no amount.
   const valid =
     amountProblem(typed, account.outstandingAmount) === null &&
-    !/^0+(\.0+)?$/.test(typed);
+    !ZERO.test(typed);
 
   // Each record mints a new idempotency key, so a second tap would be a second
   // collection the server cannot tell apart. `saving` disables the buttons
@@ -176,39 +182,29 @@ function AccountForm({
   // set until the route has re-read and the form is gone.
   const inFlight = useRef(false);
 
-  async function save(value: string) {
+  async function save(value: string, note: string) {
     if (inFlight.current) return;
     inFlight.current = true;
     setSaving(true);
     try {
-      setProblem(await onRecord({ account, customer, amount: value, note }));
+      const problem = await onRecord({
+        account,
+        customer,
+        amount: value,
+        note,
+      });
+      if (problem) form.setError("root.server", { message: problem });
     } finally {
       inFlight.current = false;
       setSaving(false);
     }
   }
 
-  function confirm() {
-    const wrong = amountProblem(typed, account.outstandingAmount);
-    if (wrong === "NOT_AN_AMOUNT") {
-      setError("Enter the amount in rupees, like 100 or 100.50.");
-    } else if (wrong === "EXCEEDS_OUTSTANDING") {
-      setError(
-        `More than the outstanding ${formatCurrency(account.outstandingAmount)}. Collect at most that.`,
-      );
-    } else if (/^0+(\.0+)?$/.test(typed)) {
-      setError("For a visit where nothing was paid, use No payment.");
-    } else {
-      setError(null);
-      void save(typed);
-    }
-  }
-
   const actions = (
     <>
       <Button
+        type="submit"
         tone="primary"
-        onClick={confirm}
         disabled={saving}
         className="h-14 w-full rounded-pill text-lg font-semibold"
       >
@@ -233,7 +229,15 @@ function AccountForm({
   );
 
   return (
-    <section
+    <Form
+      form={form}
+      onSubmit={({ amount, note }) => save(amount, note ?? "")}
+      // The keypad's "done" key is Enter: it closes the keyboard, and must
+      // never record a collection by itself.
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target instanceof HTMLInputElement)
+          event.preventDefault();
+      }}
       aria-labelledby={`${account.accountLoanId}-title`}
       className={cn(
         "flex flex-col gap-3",
@@ -309,15 +313,20 @@ function AccountForm({
           </p>
         ) : (
           <>
-            <Field
+            <FormField
+              name="amount"
               label="Amount collected (₹)"
-              error={error ?? undefined}
               hint={varianceHint(typed, account.expectedAmount)}
+              rewrite={(message) =>
+                message.startsWith("must be an amount")
+                  ? "Enter the amount in rupees, like 100 or 100.50."
+                  : message
+              }
               className={cn(
                 "[&>label]:text-base [&>label]:font-medium",
                 HINT_STRIP,
                 HINT_TONE[
-                  error
+                  amountError
                     ? "critical"
                     : varianceTone(typed, account.expectedAmount)
                 ],
@@ -327,28 +336,17 @@ function AccountForm({
                 inputMode="decimal"
                 autoComplete="off"
                 enterKeyHint="done"
-                value={amount}
-                onChange={(event) => {
-                  setAmount(event.target.value);
-                  setError(null);
-                }}
               />
-            </Field>
-            <Field
+            </FormField>
+            <FormField
+              name="note"
               label="Note (optional)"
               hint="Only for something unusual."
               className="[&>label]:text-base"
             >
-              <Textarea
-                rows={2}
-                maxLength={500}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
-            </Field>
-            {problem ? (
-              <FormMessage tone="critical">{problem}</FormMessage>
-            ) : null}
+              <Textarea rows={2} maxLength={500} />
+            </FormField>
+            <FormRootError />
             {layout === "card" ? (
               <div className="flex flex-col gap-2">{actions}</div>
             ) : null}
@@ -383,7 +381,8 @@ function AccountForm({
             tone="danger"
             onClick={() => {
               setConfirmingNoPayment(false);
-              void save("0");
+              // BR-09: no amount to check — the visit itself is the record.
+              void save("0", form.getValues("note")?.trim() ?? "");
             }}
             className="h-14 rounded-pill text-base font-semibold"
           >
@@ -398,8 +397,35 @@ function AccountForm({
           </Button>
         </div>
       </Dialog>
-    </section>
+    </Form>
   );
+}
+
+const ZERO = /^0+(\.0+)?$/;
+
+/**
+ * The contract's own amount and note (BR-13's key, the account and the clock
+ * are added when it is saved), plus what the phone can check before saving:
+ * not over the outstanding (BR-07), and not 0 — that is No payment (BR-09).
+ */
+function doorSchema(outstanding: string) {
+  return recordCollectionBodySchema
+    .pick({ amount: true, note: true })
+    .superRefine(({ amount }, context) => {
+      if (amountProblem(amount, outstanding) === "EXCEEDS_OUTSTANDING") {
+        context.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message: `More than the outstanding ${formatCurrency(outstanding)}. Collect at most that.`,
+        });
+      } else if (ZERO.test(amount)) {
+        context.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message: "For a visit where nothing was paid, use No payment.",
+        });
+      }
+    });
 }
 
 function Figure({ label, value }: { label: string; value: string }) {

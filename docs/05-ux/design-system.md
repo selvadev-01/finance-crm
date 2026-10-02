@@ -215,6 +215,8 @@ In `apps/web`, a list is built from:
 - the column builders in `components/columns.tsx` (`identityColumn`, `moneyColumn` sorted in paise, `valueColumn`, `displayColumn`);
 - `ListFallback` for loading, failed, not-permitted and the screen's chosen empty state.
 
+One record's double-entry lines — a journal voucher, a ledger posting — are not a list: they use `components/entry-lines.tsx` (`EntryLines`), Particulars with Debit and Credit columns and the credit lines indented.
+
 `sectors/sector-list.tsx` is the reference list page, and `sectors/[sectorId]/sector-detail.tsx` the reference detail page.
 
 ### Forms
@@ -230,6 +232,8 @@ react-hook-form 7.88 over the contract's own zod schema (`@hookform/resolvers` 5
 | `FormRootError`               | The form-level message from `root.server`. A `warning` type shows amber                                                                                                                                                                                                                                                                                                                 |
 | `FormActions`, `SubmitButton` | The action row, and a submit button that disables itself and shows its pending label. Below 640px the row sticks to the foot of the screen, above the phone layout's tab bar (`--shell-bottom`, set by `MobileShell.Root`); the other actions share one row and the primary `SubmitButton` (marked `data-commit`) takes the full row below, so the bar is never more than two rows high |
 | `DialogForm`                  | A dialog whose body is a form. It refuses to close mid-write and draws its own Cancel and submit buttons                                                                                                                                                                                                                                                                                |
+
+**The field app's forms use it too** — record a collection, ask for a correction, a field expense and the cash handover (`app/route/*-screen.tsx`). A screen refines the contract schema it sends (`.pick()`, then `.superRefine()` for what only the phone can check, such as "not over the outstanding"); denomination counts stay plain state beside the form, because `DenominationCount` is shared with the console. Enter in a text input never submits a money form — the keypad's "done" key is Enter. A submit button outside the form (`FieldPage`'s `footer`) points at it with `form={id}`.
 
 **Error wording** goes through one rule, used for both the browser's checks and the API's `400` details (`fieldMessage`, `validationMessage`):
 
