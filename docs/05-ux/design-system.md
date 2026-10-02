@@ -134,6 +134,8 @@ Focus is **always visible**. There is a 2px accent outline with a 2px offset, ap
 
 Motion is minimal and functional: a colour transition on hover, a 1px translate on press so a gloved tap registers visibly, and a 120ms fade-in (`animate-in`) for dialogs. Anything more must justify itself as hierarchy, feedback, or state change.
 
+Loading has two motions, both feedback. `Skeleton` (and so `ListSkeleton` and `DetailSkeleton`) sweeps a highlight across its bars (`animate-shimmer`); never hand-roll an `animate-pulse` block. The console draws `ActivityBar`, a 2px indeterminate accent bar along the top (`animate-progress`), while any `useApiQuery` read has been in flight for more than 150ms. It is the only sign that a reload is running, since a reloaded list keeps its rows on screen. Background polls do not go through `useApiQuery` and do not show it. Under reduced motion the shimmer stops and the bar becomes a still strip.
+
 ---
 
 ## Component base

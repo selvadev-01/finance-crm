@@ -164,6 +164,8 @@ Not everything in the notification centre warrants a phone buzz.
 
 `ALERT` cannot be disabled in preferences.
 
+**These are defaults (2026-10-02, [ADR-0019](adr/0019-message-templates.md)).** A business's Super Admin may push any message or stop pushing a `WARNING`, per message, on `/settings/templates`. An `ALERT` is always pushed: the API refuses to switch it off.
+
 ---
 
 ## Email
@@ -185,7 +187,11 @@ Email is a third channel, beside the centre and push. It is **SMTP through Nodem
 
 > An inbox fills faster than a notification tray and is read less often. Only the events the business must act on go there.
 
-**Payload rule.** An email carries the notification's own title and body, already written for that recipient. Nothing is added to it.
+That table is the default. Since [ADR-0019](adr/0019-message-templates.md) a business may email any message, per message; an `ALERT` is always emailed.
+
+**Payload rule.** An email carries the notification's own title and body, already written for that recipient. By default it adds nothing: its subject, heading and message are `{{title}}` and `{{body}}`.
+
+**Words come from templates ([ADR-0019](adr/0019-message-templates.md)).** Every message has English and Tamil defaults in a code catalogue, which a business may override. Each recipient's copy is rendered in their own language inside the event's transaction, and stored as sent. Email is built from structured fields — subject, heading, paragraphs, button label and footer — into the fixed layout. No HTML is accepted, and the button always points at the subject in Rasi.
 
 ---
 

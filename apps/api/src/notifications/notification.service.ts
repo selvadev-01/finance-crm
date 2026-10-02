@@ -1,44 +1,57 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { NotificationCategory, NotificationEvent } from '@repo/contracts';
+import type { TemplateLanguage } from '@repo/contracts';
 import type { Prisma } from '@repo/db';
 import { type CalendarDate, toMoney } from '@repo/domain';
 
 import { assignmentInEffectOn } from '../access/scope.js';
 import { EmailOutbox } from '../email/email-outbox.js';
-import { notificationEmail } from '../email/email-templates.js';
 import { APP_CONFIG, type AppConfig } from '../platform/config/config.js';
 import { Database } from '../platform/database/database.js';
 import { InternalError } from '../platform/errors/errors.js';
+import { noticeDefinition, type TemplateKey } from './templates/catalogue.js';
+import {
+  NotificationTemplates,
+  type RenderedMessage,
+  renderMessage,
+  type ResolvedTemplate,
+} from './templates/notification-templates.js';
+import type { TemplateValues } from './templates/template-engine.js';
 
 type Tx = Prisma.TransactionClient;
 
 export interface Notice {
   recipients: (string | null | undefined)[];
-  category: NotificationCategory;
-  eventType: NotificationEvent;
-  title: string;
-  body: string;
+  /**
+   * Which message (US-074). Its category and event type come from the
+   * catalogue, and its words from the business's template in each
+   * recipient's language, or the default.
+   */
+  template: TemplateKey;
+  /** The placeholders, already formatted — money through `rupees`. */
+  values: TemplateValues;
   link: { entityType: string | null; entityId: string | null; url: string };
   /** Whoever caused the event is never told about it. */
   actorUserId?: string | null;
 }
 
-/** notifications.md#what-is-pushed — the rest is in-app only. */
-const PUSHED: readonly NotificationCategory[] = ['ALERT', 'WARNING'];
-
-/**
- * notifications.md#email — only alerts are emailed. Warnings fire on every
- * extra collection and correction request; an inbox would drown in them.
- */
-export const EMAILED: readonly NotificationCategory[] = ['ALERT'];
+interface Recipient {
+  userId: string;
+  language: TemplateLanguage;
+  organization: { id: string; name: string } | null;
+}
 
 /**
  * M10 — raising a notification. **Called inside the transaction of the event
  * it describes** and refuses otherwise: the in-app notification commits or
  * rolls back with its cause, and so does each push delivery row (one per
- * active device) and, for an alert, the email row — which the dispatch jobs
- * drain later (M14). Push and email can fail; the notification is already in
- * the centre.
+ * active device) and the email row — which the dispatch jobs drain later
+ * (M14). Push and email can fail; the notification is already in the centre.
+ *
+ * Each recipient's copy is rendered from the business's template in their own
+ * language (US-074) and stored as text, so a later edit to the template never
+ * rewrites it. Whether it is pushed and emailed is the business's choice per
+ * message, defaulting from the category — ALERT and WARNING pushed, ALERT
+ * emailed — and an ALERT is always both.
  *
  * A category the recipient switched off is skipped — never `ALERT` (US-073).
  */
@@ -48,16 +61,19 @@ export class NotificationService {
     private readonly database: Database,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly emails: EmailOutbox,
+    private readonly templates: NotificationTemplates,
   ) {}
 
   async raise(notice: Notice): Promise<number> {
     if (!this.database.inTransaction) {
       throw new InternalError(
         'NOTIFICATION_OUTSIDE_TRANSACTION',
-        `Notification ${notice.eventType} raised outside a transaction`,
+        `Notification ${notice.template} raised outside a transaction`,
       );
     }
     const tx = this.database.client;
+    const definition = noticeDefinition(notice.template);
+    const { category, eventType } = definition.notice;
     const recipients = [
       ...new Set(
         notice.recipients.filter(
@@ -69,82 +85,160 @@ export class NotificationService {
     if (recipients.length === 0) return 0;
 
     const muted =
-      notice.category === 'ALERT'
+      category === 'ALERT'
         ? new Set<string>()
         : new Set(
             (
               await tx.notificationPreference.findMany({
                 where: {
                   userId: { in: recipients },
-                  category: notice.category,
+                  category,
                   enabled: false,
                 },
                 select: { userId: true },
               })
             ).map((row) => row.userId),
           );
+    const people = await this.recipientsOf(tx, recipients);
     const providers = this.pushProviders();
+    // One resolution per business and one rendering per language: a holiday
+    // told to forty staff reads its template once.
+    const resolved = new Map<string, Promise<ResolvedTemplate>>();
+    const rendered = new Map<string, Promise<RenderedMessage>>();
+    const messageFor = (person: Recipient) => {
+      const organization = person.organization;
+      const cacheKey = `${organization?.id ?? ''}:${person.language}`;
+      let message = rendered.get(cacheKey);
+      if (!message) {
+        message = this.templateOf(
+          tx,
+          organization?.id ?? null,
+          definition,
+          resolved,
+        ).then((template) =>
+          renderMessage(
+            definition,
+            template.content(person.language),
+            person.language,
+            notice.values,
+            {
+              // The email copy's button; with no email there is no copy to point.
+              url: this.emails.enabled
+                ? this.emails.link(notice.link.url)
+                : notice.link.url,
+              organizationName: organization?.name ?? 'Rasi',
+            },
+          ),
+        );
+        rendered.set(cacheKey, message);
+      }
+      return message;
+    };
     let raised = 0;
 
-    for (const userId of recipients) {
-      if (muted.has(userId)) continue;
+    for (const person of people) {
+      if (muted.has(person.userId)) continue;
+      const message = await messageFor(person);
+      const channels = (
+        await this.templateOf(
+          tx,
+          person.organization?.id ?? null,
+          definition,
+          resolved,
+        )
+      ).channels;
       const notification = await tx.notification.create({
         data: {
-          userId,
-          category: notice.category,
-          eventType: notice.eventType,
-          title: notice.title,
-          body: notice.body,
+          userId: person.userId,
+          category,
+          eventType,
+          title: message.title ?? '',
+          body: message.body ?? '',
           payload: notice.link,
         },
         select: { id: true },
       });
       raised += 1;
-      if (EMAILED.includes(notice.category) && this.emails.enabled) {
-        await this.queueEmail(tx, userId, notification.id, notice);
-      }
-      if (!PUSHED.includes(notice.category) || providers.length === 0) continue;
-      const devices = await tx.pushSubscription.findMany({
-        where: { userId, isActive: true, provider: { in: providers } },
-        select: { id: true },
-      });
-      if (devices.length > 0) {
-        await tx.notificationOutbox.createMany({
-          data: devices.map((device) => ({
-            notificationId: notification.id,
-            pushSubscriptionId: device.id,
-            nextAttemptAt: new Date(),
-          })),
+      if (channels.email && this.emails.enabled && person.organization) {
+        await this.emails.queue({
+          organizationId: person.organization.id,
+          userId: person.userId,
+          kind: 'NOTIFICATION',
+          notificationId: notification.id,
+          content: message.email,
         });
+      }
+      if (channels.push) {
+        await this.queuePush(tx, person.userId, notification.id, providers);
       }
     }
     return raised;
   }
 
-  /** The email copy of a notification, for a recipient who is staff. */
-  private async queueEmail(
+  /**
+   * One delivery row per active device of a provider this deployment pushes
+   * through. Returns how many were queued.
+   */
+  async queuePush(
     tx: Tx,
     userId: string,
     notificationId: string,
-    notice: Notice,
-  ): Promise<void> {
-    const staff = await tx.staffProfile.findUnique({
-      where: { userId },
-      select: { organization: { select: { id: true, name: true } } },
+    providers = this.pushProviders(),
+  ): Promise<number> {
+    if (providers.length === 0) return 0;
+    const devices = await tx.pushSubscription.findMany({
+      where: { userId, isActive: true, provider: { in: providers } },
+      select: { id: true },
     });
-    if (!staff) return;
-    await this.emails.queue({
-      organizationId: staff.organization.id,
-      userId,
-      kind: 'NOTIFICATION',
-      notificationId,
-      content: notificationEmail({
-        title: notice.title,
-        body: notice.body,
-        url: this.emails.link(notice.link.url),
-        organizationName: staff.organization.name,
-      }),
+    if (devices.length > 0) {
+      await tx.notificationOutbox.createMany({
+        data: devices.map((device) => ({
+          notificationId,
+          pushSubscriptionId: device.id,
+          nextAttemptAt: new Date(),
+        })),
+      });
+    }
+    return devices.length;
+  }
+
+  /**
+   * Each recipient's language and business, in the order given. A user with no
+   * staff profile — none today — reads the default English words and is not
+   * emailed, as before templates.
+   */
+  private async recipientsOf(tx: Tx, userIds: string[]): Promise<Recipient[]> {
+    const staff = await tx.staffProfile.findMany({
+      where: { userId: { in: userIds } },
+      select: {
+        userId: true,
+        language: true,
+        organization: { select: { id: true, name: true } },
+      },
     });
+    const byUser = new Map(staff.map((row) => [row.userId, row] as const));
+    return userIds.map(
+      (userId) =>
+        byUser.get(userId) ?? { userId, language: 'EN', organization: null },
+    );
+  }
+
+  private templateOf(
+    tx: Tx,
+    organizationId: string | null,
+    definition: ResolvedTemplate['definition'],
+    cache: Map<string, Promise<ResolvedTemplate>>,
+  ): Promise<ResolvedTemplate> {
+    const key = organizationId ?? '';
+    let template = cache.get(key);
+    if (!template) {
+      template =
+        organizationId === null
+          ? Promise.resolve(NotificationTemplates.defaults(definition))
+          : this.templates.resolve(tx, organizationId, definition);
+      cache.set(key, template);
+    }
+    return template;
   }
 
   /** Which stored subscriptions are pushed to under the current configuration. */

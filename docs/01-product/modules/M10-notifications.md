@@ -8,7 +8,7 @@
 
 ## Scope
 
-**In:** the in-app notification centre, role-scoped delivery, push dispatch via Web Push (VAPID) and FCM, email over SMTP (alerts, and transactional email such as the sign-up welcome), device registration, delivery retry, preferences.
+**In:** the in-app notification centre, role-scoped delivery, push dispatch via Web Push (VAPID) and FCM, email over SMTP (alerts, and transactional email such as the sign-up welcome), device registration, delivery retry, preferences, and message templates — every message's words per business in English and Tamil, and its channels (US-074).
 
 **Out:** the events themselves — raised by M05, M07, M08, M03.
 
@@ -16,7 +16,7 @@
 
 ## Owned entities
 
-`notification` · `push_subscription` · `notification_outbox` · `email_outbox`
+`notification` · `push_subscription` · `notification_outbox` · `email_outbox` · `notification_preference` · `notification_template` · `notification_channel`
 
 ---
 
@@ -114,6 +114,8 @@ Per-category opt-out. **`ALERT` cannot be disabled** — low collections, missed
 | Register device           | All          |
 | Deregister device         | Self, Admin+ |
 | Manage preferences        | Self         |
+| Choose own language       | Self         |
+| Manage message templates  | Super Admin  |
 
 ---
 
@@ -164,7 +166,7 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
 - **Providers.** `packages/notifications`: `WebPushProvider` (web-push 3.6.7; 404/410 gone, 429/5xx/network retry, other 4xx failed) and `FcmProvider` (firebase-admin 14.4.0; unregistered/invalid token gone, unavailable/quota/internal retry), each with an injectable transport; `outcome()` holds the retry table once. A provider that is selected but not configured answers `retry`. Configuration refuses to start without the keys of the selected provider.
 - **Preferences.** `notification_preference` holds one row per user and category that differs from the default (on). `ALERT` cannot be switched off — `422 ALERT_ALWAYS_ON` at the API, a CHECK in the database.
 - **Routes.** `GET /api/notifications` (newest first, `unread`, `category`, with `unreadCount`), `POST /api/notifications/:id/read`, `POST /api/notifications/read-all`, `GET /api/push/config` (provider and VAPID public key), `GET|POST /api/push-subscriptions` (register refreshes by endpoint or token; `422 PUSH_PROVIDER_DISABLED`; a Web Push endpoint must be on a known browser push service — FCM, Mozilla, Windows WNS, Apple — or it is `422 PUSH_ENDPOINT_NOT_ALLOWED`, because the server POSTs to it, and dispatch refuses and deactivates any other stored endpoint; a device re-registered by a different user expires the previous user's queued pushes), `DELETE /api/push-subscriptions/:id` (own, or any in the organization for Admin and above), `GET|PATCH /api/notification-preferences`. Another user's notification or device is `404`.
-- **Web.** In the console the bell **is** the centre (S-21), in the top bar on a computer and the app bar on a phone, with the unread count on it. Pressing it opens `NotificationPanel` (`lib/notifications/notification-panel.tsx`) — a `Popover` on a computer, a `Dialog placement="sheet"` on a phone — grouped by business day, with the unread filter, mark read, mark all read and "Show more". There is **no `/notifications` page and no nav item** (2026-09-21): a notification is read on the way to its subject, so following its deep link marks it read and closes the panel behind it. The panel is mounted only while open, so the list is fetched on the first press; the unread count alone is polled. "Notify me on this device" and the category preferences are the `/settings/notifications` tab, one of the Settings group's tabs, open to every console role because both are per user. The Junior's status bar has a bell opening `/route#notifications` (needs signal; notifications are not stored on the phone, and their links point at console pages so rows are marked read instead). The bell polls every minute while visible. Push permission is asked only from a tap. The Junior's field worker (`app/sw.ts`) shows pushes and opens `/route#notifications`; the console registers a separate push-only worker, `public/push-sw.js` with scope `/push/`, so no console page is controlled by a worker.
+- **Web.** In the console the bell **is** the centre (S-21), in the top bar on a computer and the app bar on a phone, with the unread count on it. Pressing it opens `NotificationPanel` (`lib/notifications/notification-panel.tsx`) — a `Popover` on a computer, a `Dialog placement="sheet"` on a phone — grouped by business day, with the unread filter, mark read, mark all read and "Show more". There is **no `/notifications` page and no nav item** (2026-09-21): a notification is read on the way to its subject, so following its deep link marks it read and closes the panel behind it. The panel is mounted only while open, so the list is fetched on the first press; the unread count alone is polled. "Notify me on this device" and the category preferences are the `/settings/notifications` tab, one of the Settings group's tabs, open to every console role because both are per user. The Junior's status bar has a bell opening `/route#notifications` (needs signal; notifications are not stored on the phone, and their links point at console pages so rows are marked read instead). The bell polls every minute while visible. Push permission is asked only from a tap. Since 2026-10-02 a device is asked **once**: the first time the dashboard opens on a browser where push is set up and supported, notifications are not blocked, the browser is not registered for pushes (one that allowed them but never finished registering counts as not registered), and the device has not been asked before, a confirm dialog offers to turn them on (`lib/notifications/push-prompt.tsx`). Its button makes the browser's permission request. Any answer, "Not now" included, is remembered in that browser's storage, so the same device is never asked again and a new device is; the switch on `/settings/notifications` remains the way to change it. The same day `enablePush` stopped waiting on `navigator.serviceWorker.ready` — it never resolves on a console page, because the push worker's scope is `/push/` — and waits for that registration's own worker instead, which had left the switch stuck at "Turning on…". It also asks for permission before fetching the key, while the tap still counts. The Junior's field worker (`app/sw.ts`) shows pushes and opens `/route#notifications`; the console registers a separate push-only worker, `public/push-sw.js` with scope `/push/`, so no console page is controlled by a worker.
 
 **Tests.** Tier 1 `test/notifications/notifications.spec.ts`: each Senior alert and who does not receive it, the missed summary, reopen, the three cash events, correction approvers, preferences, delivery rows per device, dispatch with sent / retry / gone, and the centre; assignment and reconciliation notices in their own specs; three constraint specs. HTTP `test/notifications.e2e-spec.ts` and the RBAC matrix cover all nine routes; Tier 2 writes only notifications, devices and preferences, which cascade with the run's staff.
 
@@ -197,7 +199,7 @@ Design and rationale in [notifications.md#email](../../02-architecture/notificat
   A login failure is retried so an operator can fix the password before the attempts run out. That holds even when the rejection arrives as a 5xx reply, which is how Gmail sends `535 5.7.8`: Nodemailer's `EAUTH` code is checked before the reply code.
 
 - **Checking the settings.** `pnpm --filter api email:test <address>`, after `pnpm build`, sends one email straight through the configured server, with no database, queue or worker, and prints the server's reply if it is refused. It was proven against Gmail SMTP on 2026-09-15.
-- **Content.** `email-templates.ts` holds pure functions. Every email has a plain-text part and a minimal HTML part with inline styles, no images and no tracking. Every value is HTML-escaped, and subjects are kept to one line.
+- **Content.** `email-templates.ts` holds the layout as pure functions. Every email has a plain-text part and a minimal HTML part with inline styles, no images and no tracking. Every value is HTML-escaped, and subjects are kept to one line. Since 2026-10-02 the notification and password-reset emails are rendered from message templates into this layout ([below](#as-built--message-templates-us-074-decided-2026-10-02)); only the welcome email is still written in code.
 
 **Tests.**
 
@@ -210,7 +212,68 @@ Design and rationale in [notifications.md#email](../../02-architecture/notificat
 - The sign-up spec covers the welcome email. Five `email_outbox` constraint specs. Config specs.
 - **HTTP tests never send email.** `createTestApp` forces `EMAIL_PROVIDER=NONE` over whatever the developer's `.env` holds, so results do not depend on local SMTP settings.
 
-**Not built:** email verification and self-service password reset through Better Auth (the provider now exists; both are open decisions, M01), per-user email preferences, a health check on the SMTP server, bounce handling.
+**Not built:** email verification through Better Auth (an open decision, M01), per-user email preferences, a health check on the SMTP server, bounce handling. (Self-service password reset was built on 2026-09-20, US-003.)
+
+### As built — message templates (US-074, decided 2026-10-02)
+
+Decision and rationale in [ADR-0019](../../02-architecture/adr/0019-message-templates.md). The owner decided four things: templates are per business and edited by its Super Admin alone; in-app, push and email words, per-message channels and the password-reset email are all editable; English and Tamil; and email is built from structured fields.
+
+- **Catalogue.** `apps/api/src/notifications/templates/catalogue.ts` lists 27 messages: 26 that raise a notification, and `PASSWORD_RESET`, which is email only.
+  - A message is finer than an event. Approved and rejected expenses, a correction and a reversal, cash short and over, a new and a running account, a matching and a differing handover count, and a holiday declared and removed are each two messages.
+  - Each message has one category, its placeholders with sample values, and defaults in English and Tamil.
+  - The English defaults are the wording `EventNotices` wrote before, except the reconciliation summary, which is now sentences. The Tamil defaults were written on 2026-10-02 and **have not been read by a native speaker**.
+  - The welcome email stays code (`welcomeEmail`): it is sent before the business exists to have a template.
+- **Placeholders.** `{{name}}` inserts a value, `{{#name}}…{{/name}}` shows its words only when `name` has a value, and `{{^name}}…{{/name}}` only when it has none (`template-engine.ts`).
+  - The in-app words may use the event's placeholders and `{{organizationName}}`. The email may also use `{{title}}` and `{{body}}`, the in-app words as rendered. That is how every notification email defaults: subject `{{title}} — {{organizationName}}`, heading `{{title}}`, message `{{body}}`.
+- **Raising.** `NotificationService.raise` takes a template key and pre-formatted values instead of a title and body. Inside the event's transaction it:
+  - reads the business's override and channel rows for that message, once per business;
+  - renders once per language;
+  - stores each recipient's copy as text, so a later edit never changes a sent notification.
+
+  A field that renders blank falls back to the default's words, and a placeholder unknown to the catalogue renders as nothing. Rendering never throws.
+
+- **Channels.** The default comes from the category: `ALERT` and `WARNING` pushed, `ALERT` emailed. A business may change push and email per message, and the in-app centre always gets it.
+  - An `ALERT`'s push and email are locked on: `422 CHANNEL_LOCKED`, and the resolver ignores any stored row for one.
+  - `PASSWORD_RESET` is always emailed and has no push (`422 CHANNEL_NOT_AVAILABLE`).
+  - Preferences report a category as pushed or emailed when any of its messages is.
+- **Language.** `staff_profile.language` (`EN` | `TA`, default `EN`) is each person's own choice, through `PATCH /api/notification-preferences` with `language` (not audited, like the categories).
+  - The console has it on `/settings/notifications`; the Junior has it on Profile (J-08), which needs signal.
+  - The password-reset email uses the business's template in the reader's language too.
+- **Routes**, `notificationTemplate.view` / `.manage`, Super Admin only:
+  - `GET /api/notification-templates`: every message with its channels and overridden languages, and whether push and email are configured on this server.
+  - `GET /api/notification-templates/:key`: placeholders and, per language, the words in force and the default.
+  - `PATCH /api/notification-templates/:key/:language`: save. Words equal to the default drop the override. `422 TEMPLATE_INVALID` names each field; `TEMPLATE_UNCHANGED`.
+  - `DELETE /api/notification-templates/:key/:language`: reset (`422 TEMPLATE_NOT_OVERRIDDEN`).
+  - `PATCH /api/notification-templates/:key`: channels.
+  - `POST /api/notification-templates/:key/preview`: unsaved words rendered with samples through the real email layout. Writes nothing.
+  - `POST /api/notification-templates/:key/test`: the saved words with samples, marked "Test", to the caller's own centre, every device (whatever the push choice) and inbox.
+
+  Saves, resets and channel changes are audited (`notification_template` CREATE/UPDATE/DELETE, `notification_channel` CREATE/UPDATE).
+
+- **Web.** `/settings/templates` is a Settings tab for the Super Admin. It lists the messages by area, one `DataView` per area (a table on a computer, cards on a phone): message and description, category, recipients, channels, and whose words each language uses. The whole row opens the editor.
+  - `/settings/templates/:key` is the editor: channel switches, one tab per language, the in-app and email fields, and placeholder chips that insert at the cursor.
+  - Its preview is rendered by the API 400 ms after typing stops, marking problems at their field. It shows a bell row and the email in a sandboxed `iframe`.
+  - Save, discard, "Use Rasi's words" (confirmed) and "Send a test to me" complete it.
+
+**Tests.**
+
+- `src/notifications/templates/template-engine.spec.ts`: the placeholder rules.
+- `catalogue.spec.ts`: every default in both languages is valid, within the contract limits and fully rendered with its samples; every notification event has a message; the old English wording is kept; channel defaults and locks.
+- Tier 1 `test/notifications/templates.spec.ts`:
+  - a business's words in each reader's language, and another business unaffected
+  - a sent notification keeping its words
+  - refusals by field
+  - the audit trail of save, edit and reset
+  - channel choices deciding push and email
+  - the locks
+  - the preview's escaping
+  - the test send
+  - the password reset in the business's words and in Tamil
+  - the language preference
+- `test/db-constraints/notification-templates.spec.ts`: the three CHECKs and the unique key.
+- The RBAC matrix and audit coverage list the seven routes.
+
+**Not built:** a browser pass of the two screens in `test:layout`, and the HTTP e2e run of the new routes (the RBAC matrix entries exist; see the backlog row).
 
 ---
 

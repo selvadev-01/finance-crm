@@ -7,10 +7,12 @@ import {
 import {
   Card,
   Choice,
+  Field,
   FormMessage,
   ListSkeleton,
   PageHeader,
   Section,
+  Select,
   Switch,
 } from "@repo/ui";
 import { useState } from "react";
@@ -31,17 +33,32 @@ const CATEGORY_HINT: Record<NotificationCategory, string> = {
 };
 
 /**
- * The Notifications tab of Settings: this device's push switch (US-071) and
- * the reader's own categories (US-073). Every console role has it — the
- * categories are per user, not per organisation.
+ * The Notifications tab of Settings: this device's push switch (US-071), the
+ * language notifications are written in (US-074) and the reader's own
+ * categories (US-073). Every console role has it — all three are per user,
+ * not per organisation.
  *
  * The notifications themselves are in the bell's panel, not here
  * (`notification-panel.tsx`).
  */
 export function NotificationSettings() {
   const preferences = useApiQuery(notificationContract.getPreferences, {});
-  const [saving, setSaving] = useState<NotificationCategory | null>(null);
+  const [saving, setSaving] = useState<NotificationCategory | "language" | null>(
+    null,
+  );
   const [problem, setProblem] = useState<string | null>(null);
+
+  async function setLanguage(language: "EN" | "TA") {
+    setSaving("language");
+    const result = await apiWrite(notificationContract.updatePreferences, {
+      body: { language },
+    });
+    setProblem(
+      result.ok ? null : (result.form ?? "Could not save. Try again."),
+    );
+    setSaving(null);
+    preferences.reload();
+  }
 
   async function setCategory(category: NotificationCategory, enabled: boolean) {
     setSaving(category);
@@ -69,7 +86,28 @@ export function NotificationSettings() {
         />
       </Section>
 
-      <Section title="What to notify me about">
+      <Section
+        title="Language"
+        description="What your notifications and emails are written in. The app's screens stay in English."
+      >
+        {preferences.status === "ready" ? (
+          <Field label="Notifications in">
+            <Select
+              className="max-w-xs"
+              value={preferences.data.language}
+              disabled={saving !== null}
+              onChange={(event) =>
+                void setLanguage(event.target.value as "EN" | "TA")
+              }
+            >
+              <option value="EN">English</option>
+              <option value="TA">தமிழ் (Tamil)</option>
+            </Select>
+          </Field>
+        ) : null}
+      </Section>
+
+      <Section title="Notification preferences">
         {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
         {preferences.status === "loading" ? (
           <ListSkeleton columns={1} rows={4} />

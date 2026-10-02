@@ -12,7 +12,8 @@ import { isKnownPushEndpoint } from '@repo/notifications';
 
 import { foundInScope } from '../access/scope.js';
 import { APP_CONFIG, type AppConfig } from '../platform/config/config.js';
-import { EMAILED } from './notification.service.js';
+import { CATALOGUE } from './templates/catalogue.js';
+import { effectiveChannels } from './templates/notification-templates.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
 import { DomainError } from '../platform/errors/errors.js';
@@ -28,7 +29,6 @@ const CATEGORIES: readonly NotificationCategory[] = [
   'SUCCESS',
   'INFORMATION',
 ];
-const PUSHED: readonly NotificationCategory[] = ['ALERT', 'WARNING'];
 
 /**
  * M10 for the signed-in user: their notifications (US-070), their devices
@@ -222,33 +222,57 @@ export class NotificationCentreService {
   }
 
   async preferences(context: RequestContext): Promise<NotificationPreferences> {
-    const rows = await this.database.client.notificationPreference.findMany({
-      where: { userId: context.userId },
-    });
+    const client = this.database.client;
+    const [rows, staff, choices] = await Promise.all([
+      client.notificationPreference.findMany({
+        where: { userId: context.userId },
+      }),
+      client.staffProfile.findUniqueOrThrow({
+        where: { userId: context.userId },
+        select: { language: true },
+      }),
+      client.notificationChannel.findMany({
+        where: { organizationId: context.organizationId },
+        select: { key: true, push: true, email: true },
+      }),
+    ]);
     const off = new Set(
       rows.filter((row) => !row.enabled).map((row) => row.category),
     );
+    // US-074: the business chooses push and email per message, so a category
+    // is "pushed" or "emailed" when any of its messages is.
+    const chosen = new Map(choices.map((row) => [row.key, row] as const));
+    const channels = CATALOGUE.filter((definition) => definition.notice).map(
+      (definition) => ({
+        category: definition.notice?.category,
+        ...effectiveChannels(definition, chosen.get(definition.key) ?? null),
+      }),
+    );
+    const any = (category: NotificationCategory, channel: 'push' | 'email') =>
+      channels.some((row) => row.category === category && row[channel]);
     return {
       categories: CATEGORIES.map((category) => ({
         category,
         enabled: category === 'ALERT' || !off.has(category),
         locked: category === 'ALERT',
-        pushed: PUSHED.includes(category),
+        pushed: any(category, 'push'),
         emailed:
-          EMAILED.includes(category) && this.config.EMAIL_PROVIDER === 'SMTP',
+          any(category, 'email') && this.config.EMAIL_PROVIDER === 'SMTP',
       })),
+      language: staff.language,
     };
   }
 
   async updatePreferences(
     context: RequestContext,
     input: {
-      categories: { category: NotificationCategory; enabled: boolean }[];
+      categories?:
+        { category: NotificationCategory; enabled: boolean }[] | undefined;
+      language?: 'EN' | 'TA' | undefined;
     },
   ): Promise<NotificationPreferences> {
-    if (
-      input.categories.some((row) => row.category === 'ALERT' && !row.enabled)
-    ) {
+    const categories = input.categories ?? [];
+    if (categories.some((row) => row.category === 'ALERT' && !row.enabled)) {
       throw new DomainError(
         'ALERT_ALWAYS_ON',
         'Alerts cannot be switched off',
@@ -256,7 +280,13 @@ export class NotificationCentreService {
       );
     }
     await this.database.transaction(async (tx) => {
-      for (const row of input.categories) {
+      if (input.language) {
+        await tx.staffProfile.update({
+          where: { userId: context.userId },
+          data: { language: input.language },
+        });
+      }
+      for (const row of categories) {
         await tx.notificationPreference.upsert({
           where: {
             userId_category: { userId: context.userId, category: row.category },

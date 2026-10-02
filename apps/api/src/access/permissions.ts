@@ -86,6 +86,10 @@ export const PERMISSIONS = {
   'notification.viewOwn': ALL,
   'notification.registerDevice': ALL,
   'notification.managePreferences': ALL,
+  // US-074: the words and channels of every message are how the business
+  // speaks to its staff — the owner's alone, like the settings.
+  'notificationTemplate.view': SUPER_ADMIN,
+  'notificationTemplate.manage': SUPER_ADMIN,
 
   // Administration (M01, M13, M15)
   'staff.list': ADMINS_AND_SENIOR,

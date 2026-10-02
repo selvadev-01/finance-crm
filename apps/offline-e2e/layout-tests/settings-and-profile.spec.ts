@@ -158,7 +158,7 @@ test.describe("the Settings group", () => {
     await page.goto("/settings/notifications");
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByText("What to notify me about")).toBeVisible();
+    await expect(page.getByText("Notification preferences")).toBeVisible();
     // ALERT cannot be switched off — a CHECK backs it (US-073).
     await expect(page.getByRole("switch", { name: /Alert/ })).toBeDisabled();
     await expect(page.getByRole("switch", { name: /Warning/ })).toBeEnabled();

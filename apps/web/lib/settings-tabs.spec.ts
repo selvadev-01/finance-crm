@@ -11,6 +11,7 @@ describe("the Settings tabs", () => {
       "/settings/business",
       "/settings/holidays",
       "/settings/notifications",
+      "/settings/templates",
       "/settings/audit",
       "/settings/security",
       "/settings/expense-categories",
@@ -19,7 +20,7 @@ describe("the Settings tabs", () => {
     ]);
   });
 
-  it("keeps business settings from an Admin, who keeps the record tabs", () => {
+  it("keeps business settings and message templates from an Admin, who keeps the record tabs", () => {
     expect(hrefs("ADMIN")).toEqual([
       "/settings/holidays",
       "/settings/notifications",

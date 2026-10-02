@@ -17,7 +17,16 @@ import {
 } from '@repo/domain';
 
 import { STARTER_EXPENSE_CATEGORIES } from '../books/expense-category.service.js';
+import { planOfficeBooks, writeOfficeBooks } from './office-books.js';
 import { createRandom, type Random } from './prng.js';
+import {
+  createLedgerPoster,
+  inBatches,
+  ist,
+  type Money,
+  workingDaysBefore,
+  writePostings,
+} from './seed-ledger.js';
 
 /**
  * The seed dataset (Phase 1 backlog): one organization, "Rasi Seed", with a
@@ -40,15 +49,14 @@ import { createRandom, type Random } from './prng.js';
  * - Nothing is written to `audit_log`.
  * - Books (ADR-0018) are a handful of entries, not a month of bookkeeping: the
  *   starter categories, one bank, a deposit, rent, stationery, a salary from
- *   the bank, bank interest, an owner drawing, a bank-charges journal, and on
+ *   the bank, bank interest, an owner drawing, a bank-charges journal (those
+ *   in `office-books.ts`, which also tops up an older seed), and on
  *   Line 1 one approved field expense (taken off the Junior's handover and
  *   counted in the day close), one rejected and one still waiting. No capital
  *   is seeded, so office cash stays negative from the disbursements.
  */
 export const SEED_ORGANIZATION_NAME = 'Rasi Seed';
 export const SEED_PASSWORD = 'rasi-seed-password';
-
-type Money = ReturnType<typeof toMoney>;
 
 export interface SeedOptions {
   /** The business date the dataset is "as of". History ends the day before. */
@@ -121,9 +129,6 @@ function everyday(random: Random): Behaviour {
   return 'MISSED';
 }
 
-const ist = (date: CalendarDate, time: string) =>
-  new Date(`${date}T${time}+05:30`);
-
 function notes(amount: number): { denomination: number; count: number }[] {
   const result: { denomination: number; count: number }[] = [];
   let left = amount;
@@ -167,14 +172,8 @@ export async function seedDataset(
   });
   const holidays: HolidaySet = new Set([seedHoliday]);
   /** The n-th working day before `asOf`. */
-  const workingDaysBack = (n: number): CalendarDate => {
-    let date = options.asOf;
-    for (let found = 0; found < n;) {
-      date = addCalendarDays(date, -1);
-      if (isWorkingDay(date, holidays)) found += 1;
-    }
-    return date;
-  };
+  const workingDaysBack = (n: number): CalendarDate =>
+    workingDaysBefore(options.asOf, n, holidays);
 
   const sectorIds = [randomUUID(), randomUUID()];
   await tx.sector.createMany({
@@ -479,9 +478,9 @@ export async function seedDataset(
     });
   }
 
-  // Books (ADR-0018): the starter categories, as sign-up writes them, one
-  // bank, and their keyed ledger accounts — one EXPENSE per category, one
-  // BANK per bank — plus the two Books singletons.
+  // Books (ADR-0018): the starter categories, as sign-up writes them, and one
+  // EXPENSE ledger account per category. The bank and the office side come
+  // from `seedOfficeBooks`, after everything else is written.
   const categoryIds = Object.fromEntries(
     STARTER_EXPENSE_CATEGORIES.map((name) => [name, randomUUID()]),
   ) as Record<(typeof STARTER_EXPENSE_CATEGORIES)[number], string>;
@@ -498,72 +497,9 @@ export async function seedDataset(
       return [name, id];
     }),
   ) as Record<(typeof STARTER_EXPENSE_CATEGORIES)[number], string>;
-  const bankId = randomUUID();
-  const bankLedger = randomUUID();
-  ledgerAccounts.push({
-    id: bankLedger,
-    organizationId: orgId,
-    accountType: 'BANK',
-    bankAccountId: bankId,
-    normalBalance: 'DEBIT',
-  });
-  const otherIncome = randomUUID();
-  const ownerDrawings = randomUUID();
-  ledgerAccounts.push(
-    {
-      id: otherIncome,
-      organizationId: orgId,
-      accountType: 'OTHER_INCOME',
-      normalBalance: 'CREDIT',
-    },
-    {
-      id: ownerDrawings,
-      organizationId: orgId,
-      accountType: 'OWNER_DRAWINGS',
-      normalBalance: 'DEBIT',
-    },
-  );
 
-  const transactions: Prisma.LedgerTransactionCreateManyInput[] = [];
-  const entries: Prisma.LedgerEntryCreateManyInput[] = [];
-  const post = (
-    type:
-      | 'DISBURSEMENT'
-      | 'COLLECTION'
-      | 'HANDOVER'
-      | 'ADJUSTMENT'
-      | 'EXPENSE'
-      | 'BANK_TRANSFER'
-      | 'OTHER_INCOME'
-      | 'DRAWINGS'
-      | 'JOURNAL',
-    source: { table: string; id: string },
-    date: CalendarDate,
-    description: string,
-    lines: { account: string; direction: 'DEBIT' | 'CREDIT'; amount: Money }[],
-  ) => {
-    const transactionId = randomUUID();
-    transactions.push({
-      id: transactionId,
-      transactionType: type,
-      sourceTable: source.table,
-      sourceId: source.id,
-      businessDate: toUtcMidnight(date),
-      eventAt: ist(date, '18:00:00'),
-      description,
-    });
-    lines
-      .filter((line) => line.amount.greaterThan(0))
-      .forEach((line, i) =>
-        entries.push({
-          ledgerTransactionId: transactionId,
-          ledgerAccountId: line.account,
-          direction: line.direction,
-          amount: line.amount.toString(),
-          sequence: i + 1,
-        }),
-      );
-  };
+  const poster = createLedgerPoster();
+  const { post } = poster;
 
   // ----------------------------------------------------------------- accounts
   const accountRows: Prisma.AccountLoanCreateManyInput[] = [];
@@ -1046,156 +982,24 @@ export async function seedDataset(
       },
     );
   }
-
-  // The office side, recorded by the Admin (the drawing and the journal by
-  // the Super Admin, whose alone they are).
-  const officeExpense = (
-    date: CalendarDate,
-    category: (typeof STARTER_EXPENSE_CATEGORIES)[number],
-    amount: string,
-    note: string,
-    fromBank: boolean,
-  ) => {
-    const id = randomUUID();
-    expenseRows.push({
-      id,
-      organizationId: orgId,
-      expenseCategoryId: categoryIds[category],
-      amount,
-      businessDate: toUtcMidnight(date),
-      note,
-      paidFrom: fromBank ? 'BANK' : 'OFFICE_CASH',
-      bankAccountId: fromBank ? bankId : null,
-      status: 'APPROVED',
-      decidedByUserId: userIds['admin']!,
-      decidedAt: ist(date, '11:00:00'),
-      createdByUserId: userIds['admin']!,
-    });
-    post('EXPENSE', { table: 'expense', id }, date, `${category}: ${note}`, [
-      {
-        account: expenseAccount[category],
-        direction: 'DEBIT',
-        amount: toMoney(amount),
-      },
-      {
-        account: fromBank ? bankLedger : officeCash,
-        direction: 'CREDIT',
-        amount: toMoney(amount),
-      },
-    ]);
-  };
-  const depositDate = workingDaysBack(20);
-  const salaryDate = workingDaysBack(10);
-  const sundriesDate = workingDaysBack(7);
-  const journalDate = workingDaysBack(4);
-
-  const transferRows: Prisma.BankTransferCreateManyInput[] = [
+  const books = planOfficeBooks(
     {
-      id: randomUUID(),
       organizationId: orgId,
-      amount: '50000.00',
-      businessDate: toUtcMidnight(depositDate),
-      note: 'Deposit of office cash',
-      toBankAccountId: bankId,
-      createdByUserId: userIds['admin']!,
+      asOf: options.asOf,
+      holidays,
+      adminUserId: userIds['admin']!,
+      superAdminUserId: userIds['superadmin']!,
     },
-  ];
-  post(
-    'BANK_TRANSFER',
-    { table: 'bank_transfer', id: transferRows[0]!.id! },
-    depositDate,
-    'Cash in hand → Seed Bank: Deposit of office cash',
-    [
-      { account: bankLedger, direction: 'DEBIT', amount: toMoney('50000') },
-      { account: officeCash, direction: 'CREDIT', amount: toMoney('50000') },
-    ],
-  );
-  officeExpense(depositDate, 'Rent', '6000.00', 'Office rent', false);
-  officeExpense(salaryDate, 'Salary', '15000.00', 'Staff salaries', true);
-  officeExpense(
-    sundriesDate,
-    'Stationery & printing',
-    '450.00',
-    'Receipt books',
-    false,
-  );
-
-  const incomeRows: Prisma.IncomeEntryCreateManyInput[] = [
     {
-      id: randomUUID(),
-      organizationId: orgId,
-      amount: '125.50',
-      businessDate: toUtcMidnight(sundriesDate),
-      note: 'Interest on the bank balance',
-      bankAccountId: bankId,
-      createdByUserId: userIds['admin']!,
+      categoryIds,
+      officeCash,
+      expense: expenseAccount,
     },
-  ];
-  post(
-    'OTHER_INCOME',
-    { table: 'income_entry', id: incomeRows[0]!.id! },
-    sundriesDate,
-    'Other income: Interest on the bank balance',
-    [
-      { account: bankLedger, direction: 'DEBIT', amount: toMoney('125.50') },
-      { account: otherIncome, direction: 'CREDIT', amount: toMoney('125.50') },
-    ],
-  );
-
-  const drawingRows: Prisma.DrawingEntryCreateManyInput[] = [
-    {
-      id: randomUUID(),
-      organizationId: orgId,
-      amount: '5000.00',
-      businessDate: toUtcMidnight(salaryDate),
-      note: 'Owner drawing',
-      bankAccountId: bankId,
-      createdByUserId: userIds['superadmin']!,
-    },
-  ];
-  post(
-    'DRAWINGS',
-    { table: 'drawing_entry', id: drawingRows[0]!.id! },
-    salaryDate,
-    'Drawing: Owner drawing',
-    [
-      { account: ownerDrawings, direction: 'DEBIT', amount: toMoney('5000') },
-      { account: bankLedger, direction: 'CREDIT', amount: toMoney('5000') },
-    ],
-  );
-
-  const journalRows: Prisma.JournalEntryCreateManyInput[] = [
-    {
-      id: randomUUID(),
-      organizationId: orgId,
-      businessDate: toUtcMidnight(journalDate),
-      note: 'Bank charges found on the passbook',
-      createdByUserId: userIds['superadmin']!,
-    },
-  ];
-  post(
-    'JOURNAL',
-    { table: 'journal_entry', id: journalRows[0]!.id! },
-    journalDate,
-    'Journal: Bank charges found on the passbook',
-    [
-      {
-        account: expenseAccount['Bank charges'],
-        direction: 'DEBIT',
-        amount: toMoney('118'),
-      },
-      { account: bankLedger, direction: 'CREDIT', amount: toMoney('118') },
-    ],
+    poster,
+    ledgerAccounts,
   );
 
   // -------------------------------------------------------------------- write
-  const inBatches = async <Row>(
-    rows: Row[],
-    write: (batch: Row[]) => Promise<unknown>,
-  ) => {
-    for (let i = 0; i < rows.length; i += 2000)
-      await write(rows.slice(i, i + 2000));
-  };
   await tx.accountLoan.createMany({ data: accountRows });
   await inBatches(scheduleRows, (data) =>
     tx.accountSchedule.createMany({ data }),
@@ -1215,41 +1019,13 @@ export async function seedDataset(
       name,
     })),
   });
-  await tx.bankAccount.create({
-    data: {
-      id: bankId,
-      organizationId: orgId,
-      name: 'Seed Bank',
-      last4: '4321',
-    },
+  // The field expenses go in with the office ones, after the bank they need.
+  await writeOfficeBooks(tx, {
+    ...books,
+    expenses: [...expenseRows, ...books.expenses],
   });
-  await tx.expense.createMany({ data: expenseRows });
-  await tx.bankTransfer.createMany({ data: transferRows });
-  await tx.incomeEntry.createMany({ data: incomeRows });
-  await tx.drawingEntry.createMany({ data: drawingRows });
-  await tx.journalEntry.createMany({ data: journalRows });
   await tx.ledgerAccount.createMany({ data: ledgerAccounts });
-  await inBatches(transactions, (data) =>
-    tx.ledgerTransaction.createMany({ data }),
-  );
-  await inBatches(entries, (data) => tx.ledgerEntry.createMany({ data }));
-
-  // The balance cache (M09 reconciles it nightly): signed per normal balance.
-  //  because it is one set-based UPDATE over every seeded entry;
-  // the only interpolation is the id array, which Prisma parameterises.
-  await tx.$executeRaw`
-    UPDATE ledger_account AS la
-    SET balance = la.balance + delta.amount
-    FROM (
-      SELECT e."ledgerAccountId" AS id,
-             SUM(CASE WHEN e.direction = a."normalBalance" THEN e.amount ELSE -e.amount END) AS amount
-      FROM ledger_entry e
-      JOIN ledger_account a ON a.id = e."ledgerAccountId"
-      JOIN ledger_transaction t ON t.id = e."ledgerTransactionId"
-      WHERE t.id = ANY(${transactions.map((t) => t.id!)})
-      GROUP BY e."ledgerAccountId"
-    ) AS delta
-    WHERE la.id = delta.id`;
+  await writePostings(tx, poster);
 
   return {
     organizationId: orgId,
@@ -1259,11 +1035,11 @@ export async function seedDataset(
       accounts: accountRows.length,
       scheduleSlots: scheduleRows.length,
       collections: collectionRows.length + adjustmentRows.length,
-      ledgerTransactions: transactions.length,
-      ledgerEntries: entries.length,
+      ledgerTransactions: poster.transactions.length,
+      ledgerEntries: poster.entries.length,
       dayCloses: dayCloseRows.length,
       cashHandovers: handoverRows.length,
-      expenses: expenseRows.length,
+      expenses: expenseRows.length + books.expenses.length,
     },
     cases: {
       unevenCompletedAccountId: uneven.id,

@@ -327,6 +327,13 @@ enum EmailKind {
   PASSWORD_RESET
 }
 
+/// The language a staff member reads their notifications and emails in
+/// (US-074, added 2026-10-02 in migration notification_templates).
+enum Language {
+  EN
+  TA
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -391,6 +398,8 @@ model Organization {
   auditLogs      AuditLog[]
   securityEvents SecurityEvent[]
   emails         EmailOutbox[]
+  notificationTemplates NotificationTemplate[]
+  notificationChannels  NotificationChannel[]
 
   @@map("organization")
 }
@@ -406,6 +415,9 @@ model StaffProfile {
   /// Set by an Admin password reset (US-003); cleared when the staff member
   /// changes their password. While set, only the password change is allowed.
   mustChangePassword Boolean     @default(false)
+  /// What their notifications and emails are written in (US-074). Their own
+  /// choice, on /settings/notifications.
+  language           Language    @default(EN)
   joinedAt           DateTime    @db.Date
   /// Soft delete. Excluded from every query when set.
   deletedAt          DateTime?   @db.Timestamptz(3)
@@ -1117,6 +1129,60 @@ model EmailOutbox {
   @@index([userId])
   @@index([notificationId])
   @@map("email_outbox")
+}
+
+/// US-074: a business's own wording for one message in one language, over the
+/// built-in default in apps/api/src/notifications/templates/catalogue.ts. No
+/// row means the default. A notification stores the text it was rendered
+/// with, so editing a template never rewrites one already sent.
+/// CHECKs notification_template_key_format_check, _push_pair_check,
+/// _length_check (migration constraints_notification_templates).
+model NotificationTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// A catalogue key — `LOW_COLLECTION`, `PASSWORD_RESET`.
+  key            String
+  language       Language
+  /// In-app and push. Both null for an email-only message.
+  title          String?
+  body           String?
+  emailSubject   String
+  emailHeading   String
+  emailBody      String
+  emailAction    String
+  emailFooter    String
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+  updatedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key, language])
+  @@map("notification_template")
+}
+
+/// US-074: a business's own choice of whether one message is pushed and
+/// emailed. No row means the category's default — ALERT and WARNING pushed,
+/// ALERT emailed. The in-app centre always gets it.
+/// CHECK notification_channel_key_format_check (migration
+/// constraints_notification_templates).
+model NotificationChannel {
+  id             String  @id @default(cuid())
+  organizationId String
+  key            String
+  push           Boolean
+  email          Boolean
+
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  createdByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@map("notification_channel")
 }
 
 /// Sundays are NOT stored here — they are excluded by rule, not by data (BR-02).

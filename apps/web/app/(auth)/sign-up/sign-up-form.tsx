@@ -67,7 +67,7 @@ export function SignUpForm() {
       <div className="flex flex-col gap-[var(--stack-gap)]">
         <FormMessage tone="info">Your business is ready.</FormMessage>
         <Field
-          label="Your business’s sign-in link"
+          label="Business sign-in link"
           hint="Share it with your staff. You can also sign in at the usual page."
         >
           <Input

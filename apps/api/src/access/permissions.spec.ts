@@ -75,6 +75,8 @@ const ROW_PERMISSIONS: Record<string, Permission | null> = {
   'Notifications (M10) › Scope received': null,
   'Notifications (M10) › Register push device': 'notification.registerDevice',
   'Notifications (M10) › Manage preferences': 'notification.managePreferences',
+  'Notifications (M10) › View message templates': 'notificationTemplate.view',
+  'Notifications (M10) › Edit message templates': 'notificationTemplate.manage',
   'Administration (M01, M13, M15) › List staff': 'staff.list',
   'Administration (M01, M13, M15) › Create staff': 'staff.create',
   'Administration (M01, M13, M15) › Update staff details': 'staff.update',

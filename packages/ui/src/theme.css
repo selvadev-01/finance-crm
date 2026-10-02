@@ -160,12 +160,37 @@
   --spacing-touch-lg: 3.25rem;
 
   --animate-in: rasi-in 120ms ease-out;
+  /* Loading feedback only: a skeleton's sweep, and the indeterminate bar
+   * shown while a read is in flight. Both are transforms, so a mid-range
+   * phone composites them without repainting the page. */
+  --animate-shimmer: rasi-shimmer 1.4s ease-in-out infinite;
+  --animate-progress: rasi-progress 1.2s ease-in-out infinite;
 }
 
 @keyframes rasi-in {
   from {
     opacity: 0;
     transform: translateY(2px);
+  }
+}
+
+@keyframes rasi-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* For a bar 40% of its track: -100% starts it just off the left edge, and
+ * 250% of 40% is the whole track, so it leaves just past the right. */
+@keyframes rasi-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
   }
 }
 

@@ -10,10 +10,11 @@ import { EmailDispatchService } from '../../src/email/email-dispatch.service.js'
 import { EmailOutbox } from '../../src/email/email-outbox.js';
 import {
   escapeHtml,
-  notificationEmail,
-  passwordResetEmail,
+  templatedEmail,
   welcomeEmail,
 } from '../../src/email/email-templates.js';
+import { templateDefinition } from '../../src/notifications/templates/catalogue.js';
+import { renderMessage } from '../../src/notifications/templates/notification-templates.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import { Database } from '../../src/platform/database/database.js';
 import { cashWorld } from '../cash/world.js';
@@ -64,11 +65,15 @@ describe('email (M10, notifications.md#email)', () => {
       database.transaction(() =>
         smtp.notifications.raise({
           recipients,
-          category,
-          eventType:
+          template:
             category === 'ALERT' ? 'LOW_COLLECTION' : 'EXTRA_COLLECTION',
-          title: 'Low collection on Line 3',
-          body: 'Suresh collected ₹80.00 of ₹100.00 from Guru',
+          values: {
+            accountCode: 'ACC-3',
+            collector: 'Suresh',
+            amount: '₹80.00',
+            expected: '₹100.00',
+            customerName: 'Guru',
+          },
           link: {
             entityType: 'collection',
             entityId: 'col_1',
@@ -120,10 +125,10 @@ describe('email (M10, notifications.md#email)', () => {
           kind: 'NOTIFICATION',
           status: 'PENDING',
           attempts: 0,
-          subject: `Low collection on Line 3 — Rasi Test`,
+          subject: `Low collection · ACC-3 — Rasi Test`,
           notification: {
             category: 'ALERT',
-            title: 'Low collection on Line 3',
+            title: 'Low collection · ACC-3',
           },
         });
         expect(rows[0]!.textBody).toContain(
@@ -142,10 +147,8 @@ describe('email (M10, notifications.md#email)', () => {
         await database.transaction(() =>
           quiet.notifications.raise({
             recipients: [w.senior.userId],
-            category: 'ALERT',
-            eventType: 'LOW_COLLECTION',
-            title: 'T',
-            body: 'B',
+            template: 'LOW_COLLECTION',
+            values: {},
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );
@@ -188,7 +191,7 @@ describe('email (M10, notifications.md#email)', () => {
         expect(smtp.sent).toEqual([
           expect.objectContaining({
             to: (await email(w.senior.userId)).email,
-            subject: `Low collection on Line 3 — Rasi Test`,
+            subject: `Low collection · ACC-3 — Rasi Test`,
             text: expect.stringContaining('Suresh collected'),
             html: expect.stringContaining('<h1'),
           }),
@@ -329,11 +332,13 @@ describe('email (M10, notifications.md#email)', () => {
 
   describe('templates', () => {
     it('escapes every interpolated value in the HTML part', () => {
-      const email = notificationEmail({
-        title: '<script>alert(1)</script>',
+      const email = templatedEmail({
+        subject: "<script>alert(1)</script> — Ganesh's Chits",
+        heading: '<script>alert(1)</script>',
         body: 'A & B "quoted"',
+        action: 'View in Rasi',
+        footer: "From Ganesh's Chits",
         url: 'https://rasi.example/x?a=1&b=2',
-        organizationName: "Ganesh's Chits",
       });
       expect(email.html).not.toContain('<script>');
       expect(email.html).toContain('&lt;script&gt;');
@@ -342,12 +347,32 @@ describe('email (M10, notifications.md#email)', () => {
       expect(escapeHtml(`'`)).toBe('&#39;');
     });
 
-    it('tells a Junior how long the reset link lasts and that ignoring it changes nothing (US-003)', () => {
-      const email = passwordResetEmail({
-        name: 'Meena',
-        resetUrl: 'https://rasi.example/reset-password?token=abc',
-        validForMinutes: 30,
+    it('turns a blank line into a new paragraph and a single break into a line break (US-074)', () => {
+      const email = templatedEmail({
+        subject: 'S',
+        heading: 'H',
+        body: 'Hello,\n\nLine one\nline two',
+        action: 'Open',
+        footer: 'F',
+        url: 'https://rasi.example/',
       });
+      expect(email.html).toContain('>Hello,</p>');
+      expect(email.html).toContain('>Line one<br>line two</p>');
+      expect(email.text).toContain('Hello,\n\nLine one\nline two');
+    });
+
+    it('tells a Junior how long the reset link lasts and that ignoring it changes nothing (US-003)', () => {
+      const definition = templateDefinition('PASSWORD_RESET')!;
+      const { email } = renderMessage(
+        definition,
+        definition.defaults.EN,
+        'EN',
+        { name: 'Meena', validForMinutes: '30' },
+        {
+          url: 'https://rasi.example/reset-password?token=abc',
+          organizationName: 'Rasi Test',
+        },
+      );
       expect(email.subject).toBe('Set a new Rasi password');
       expect(email.text).toContain('lasts 30 minutes');
       expect(email.text).toContain('your password stays as it is');

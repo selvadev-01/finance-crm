@@ -46,6 +46,7 @@ Column-level reference. Structure and reasoning are in [`erd.md`](erd.md); rules
 | `phone`              | `String`            | No   | E.164. Unique                                                                                          |
 | `status`             | `StaffStatus`       | No   | `ACTIVE` \| `SUSPENDED` \| `INACTIVE`. Default `ACTIVE`                                                |
 | `mustChangePassword` | `Boolean`           | No   | Default `false`. Set by an Admin password reset (US-003); while set, only a password change is allowed |
+| `language`           | `Language`          | No   | `EN` \| `TA`. Default `EN`. What their notifications and emails are written in (US-074); their own choice |
 | `joinedAt`           | `DateTime @db.Date` | No   |                                                                                                        |
 | `deletedAt`          | `DateTime`          | Yes  | Soft delete; excluded from all queries when set                                                        |
 
@@ -537,6 +538,41 @@ Email waiting to be sent, or already sent, over SMTP ([notifications.md#email](.
 | `sentAt`         | `DateTime`     | Yes  |                                                                                                 |
 
 Constraints (migration `constraints_email_outbox`): `email_outbox_attempts_non_negative_check`; `email_outbox_sent_has_timestamp_check`; `email_outbox_failed_has_error_check`; `email_outbox_notification_kind_check` (`kind = NOTIFICATION` if and only if `notificationId` is set); `email_outbox_content_check` (subject and text not blank). Index on `(organizationId, status, nextAttemptAt)` for the claim. A row for someone no longer an active staff member is `EXPIRED` rather than sent.
+
+### `notification_template`
+
+A business's own words for one message in one language (US-074, [ADR-0019](../02-architecture/adr/0019-message-templates.md)), over the catalogue's default in `apps/api/src/notifications/templates/catalogue.ts`. No row means the default; resetting deletes the row.
+
+| Column            | Type       | Null | Notes                                                                       |
+| ----------------- | ---------- | ---- | --------------------------------------------------------------------------- |
+| `organizationId`  | `String`   | No   | FK → `organization.id`, cascade                                             |
+| `key`             | `String`   | No   | A catalogue key, `LOW_COLLECTION`. Unique with `organizationId`, `language` |
+| `language`        | `Language` | No   | `EN` \| `TA`                                                                |
+| `title`           | `String`   | Yes  | In-app and push, ≤ 120. Null with `body` for an email-only message          |
+| `body`            | `String`   | Yes  | ≤ 500                                                                       |
+| `emailSubject`    | `String`   | No   | ≤ 150                                                                       |
+| `emailHeading`    | `String`   | No   | ≤ 150                                                                       |
+| `emailBody`       | `String`   | No   | Paragraphs separated by a blank line, ≤ 3000                                |
+| `emailAction`     | `String`   | No   | The button label, ≤ 40. Its link is never a template field                  |
+| `emailFooter`     | `String`   | No   | ≤ 500                                                                       |
+| `createdByUserId` | `String`   | Yes  |                                                                             |
+| `updatedByUserId` | `String`   | Yes  |                                                                             |
+
+Constraints (migration `constraints_notification_templates`): `notification_template_key_format_check` (`^[A-Z][A-Z_]{0,63}$`); `notification_template_push_pair_check` (`title` and `body` both set or both null); `notification_template_length_check` (every part non-blank and within the limits above). Placeholders are checked against the catalogue by the API (`422 TEMPLATE_INVALID`), not the database.
+
+### `notification_channel`
+
+A business's choice of whether one message is pushed and emailed (US-074). No row means the category's default — `ALERT` and `WARNING` pushed, `ALERT` emailed. An `ALERT` is pushed and emailed whatever is stored; the API refuses to store otherwise.
+
+| Column            | Type      | Null | Notes                                   |
+| ----------------- | --------- | ---- | --------------------------------------- |
+| `organizationId`  | `String`  | No   | FK → `organization.id`, cascade         |
+| `key`             | `String`  | No   | A catalogue key. Unique with `organizationId` |
+| `push`            | `Boolean` | No   |                                         |
+| `email`           | `Boolean` | No   |                                         |
+| `createdByUserId` | `String`  | Yes  |                                         |
+
+Constraint: `notification_channel_key_format_check`.
 
 ### `holiday`
 

@@ -28,6 +28,7 @@ One decision per file, numbered, never deleted. A decision that turns out wrong 
 | [0016](0016-installable-app-and-per-device-layout.md)   | Installable app; phone or computer layout per device | Accepted                    |
 | [0017](0017-numbered-pages-over-cursors.md)             | Numbered pages, walked over the API's cursors        | Accepted                    |
 | [0017](0017-collection-frequency.md)                    | Weekly and monthly collection, anchored from day 0   | Accepted                    |
+| [0019](0019-message-templates.md)                       | Message templates per business, rendered per reader  | Accepted                    |
 
 ## When to write one
 

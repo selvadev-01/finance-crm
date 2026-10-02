@@ -14,6 +14,7 @@ import { LedgerService } from '../../src/ledger/ledger.service.js';
 import { NotificationCentreService } from '../../src/notifications/notification-centre.service.js';
 import { NotificationService } from '../../src/notifications/notification.service.js';
 import { PushDispatchService } from '../../src/notifications/push-dispatch.service.js';
+import { NotificationTemplates } from '../../src/notifications/templates/notification-templates.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import { Database } from '../../src/platform/database/database.js';
 import { at, cashWorld, counts, MONDAY, SATURDAY } from '../cash/world.js';
@@ -418,6 +419,7 @@ describe('notifications (M10, US-070…US-073)', () => {
         database,
         config,
         new EmailOutbox(database, config),
+        new NotificationTemplates(),
       );
       return { w, database, notifications };
     }
@@ -434,11 +436,9 @@ describe('notifications (M10, US-070…US-073)', () => {
           database.transaction(() =>
             service.raise({
               recipients: [w.senior.userId],
-              category,
-              eventType:
+              template:
                 category === 'ALERT' ? 'LOW_COLLECTION' : 'ACCOUNT_COMPLETED',
-              title: 'Title',
-              body: 'Body',
+              values: {},
               link: { entityType: null, entityId: null, url: '/' },
             }),
           );
@@ -450,6 +450,7 @@ describe('notifications (M10, US-070…US-073)', () => {
             database,
             { PUSH_PROVIDER: 'NONE' } as AppConfig,
             new EmailOutbox(database, { EMAIL_PROVIDER: 'NONE' } as AppConfig),
+            new NotificationTemplates(),
           ),
         );
         expect(
@@ -472,10 +473,8 @@ describe('notifications (M10, US-070…US-073)', () => {
         await database.transaction(() =>
           notifications.raise({
             recipients: [w.senior.userId],
-            category: 'ALERT',
-            eventType: 'LOW_COLLECTION',
-            title: 'Low collection',
-            body: 'Collected ₹80.00 of ₹100.00',
+            template: 'LOW_COLLECTION',
+            values: { amount: '₹80.00', expected: '₹100.00' },
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );
@@ -587,10 +586,8 @@ describe('notifications (M10, US-070…US-073)', () => {
         await database.transaction(() =>
           notifications.raise({
             recipients: [w.senior.userId],
-            category: 'ALERT',
-            eventType: 'LOW_COLLECTION',
-            title: 'Low collection',
-            body: 'Body',
+            template: 'LOW_COLLECTION',
+            values: {},
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );
@@ -645,10 +642,8 @@ describe('notifications (M10, US-070…US-073)', () => {
         await database.transaction(() =>
           notifications.raise({
             recipients: [w.senior.userId],
-            category: 'ALERT',
-            eventType: 'LOW_COLLECTION',
-            title: 'Low collection · for the Senior',
-            body: 'Collected ₹80.00 of ₹100.00 from Guru',
+            template: 'LOW_COLLECTION',
+            values: { customerName: 'Guru' },
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );
@@ -672,10 +667,8 @@ describe('notifications (M10, US-070…US-073)', () => {
         await database.transaction(() =>
           notifications.raise({
             recipients: [w.junior.userId],
-            category: 'ALERT',
-            eventType: 'HANDOVER_DISPUTED',
-            title: 'Handover disputed',
-            body: 'Body',
+            template: 'HANDOVER_DISPUTED',
+            values: {},
             link: { entityType: null, entityId: null, url: '/' },
           }),
         );

@@ -30,6 +30,12 @@ export const SETTINGS_TABS: SettingsTab[] = [
     label: "Notifications",
     shownTo: everyone,
   },
+  // M10, US-074: the words of every message, the Super Admin's alone.
+  {
+    href: "/settings/templates",
+    label: "Message templates",
+    shownTo: seesSettings,
+  },
   // M13, US-090 and ADR-0014: Admin and above.
   {
     href: "/settings/audit",

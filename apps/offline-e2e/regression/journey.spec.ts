@@ -365,9 +365,9 @@ test.describe.serial("regression: a business day in Chennai", () => {
       .filter({ hasText: data.correction.customerName })
       .click();
     await page
-      .getByLabel("What you actually collected (₹)")
+      .getByLabel("Actual amount collected (₹)")
       .fill(data.correction.correctedAmount);
-    await page.getByLabel("Why").fill(data.correction.reason);
+    await page.getByLabel("Reason").fill(data.correction.reason);
     await page.getByRole("button", { name: "Ask to correct" }).click();
     await expect(page.getByText(/^Sent to your Senior/)).toBeVisible();
   });
@@ -425,7 +425,7 @@ test.describe.serial("regression: a business day in Chennai", () => {
     await expect(page.getByTestId("expense")).toBeVisible();
     await expect(
       page
-        .getByRole("list", { name: "Your field expenses" })
+        .getByRole("list", { name: "Field expenses" })
         .getByText("Approved"),
     ).toBeVisible();
   });

@@ -29,7 +29,7 @@ test("a browser tab is never asked, and shows the computer layout", async ({
   await expect(
     page.getByRole("button", { name: "Open navigation" }),
   ).toBeVisible();
-  await expect(page.getByText("How will you use Rasi here?")).toHaveCount(0);
+  await expect(page.getByText("Choose device layout")).toHaveCount(0);
   await expect(tabBar(page)).toHaveCount(0);
 });
 
@@ -39,7 +39,7 @@ test("the installed app asks first, and keeps the answer", async ({ page }) => {
   await page.goto("/customers");
 
   await expect(
-    page.getByRole("heading", { name: "How will you use Rasi here?" }),
+    page.getByRole("heading", { name: "Choose device layout" }),
   ).toBeVisible();
   // A phone-sized touch screen: the phone layout is the suggestion.
   await expect(page.getByRole("radio", { name: /Phone/ })).toBeChecked();
@@ -52,7 +52,7 @@ test("the installed app asks first, and keeps the answer", async ({ page }) => {
 
   await page.reload();
   await expect(tabBar(page)).toBeVisible();
-  await expect(page.getByText("How will you use Rasi here?")).toHaveCount(0);
+  await expect(page.getByText("Choose device layout")).toHaveCount(0);
 });
 
 test("the layout switches from the account menu and back from More", async ({

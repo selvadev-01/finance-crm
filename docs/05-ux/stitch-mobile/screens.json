@@ -243,7 +243,7 @@
       "shell": "console",
       "tabs": "senior",
       "activeTab": "Cash",
-      "prompt": "Cash tab for a Senior. Title 'Cash', meta 'LN-07 · Market Road'. Section 'Waiting for you' with a count badge 1: a white handover card showing 'Priya S → you', '16 Sep 2026' muted, at right '₹8,450.00' in 20px and under it 'recorded ₹8,470.00' and coral '−₹20.00 short'; an amber 'Waiting' badge; an expandable 'Denominations' row opened to show compact lines ₹500 × 12 = ₹6,000.00, ₹200 × 10 = ₹2,000.00, ₹100 × 4 = ₹400.00, ₹50 × 1 = ₹50.00; a note 'Customer at Bus Stand paid in coins, counted short'; a footer band with secondary 'Dispute' and teal 'Acknowledge'. Section 'Cash for the office': a row '16 Sep 2026 · ₹23,930.00 to hand over' with a teal 'Hand over' button. Section 'Recent': rows with Acknowledged (green) and Disputed (coral) badges."
+      "prompt": "Cash tab for a Senior. Title 'Cash', meta 'LN-07 · Market Road'. Section 'Pending acknowledgement' with a count badge 1: a white handover card showing 'Priya S → you', '16 Sep 2026' muted, at right '₹8,450.00' in 20px and under it 'recorded ₹8,470.00' and coral '−₹20.00 short'; an amber 'Waiting' badge; an expandable 'Denominations' row opened to show compact lines ₹500 × 12 = ₹6,000.00, ₹200 × 10 = ₹2,000.00, ₹100 × 4 = ₹400.00, ₹50 × 1 = ₹50.00; a note 'Customer at Bus Stand paid in coins, counted short'; a footer band with secondary 'Dispute' and teal 'Acknowledge'. Section 'Cash for the office': a row '16 Sep 2026 · ₹23,930.00 to hand over' with a teal 'Hand over' button. Section 'Recent': rows with Acknowledged (green) and Disputed (coral) badges."
     },
     {
       "id": "S-05",
@@ -377,7 +377,7 @@
       "slug": "junior-handover",
       "role": "junior",
       "shell": "junior",
-      "prompt": "Junior 'Hand over cash'. Ghost '← Route', title 'Hand over cash', muted 'To Karthik R · needs signal'. A white card 'LN-07 · 16 Sep 2026' with 'Recorded ₹8,470.00'. Nine denomination rows 56px tall: note value at left (₹500, ₹200, ₹100, ₹50, ₹20, ₹10, ₹5, ₹2, ₹1), a 44px minus circle, a centred count input, a 44px plus circle, the subtotal right-aligned in muted tabular text. A bold total row 'Counted ₹8,450.00' with coral '−₹20.00 short' at right. A required textarea 'Why the count differs'. Sticky bottom bar with a full-width teal 'Hand over ₹8,450.00'."
+      "prompt": "Junior 'Hand over cash'. Ghost '← Route', title 'Hand over cash', muted 'To Karthik R · needs signal'. A white card 'LN-07 · 16 Sep 2026' with 'Recorded ₹8,470.00'. Nine denomination rows 56px tall: note value at left (₹500, ₹200, ₹100, ₹50, ₹20, ₹10, ₹5, ₹2, ₹1), a 44px minus circle, a centred count input, a 44px plus circle, the subtotal right-aligned in muted tabular text. A bold total row 'Counted ₹8,450.00' with coral '−₹20.00 short' at right. A required textarea 'Reason for difference'. Sticky bottom bar with a full-width teal 'Hand over ₹8,450.00'."
     },
     {
       "id": "S-21J",

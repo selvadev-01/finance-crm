@@ -453,14 +453,14 @@ test.describe("S-07 reads the ledger (2026-10-02)", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/dashboard?date=${DATE}`);
 
-    const hero = page.getByRole("region", { name: "Your money" });
+    const hero = page.getByRole("region", { name: "Fund position" });
     // Capital ₹45 L − drawings ₹0.60 L + kept profit ₹6.56 L.
     await expect(hero.getByText("₹50.96 L").first()).toBeVisible();
     // Against ₹49.76 L at the month's opening: up 2.4%.
     await expect(hero.getByText(/2\.4% this month/)).toBeVisible();
     await expect(hero.getByText("₹1.20 L").first()).toBeVisible();
 
-    const donut = page.getByRole("list", { name: "Where your money is" });
+    const donut = page.getByRole("list", { name: "Fund deployment" });
     // Principal still lent: ₹47,72,300 owed less ₹5,12,300 not yet earned.
     await expect(donut.getByText("₹42.60 L")).toBeVisible();
     await expect(page.getByText("Books balance")).toBeVisible();
@@ -472,7 +472,7 @@ test.describe("S-07 reads the ledger (2026-10-02)", () => {
     await expect(page.getByText("₹4,50,000.00")).toBeVisible();
     await expect(
       page
-        .getByRole("list", { name: "Needs your attention" })
+        .getByRole("list", { name: "Pending actions" })
         .getByText("Field expenses to approve"),
     ).toBeVisible();
     expect(await overflows(page)).toBe(false);
@@ -496,7 +496,7 @@ test.describe("S-07 reads the ledger (2026-10-02)", () => {
         .filter({ visible: true })
         .first(),
     ).toBeVisible();
-    await expect(page.getByRole("region", { name: "Your money" })).toHaveCount(
+    await expect(page.getByRole("region", { name: "Fund position" })).toHaveCount(
       0,
     );
   });
@@ -534,7 +534,7 @@ test.describe("S-20 and S-19 redesigned (2026-10-02)", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/dashboard?date=${DATE}`);
 
-    const juniors = page.getByRole("table", { name: "My Juniors" });
+    const juniors = page.getByRole("table", { name: "Junior staff" });
     // Suresh counted out ₹5,000 of ₹5,220: short, and waiting for the Senior.
     await expect(
       juniors.getByRole("link", {
@@ -544,7 +544,7 @@ test.describe("S-20 and S-19 redesigned (2026-10-02)", () => {
     await expect(juniors.getByText(/₹220\.00/)).toBeVisible();
     await expect(
       page
-        .getByRole("list", { name: "Waiting on you" })
+        .getByRole("list", { name: "Pending approvals" })
         .getByText("Handovers to acknowledge"),
     ).toBeVisible();
     await expect(
@@ -591,7 +591,7 @@ test.describe("the phone home for each console role (2026-10-02)", () => {
     await onPhone(page, "SUPER_ADMIN");
     await expect(
       page
-        .getByRole("region", { name: "Your money" })
+        .getByRole("region", { name: "Fund position" })
         .getByText("₹50.96 L")
         .first(),
     ).toBeVisible();
@@ -640,7 +640,7 @@ test.describe("the phone home for each console role (2026-10-02)", () => {
     ).toHaveAttribute("href", `/lines/line-1/day-closes/${DATE}`);
     await expect(
       page
-        .getByRole("list", { name: "Waiting on you" })
+        .getByRole("list", { name: "Pending approvals" })
         .getByRole("link", { name: "Acknowledge ₹5,000.00 from Suresh P" }),
     ).toBeVisible();
     const close = page.getByRole("link", { name: "Close the day" });

@@ -6,7 +6,7 @@ The repo directory is `finance-crm`; the product and the root package are `rasi`
 
 ## State: Phase 0 complete, Phase 1 in progress
 
-The `docs/` set fully specifies the system (16 modules, 16 ADRs, 104 stories). **Phase 0 is complete; Phases 1–6 are all in progress. Every module M01–M16 has code, so what is missing is gaps inside modules rather than whole modules — 46 of 113 stories are `Done`, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) names what each unfinished row is still missing. The recurring blockers are review passes and Firebase, which is not configured yet (decided: later). Web Push works: VAPID keys are in the development `.env`, and `push:test` has delivered to a real push service (2026-09-24). SMTP email and the pg-boss worker **do** work against the development database — `dispatch-emails` has delivered real mail, including a US-003 password reset on 2026-09-21.** What exists:
+The `docs/` set fully specifies the system (16 modules, 16 ADRs, 104 stories). **Phase 0 is complete; Phases 1–6 are all in progress. Every module M01–M16 has code, so what is missing is gaps inside modules rather than whole modules — 46 of 114 stories are `Done`, and [docs/06-delivery/backlog.md](docs/06-delivery/backlog.md) names what each unfinished row is still missing. The recurring blockers are review passes and Firebase, which is not configured yet (decided: later). Web Push works: VAPID keys are in the development `.env`, and `push:test` has delivered to a real push service (2026-09-24). SMTP email and the pg-boss worker **do** work against the development database — `dispatch-emails` has delivered real mail, including a US-003 password reset on 2026-09-21.** What exists:
 
 - `apps/web` — Next.js 16, Tailwind v4, runs on :3000 and proxies `/api` to the API in development; `/sign-in`, `/change-password`, `/home`, and a console shell of forty-five screens — customers, accounts, collections (list, detail, pending approvals), cash and day closes, sectors, lines, team, dashboards, reports (with the trial balance and postings), Books (overview, expenses, bank, income and drawings, profit and loss, balance sheet, cash book, account statements, journal), notifications and settings (business, holidays, audit, security, expense categories, bank accounts, scheduled jobs) — plus the Junior's offline `/route` app and the design-system preview at `/design-system`. Console pages read data in the browser with `useApiQuery` / `apiWrite` over the contract client
 - `apps/api` — NestJS 12 with Better Auth at `/api/auth/*`, the M16 platform in `src/platform/` (validated config, pino logging, error filter, `Database` transaction helper, `/health/*`; no tracing or queue check), M02 access control in `src/access/` (`PolicyGuard`, permissions, nine scope predicates), M13's `AuditWriter` in `src/audit/`, and twenty feature modules covering M01–M16 — see [docs/04-engineering/project-structure.md](docs/04-engineering/project-structure.md) for what each one holds
@@ -29,13 +29,13 @@ pnpm lint          # ESLint in web/ui, oxlint in api
 pnpm check-types   # NOT "typecheck" — this is the real script name
 pnpm test          # Vitest in api, web (offline engine), domain and contracts
 pnpm format        # Prettier over ts, tsx, md
-pnpm --filter api seed   # after `pnpm build`: DRY RUN of the seed dataset; --commit keeps it FOR EVER
+pnpm --filter api seed   # after `pnpm build`: DRY RUN of the seed (new, or top-up of an existing one); --commit keeps it FOR EVER
 pnpm --filter api email:test you@example.com   # after `pnpm build`: one email through the .env SMTP server
 pnpm --filter api push:test you@example.com    # after `pnpm build`: one test push to that person's registered browsers
 pnpm --filter offline-e2e test:regression      # the whole business day in a browser — WRITES PERMANENT ROWS
 ```
 
-**The seed is permanent once committed.** It writes collections and ledger rows, which reject DELETE, into the only database. Dry-run it freely; never pass `--commit` without being asked. It refuses to run if "Rasi Seed" already exists.
+**The seed is permanent once committed.** It writes collections and ledger rows, which reject DELETE, into the only database. Dry-run it freely; never pass `--commit` without being asked. If "Rasi Seed" already exists, the same command adds only what an older seed lacks, or reports it complete.
 
 `pnpm test` runs the Tier 1 suite and the offline engine's Vitest specs; `pnpm --filter api test:e2e` runs the HTTP tier. Both need PostgreSQL running, a `.env` (copy `.env.example`) and migrations applied — the suite refuses to run with pending migrations; apply them with `pnpm --filter @repo/db db:deploy`.
 

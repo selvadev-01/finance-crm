@@ -76,7 +76,7 @@ export function CashOverview({
         description="Handovers to acknowledge, cash to take to the office, and each line's day close."
       />
 
-      <Section title="Waiting for you">
+      <Section title="Pending acknowledgement">
         {waiting.status === "loading" ? (
           <ListSkeleton columns={3} rows={2} />
         ) : null}

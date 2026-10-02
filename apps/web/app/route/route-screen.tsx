@@ -75,7 +75,7 @@ export function RouteScreen({
 
   return (
     <FieldPage
-      title="My route"
+      title="Collection route"
       subtitle={
         local?.route.line ? (
           <span className="font-mono">

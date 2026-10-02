@@ -184,6 +184,16 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
     'notification.registerDevice',
   'GET /api/notification-preferences': 'notification.managePreferences',
   'PATCH /api/notification-preferences': 'notification.managePreferences',
+  // US-074 message templates: the Super Admin's alone.
+  'GET /api/notification-templates': 'notificationTemplate.view',
+  'GET /api/notification-templates/:key': 'notificationTemplate.view',
+  'POST /api/notification-templates/:key/preview': 'notificationTemplate.view',
+  'PATCH /api/notification-templates/:key': 'notificationTemplate.manage',
+  'PATCH /api/notification-templates/:key/:language':
+    'notificationTemplate.manage',
+  'DELETE /api/notification-templates/:key/:language':
+    'notificationTemplate.manage',
+  'POST /api/notification-templates/:key/test': 'notificationTemplate.manage',
   // M01 Identity
   'GET /api/me': 'profile.viewOwn',
   'POST /api/staff': 'staff.create',

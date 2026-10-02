@@ -308,7 +308,7 @@ function HandoverCard({
           {!matches ? (
             <FormField
               name="note"
-              label="Why the count differs"
+              label="Reason for difference"
               hint="Required. Your Senior sees it."
               className="[&>label]:text-base [&>label]:font-medium"
             >

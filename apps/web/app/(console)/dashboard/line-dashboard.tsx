@@ -259,7 +259,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
         {header(null, data.generatedAt)}
         <EmptyFrame>
           <NothingYet
-            title="You have no line today"
+            title="No line assigned today"
             description="Your line’s collections, Juniors and cash appear here once an Admin assigns you to a line."
           />
         </EmptyFrame>
@@ -618,7 +618,7 @@ function MyJuniors({
   return (
     <Card.Root surface="flat" className="min-w-0">
       <Card.Header
-        title="My Juniors"
+        title="Junior staff"
         actions={
           <span className="text-caption text-ink-muted">
             {day.juniors.length}{" "}
@@ -640,7 +640,7 @@ function MyJuniors({
         ) : (
           <DataView
             frame="flat"
-            caption="My Juniors"
+            caption="Junior staff"
             rows={rows}
             getRowId={(junior) => junior.userId}
             complete
@@ -894,7 +894,7 @@ function LineSummary({
 }
 
 /**
- * "Waiting on you" (Stitch "Rasi Senior Home"): corrections to decide, each
+ * "Pending approvals" (Stitch "Rasi Senior Home"): corrections to decide, each
  * Junior's cash waiting to be acknowledged — with the action in the row —
  * handovers disputed, customers not visited, phones still to send.
  */
@@ -1007,7 +1007,7 @@ function PhoneWaiting({
       <SectionHeader
         id="waiting-on-you"
         variant="heading"
-        title="Waiting on you"
+        title="Pending approvals"
         chip={
           rows.length > 0 ? (
             <Chip tone="warning">{rows.length} open</Chip>
@@ -1020,7 +1020,7 @@ function PhoneWaiting({
         </FormMessage>
       ) : null}
       <ListCard
-        label="Waiting on you"
+        label="Pending approvals"
         rows={rows}
         empty="Nothing is waiting on you before the day can close."
       />
@@ -1047,7 +1047,7 @@ function JuniorCards({
       <SectionHeader
         id="my-juniors"
         variant="heading"
-        title="My Juniors"
+        title="Junior staff"
         chip={<Chip tone="accent">{day.juniors.length} active</Chip>}
       />
       {cashFailed ? (
@@ -1061,7 +1061,7 @@ function JuniorCards({
           No Junior worked this line on this day.
         </p>
       ) : (
-        <ul aria-label="My Juniors" className="flex flex-col gap-2.5">
+        <ul aria-label="Junior staff" className="flex flex-col gap-2.5">
           {day.juniors.map((junior) => {
             const cash =
               cashRows === null
@@ -1204,7 +1204,7 @@ function WaitingOnYou({ view, day }: { view: LineView; day: Day }) {
   }
   return (
     <ActionList
-      title="Waiting on you"
+      title="Pending approvals"
       rows={rows}
       incomplete={approvals === null}
       empty="Nothing is waiting on you before the day can close."

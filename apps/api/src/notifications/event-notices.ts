@@ -28,19 +28,27 @@ const JOB_NAMES: Record<string, string> = {
   'deactivate-stale-subscriptions': 'Stale device clean-up',
 };
 
-/** An instalment's cadence in words (BR-04, US-030b). */
-const PER = { DAILY: 'a day', WEEKLY: 'a week', MONTHLY: 'a month' } as const;
+/** A section flag for a template (US-074): `yes`, or empty for "no". */
+const flag = (on: boolean) => (on ? 'yes' : '');
+
+/** A count for a template section: empty when there are none. */
+const countOrNone = (count: number) => (count === 0 ? '' : String(count));
 
 /**
- * The events the rest of the system raises (M10), each with its recipients,
- * category and words in one place (decided 2026-09-14):
+ * The events the rest of the system raises (M10), each with its recipients
+ * in one place (decided 2026-09-14):
  *
  * - A line's collection events go to **the Senior on that line today**.
  * - Cash and integrity events also go to **Admins and Super Admins**.
  * - The person whose action caused an event is never told about it.
  *
+ * The words are not here: each event names its message in the template
+ * catalogue (US-074, `templates/catalogue.ts`) and hands over the values,
+ * already formatted, and the business's own template — or the default — is
+ * rendered per recipient in their language.
+ *
  * Every method is called inside the transaction of its event. Money in the
- * text is what the recipient may already see on their own screens.
+ * values is what the recipient may already see on their own screens.
  */
 @Injectable()
 export class EventNotices {
@@ -70,50 +78,45 @@ export class EventNotices {
       toBusinessDate(new Date()),
     );
     const collector = await this.recipients.nameOf(tx, event.actorUserId);
-    const link = {
-      entityType: 'collection',
-      entityId: event.collectionId,
-      url: `/collections/${event.collectionId}`,
-    };
     const common = {
       recipients: [senior],
       actorUserId: event.actorUserId,
-      link,
+      link: {
+        entityType: 'collection',
+        entityId: event.collectionId,
+        url: `/collections/${event.collectionId}`,
+      },
+      values: {
+        accountCode: event.accountCode,
+        customerName: event.customerName,
+        collector,
+        amount: rupees(event.amount),
+        expected: rupees(event.expectedAmount),
+      },
     };
 
     if (event.classification === 'LOW') {
-      await this.notifications.raise({
-        ...common,
-        category: 'ALERT',
-        eventType: 'LOW_COLLECTION',
-        title: `Low collection · ${event.accountCode}`,
-        body: `${collector} collected ${rupees(event.amount)} of ${rupees(event.expectedAmount)} from ${event.customerName}`,
-      });
+      await this.notifications.raise({ ...common, template: 'LOW_COLLECTION' });
     } else if (event.classification === 'EXTRA') {
       await this.notifications.raise({
         ...common,
-        category: 'WARNING',
-        eventType: 'EXTRA_COLLECTION',
-        title: `Extra collection · ${event.accountCode}`,
-        body: `${collector} collected ${rupees(event.amount)} against ${rupees(event.expectedAmount)} from ${event.customerName}`,
+        template: 'EXTRA_COLLECTION',
       });
     } else if (event.classification === 'NO_PAYMENT') {
       await this.notifications.raise({
         ...common,
-        category: 'ALERT',
-        eventType: 'NO_PAYMENT_COLLECTION',
-        title: `No payment · ${event.accountCode}`,
-        body: `${collector} visited ${event.customerName}, who paid nothing (${rupees(event.expectedAmount)} was due)`,
+        template: 'NO_PAYMENT_COLLECTION',
       });
     }
     if (event.completed) {
       await this.notifications.raise({
         recipients: [senior],
         actorUserId: event.actorUserId,
-        category: 'SUCCESS',
-        eventType: 'ACCOUNT_COMPLETED',
-        title: `Account completed · ${event.accountCode}`,
-        body: `${event.customerName} has paid the account in full`,
+        template: 'ACCOUNT_COMPLETED',
+        values: {
+          accountCode: event.accountCode,
+          customerName: event.customerName,
+        },
         link: {
           entityType: 'account_loan',
           entityId: event.accountLoanId,
@@ -150,10 +153,14 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: approvers,
       actorUserId: event.actorUserId,
-      category: 'WARNING',
-      eventType: 'APPROVAL_REQUESTED',
-      title: `${event.reversal ? 'Reversal' : 'Correction'} to approve · ${event.accountCode}`,
-      body: `${requester} asks to change ${event.customerName}'s collection from ${rupees(event.from)} to ${rupees(event.to)}`,
+      template: event.reversal ? 'REVERSAL_REQUESTED' : 'CORRECTION_REQUESTED',
+      values: {
+        accountCode: event.accountCode,
+        customerName: event.customerName,
+        requester,
+        from: rupees(event.from),
+        to: rupees(event.to),
+      },
       link: {
         entityType: 'collection_approval',
         entityId: null,
@@ -191,10 +198,14 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [senior, ...admins],
       actorUserId: event.actorUserId,
-      category: 'WARNING',
-      eventType: 'EXPENSE_REQUESTED',
-      title: `Expense to approve · ${event.lineName}`,
-      body: `${spender} spent ${rupees(event.amount)} on ${event.category.toLowerCase()} from collected cash: ${event.note}`,
+      template: 'EXPENSE_REQUESTED',
+      values: {
+        lineName: event.lineName,
+        spender,
+        amount: rupees(event.amount),
+        expenseType: event.category.toLowerCase(),
+        note: event.note,
+      },
       link: {
         entityType: 'expense',
         entityId: null,
@@ -218,12 +229,13 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [event.spenderUserId],
       actorUserId: event.actorUserId,
-      category: event.approved ? 'SUCCESS' : 'WARNING',
-      eventType: 'EXPENSE_DECIDED',
-      title: `Expense ${event.approved ? 'approved' : 'rejected'} · ${rupees(event.amount)}`,
-      body: event.approved
-        ? `${by} approved your ${event.category.toLowerCase()} expense; it comes off what you hand over`
-        : `${by} rejected your ${event.category.toLowerCase()} expense: ${event.note ?? ''}. Hand that cash over with the rest`,
+      template: event.approved ? 'EXPENSE_APPROVED' : 'EXPENSE_REJECTED',
+      values: {
+        amount: rupees(event.amount),
+        decidedBy: by,
+        expenseType: event.category.toLowerCase(),
+        reason: event.note ?? '',
+      },
       link: {
         entityType: 'expense',
         entityId: event.expenseId,
@@ -255,10 +267,13 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [senior],
       actorUserId: event.actorUserId,
-      category: 'INFORMATION',
-      eventType: 'NEW_CUSTOMER',
-      title: `New customer · ${event.lineName}`,
-      body: `${by} onboarded ${event.customerName} (${event.customerCode}) onto ${event.lineName}`,
+      template: 'NEW_CUSTOMER',
+      values: {
+        lineName: event.lineName,
+        customerName: event.customerName,
+        customerCode: event.customerCode,
+        onboardedBy: by,
+      },
       link: {
         entityType: 'customer',
         entityId: event.customerId,
@@ -291,16 +306,20 @@ export class EventNotices {
       toBusinessDate(new Date()),
     );
     const by = await this.recipients.nameOf(tx, event.actorUserId);
-    const instalment = `${rupees(event.dailyAmount)} ${PER[event.collectionFrequency]} from ${dateText(event.firstDueDate)}`;
     await this.notifications.raise({
       recipients: [senior],
       actorUserId: event.actorUserId,
-      category: 'INFORMATION',
-      eventType: 'ACCOUNT_DISBURSED',
-      title: `${event.midTerm ? 'Running account added' : 'Account disbursed'} · ${event.accountCode}`,
-      body: event.midTerm
-        ? `${by} entered ${event.customerName}'s running account: ${instalment}`
-        : `${by} disbursed ${event.customerName}'s account: ${instalment}`,
+      template: event.midTerm ? 'RUNNING_ACCOUNT_ADDED' : 'ACCOUNT_DISBURSED',
+      values: {
+        accountCode: event.accountCode,
+        customerName: event.customerName,
+        disbursedBy: by,
+        amount: rupees(event.dailyAmount),
+        daily: flag(event.collectionFrequency === 'DAILY'),
+        weekly: flag(event.collectionFrequency === 'WEEKLY'),
+        monthly: flag(event.collectionFrequency === 'MONTHLY'),
+        startDate: dateText(event.firstDueDate),
+      },
       link: {
         entityType: 'account_loan',
         entityId: event.accountLoanId,
@@ -330,10 +349,13 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [event.staffUserId, ...seniors],
       actorUserId: event.actorUserId,
-      category: 'INFORMATION',
-      eventType: 'NEW_ASSIGNMENT',
-      title: `New assignment · ${event.lineName}`,
-      body: `${name} is ${event.role === 'SENIOR' ? 'Senior' : 'a Junior'} on ${event.lineName} from ${dateText(event.effectiveFrom)}`,
+      template: 'NEW_ASSIGNMENT',
+      values: {
+        lineName: event.lineName,
+        staffName: name,
+        senior: flag(event.role === 'SENIOR'),
+        startDate: dateText(event.effectiveFrom),
+      },
       link: {
         entityType: 'line',
         entityId: event.lineId,
@@ -360,10 +382,13 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [senior],
       actorUserId: event.actorUserId,
-      category: 'ALERT',
-      eventType: 'MISSED_COLLECTION',
-      title: `Missed collections · ${event.lineName}`,
-      body: `${event.missed} ${event.missed === 1 ? 'customer was' : 'customers were'} not visited on ${dateText(event.businessDate)}`,
+      template: 'MISSED_COLLECTION',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+        count: String(event.missed),
+        one: flag(event.missed === 1),
+      },
       link: dayLink(event.lineId, event.businessDate),
     });
   }
@@ -384,10 +409,11 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [senior],
       actorUserId: event.actorUserId,
-      category: 'WARNING',
-      eventType: 'DAY_REOPENED',
-      title: `Day reopened · ${event.lineName}`,
-      body: `A collection for ${dateText(event.businessDate)} arrived after the day was closed. Close it again to re-tally.`,
+      template: 'DAY_REOPENED',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+      },
       link: dayLink(event.lineId, event.businessDate),
     });
   }
@@ -409,10 +435,14 @@ export class EventNotices {
     await this.notifications.raise({
       recipients: [event.toUserId],
       actorUserId: event.actorUserId,
-      category: 'INFORMATION',
-      eventType: 'HANDOVER_SUBMITTED',
-      title: `Cash to acknowledge · ${event.lineName}`,
-      body: `${sender} handed over ${rupees(event.declaredAmount)} for ${dateText(event.businessDate)}${differs ? ` (${rupees(event.discrepancy)} against the record)` : ''}`,
+      template: 'HANDOVER_SUBMITTED',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+        sender,
+        amount: rupees(event.declaredAmount),
+        difference: differs ? rupees(event.discrepancy) : '',
+      },
       link: { entityType: 'cash_handover', entityId: null, url: '/cash' },
     });
   }
@@ -439,10 +469,16 @@ export class EventNotices {
       actorUserId: event.actorUserId,
       // A difference is already an ALERT of its own to the Senior and Admins
       // (`handoverDiscrepancy`); this one tells the sender their cash arrived.
-      category: differs ? 'WARNING' : 'SUCCESS',
-      eventType: 'HANDOVER_ACKNOWLEDGED',
-      title: `Cash received · ${event.lineName}`,
-      body: `${receiver} counted ${rupees(event.countedAmount)} for ${dateText(event.businessDate)}${differs ? `, ${rupees(event.discrepancy)} against what you declared` : ''}`,
+      template: differs
+        ? 'HANDOVER_ACKNOWLEDGED_DIFFERENT'
+        : 'HANDOVER_ACKNOWLEDGED',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+        receiver,
+        counted: rupees(event.countedAmount),
+        difference: differs ? rupees(event.discrepancy) : '',
+      },
       link: { entityType: 'cash_handover', entityId: null, url: '/cash' },
     });
   }
@@ -467,10 +503,14 @@ export class EventNotices {
         ...(await this.recipients.admins(tx, event.organizationId)),
       ],
       actorUserId: event.actorUserId,
-      category: 'ALERT',
-      eventType: 'HANDOVER_DISPUTED',
-      title: `Handover disputed · ${event.lineName}`,
-      body: `${who} disputed ${rupees(event.declaredAmount)} for ${dateText(event.businessDate)}: ${event.note}`,
+      template: 'HANDOVER_DISPUTED',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+        disputedBy: who,
+        amount: rupees(event.declaredAmount),
+        note: event.note,
+      },
       link: { entityType: 'cash_handover', entityId: null, url: '/cash' },
     });
   }
@@ -498,10 +538,12 @@ export class EventNotices {
         ...(await this.recipients.admins(tx, event.organizationId)),
       ],
       actorUserId: event.actorUserId,
-      category: 'ALERT',
-      eventType: 'DAY_CLOSE_DISCREPANCY',
-      title: `Cash ${short ? 'short' : 'over'} · ${event.lineName}`,
-      body: `Cash for ${dateText(event.businessDate)} was acknowledged ${rupees(event.discrepancy.replace('-', ''))} ${short ? 'short of' : 'over'} the record`,
+      template: short ? 'CASH_SHORT' : 'CASH_OVER',
+      values: {
+        lineName: event.lineName,
+        date: dateText(event.businessDate),
+        difference: rupees(event.discrepancy.replace('-', '')),
+      },
       link: dayLink(event.lineId, event.businessDate),
     });
   }
@@ -527,18 +569,16 @@ export class EventNotices {
       event.sectorId,
       toBusinessDate(new Date()),
     );
-    const where = event.sectorName ? ` in ${event.sectorName}` : '';
-    const day = dateText(event.date);
-    const declared = event.change === 'DECLARED';
     const words = {
-      category: 'WARNING' as const,
-      eventType: declared
-        ? ('HOLIDAY_DECLARED' as const)
-        : ('HOLIDAY_REMOVED' as const),
-      title: `${declared ? 'Holiday declared' : 'Holiday removed'} · ${day}`,
-      body: declared
-        ? `${event.name}: no collections on ${day}${where}. Collections due that day and after move to the next working day.`
-        : `${event.name} on ${day}${where} is a working day again. Collections after it move a day earlier.`,
+      template:
+        event.change === 'DECLARED'
+          ? ('HOLIDAY_DECLARED' as const)
+          : ('HOLIDAY_REMOVED' as const),
+      values: {
+        holidayName: event.name,
+        date: dateText(event.date),
+        sectorName: event.sectorName ?? '',
+      },
       actorUserId: event.actorUserId,
     };
     await this.notifications.raise({
@@ -557,7 +597,6 @@ export class EventNotices {
     });
   }
 
-  /** US-095: every mismatch is an ALERT to Admins and Super Admins. */
   /**
    * BR-05 / US-033: accounts that went past their target date with money
    * still owed, found by the nightly job (M14). One summary per line, not one
@@ -581,10 +620,8 @@ export class EventNotices {
     );
     await this.notifications.raise({
       recipients: [senior],
-      category: 'WARNING',
-      eventType: 'ACCOUNT_OVERDUE',
-      title: `${event.count === 1 ? 'An account is' : `${event.count} accounts are`} overdue`,
-      body: `${event.count === 1 ? 'It has' : 'They have'} passed the target completion date with money still owed.`,
+      template: 'ACCOUNT_OVERDUE',
+      values: { count: String(event.count), one: flag(event.count === 1) },
       link: {
         entityType: 'account_loan',
         entityId: null,
@@ -609,37 +646,34 @@ export class EventNotices {
         this.database.client,
         event.organizationId,
       ),
-      category: 'ALERT',
-      eventType: 'JOB_FAILED',
-      title: `Scheduled job failed · ${JOB_NAMES[event.job] ?? event.job}`,
-      body: `It failed five times and has stopped retrying.${event.lastError ? ` Last error: ${event.lastError.slice(0, 200)}` : ''} Tell whoever runs the server.`,
+      template: 'JOB_FAILED',
+      values: {
+        jobName: JOB_NAMES[event.job] ?? event.job,
+        lastError: event.lastError?.slice(0, 200) ?? '',
+      },
       link: { entityType: 'job', entityId: null, url: '/home' },
     });
   }
 
+  /** US-095: every mismatch is an ALERT to Admins and Super Admins. */
   async reconciliationMismatch(event: {
     organizationId: string;
     rebuilt: number;
     accountMismatches: number;
     unearned: boolean;
   }): Promise<void> {
-    const parts = [
-      event.rebuilt
-        ? `${event.rebuilt} ledger ${event.rebuilt === 1 ? 'balance' : 'balances'} rebuilt`
-        : null,
-      event.accountMismatches
-        ? `${event.accountMismatches} ${event.accountMismatches === 1 ? 'account disagrees' : 'accounts disagree'} with the ledger`
-        : null,
-      event.unearned ? 'unearned profit disagrees with the accounts' : null,
-    ].filter(Boolean);
-    if (parts.length === 0) return;
+    if (!event.rebuilt && !event.accountMismatches && !event.unearned) return;
     const tx = this.database.client;
     await this.notifications.raise({
       recipients: await this.recipients.admins(tx, event.organizationId),
-      category: 'ALERT',
-      eventType: 'RECONCILIATION_MISMATCH',
-      title: 'Nightly reconciliation found a mismatch',
-      body: `${parts.join('; ')}. Details are in the audit log.`,
+      template: 'RECONCILIATION_MISMATCH',
+      values: {
+        rebuilt: countOrNone(event.rebuilt),
+        rebuiltOne: flag(event.rebuilt === 1),
+        accountMismatches: countOrNone(event.accountMismatches),
+        accountMismatchOne: flag(event.accountMismatches === 1),
+        unearned: flag(event.unearned),
+      },
       link: { entityType: 'audit_log', entityId: null, url: '/settings/audit' },
     });
   }

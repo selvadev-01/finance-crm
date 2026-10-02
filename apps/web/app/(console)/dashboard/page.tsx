@@ -2,6 +2,7 @@ import { isCalendarDate } from "@repo/domain";
 import type { Metadata } from "next";
 
 import { readListParams } from "../../../lib/list-params";
+import { PushPrompt } from "../../../lib/notifications/push-prompt";
 import { DashboardScreen } from "./dashboard-screen";
 
 export const metadata: Metadata = { title: "Dashboard · Rasi" };
@@ -17,8 +18,12 @@ export default async function DashboardPage({
   const { date } = readListParams(await searchParams, ["date"]);
   // A date that is not a real day is ignored rather than failing the page.
   return (
-    <DashboardScreen
-      date={date !== undefined && isCalendarDate(date) ? date : undefined}
-    />
+    <>
+      <DashboardScreen
+        date={date !== undefined && isCalendarDate(date) ? date : undefined}
+      />
+      {/* Asks a device that has never decided whether to receive pushes. */}
+      <PushPrompt />
+    </>
   );
 }

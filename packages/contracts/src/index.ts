@@ -34,6 +34,7 @@ export * from "./holiday.contract.js";
 export * from "./jobs.contract.js";
 export * from "./ledger.contract.js";
 export * from "./notification.contract.js";
+export * from "./notification-template.contract.js";
 export * from "./organisation.contract.js";
 export * from "./report.contract.js";
 export * from "./route.js";

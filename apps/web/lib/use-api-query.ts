@@ -8,6 +8,7 @@ import type {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { trackRead } from "./api-activity";
 import { api } from "./api-client";
 
 /**
@@ -53,6 +54,7 @@ export function useApiQuery<Route extends RouteDefinition>(
     const settle = (state: QueryState<Route>) => {
       if (!cancelled) setSettled({ key, state });
     };
+    const finished = trackRead();
 
     api(route, body)
       .then((result) => {
@@ -73,10 +75,13 @@ export function useApiQuery<Route extends RouteDefinition>(
           status: "error",
           message: "Could not reach Rasi. Check your connection and try again.",
         }),
-      );
+      )
+      .finally(finished);
 
     return () => {
       cancelled = true;
+      // A superseded read no longer holds the bar up, even while it finishes.
+      finished();
     };
   }, [key, route, router]);
 

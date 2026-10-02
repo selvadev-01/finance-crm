@@ -32,7 +32,7 @@ const OPTIONS: {
 ];
 
 /**
- * "How will you use Rasi on this device?" (ADR-0016). Shown before the
+ * "Choose device layout" (ADR-0016). Shown before the
  * installed app first opens the console, before the browser's install dialog,
  * and from the account menu. Saving the answer switches the console at once.
  */
@@ -145,7 +145,7 @@ export function LayoutDialog({
           ? "Install Rasi on this device"
           : "Layout for this device"
       }
-      description="How will you use Rasi here?"
+      description="Choose device layout"
     >
       <LayoutChooser
         current={current}

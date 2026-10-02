@@ -265,13 +265,13 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
           ) : null}
 
           {mine && mine.length > 0 ? (
-            <Section title="Your field expenses">
+            <Section title="Field expenses">
               <ul
                 className={cn(
                   cardClass,
                   "flex flex-col divide-y divide-border",
                 )}
-                aria-label="Your field expenses"
+                aria-label="Field expenses"
               >
                 {mine.map((expense) => (
                   <ExpenseRow key={expense.id} expense={expense} />

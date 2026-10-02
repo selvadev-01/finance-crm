@@ -689,6 +689,34 @@ Low, extra, no-payment, missed, account completion, new assignment, discrepancy 
 
 Per-category opt-out. `ALERT` cannot be disabled.
 
+### US-074 · Message templates · P2
+
+Added 2026-10-02 at the owner's request ([ADR-0019](../02-architecture/adr/0019-message-templates.md)).
+
+```gherkin
+Scenario: The business's own words reach each person in their language
+  Given I am the Super Admin
+  And I have reworded the "Low collection" message in English
+  And one Senior reads notifications in Tamil
+  When a low collection is recorded on each Senior's line
+  Then the English-reading Senior gets my words
+  And the Tamil-reading Senior gets the Tamil words
+  And a notification already sent keeps the words it was sent with
+
+Scenario: A placeholder the message cannot fill is refused before saving
+  When I write {{customer}} where the message offers {{customerName}}
+  Then the field is marked and nothing is saved
+
+Scenario: Channels per message, alerts always on
+  When I switch email on for "Extra collection"
+  Then the next extra collection is also emailed
+  And I cannot switch off push or email for any alert
+
+Scenario: See it before staff do
+  Then the preview shows the push and the email with sample values
+  And "Send a test to me" reaches only my own bell, devices and inbox, marked Test
+```
+
 ---
 
 ## E09 — Dashboards and Reports (M11, M12)

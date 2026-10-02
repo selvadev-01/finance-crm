@@ -10,12 +10,13 @@ import {
   UserCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Me } from "@repo/contracts";
-import { AppShell, Button, Menu, Popover } from "@repo/ui";
+import { ActivityBar, AppShell, Button, Menu, Popover } from "@repo/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { GlobalSearch } from "../../components/global-search";
+import { useReadInFlight } from "../../lib/api-activity";
 import { authClient } from "../../lib/auth-client";
 import { navFor } from "../../lib/console-nav";
 import {
@@ -87,6 +88,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
 
   return (
     <SignedInContext value={me}>
+      <ConsoleActivityBar />
       {decision.layout === "mobile" ? (
         <PhoneConsole
           me={consoleMe}
@@ -111,6 +113,14 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Its own component so a read starting or settling re-renders only the bar,
+ * not the whole console.
+ */
+function ConsoleActivityBar() {
+  return <ActivityBar active={useReadInFlight()} />;
+}
+
+/**
  * The installed app's first launch on this device: the question comes before
  * the console, so installing Rasi begins with it (ADR-0016).
  */
@@ -131,7 +141,7 @@ function FirstLaunch({ name }: { name: string }) {
         <span className="text-title text-ink">Rasi</span>
       </div>
       <div className="flex flex-col gap-1">
-        <h1 className="text-display text-ink">How will you use Rasi here?</h1>
+        <h1 className="text-display text-ink">Choose device layout</h1>
         <p className="text-body text-ink-muted">
           Welcome, {name}. Choose the layout for this device.
         </p>
