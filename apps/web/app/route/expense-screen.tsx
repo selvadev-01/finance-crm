@@ -13,29 +13,40 @@ import {
   type CashPosition,
   type Expense,
   type ExpenseCategory,
+  type RouteRequest,
 } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
   Badge,
   Button,
   cn,
-  Field,
+  Form,
+  FormField,
   FormMessage,
+  FormRootError,
   formatBusinessDate,
   formatCurrency,
   Input,
   Skeleton,
   Textarea,
+  useZodForm,
 } from "@repo/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useController, useFormState, useWatch } from "react-hook-form";
 
 import { api } from "../../lib/api-client";
 import { apiWrite } from "../../lib/api-write";
+import { applyWriteFailure } from "../../lib/form-errors";
 import { compareMoney, subtractMoney, sumMoney } from "../../lib/money";
 import { CategoryIcon } from "../(console)/books/visuals";
 import { Banner, cardClass, FieldPage, Section } from "./app-chrome";
 
-type Errors = Partial<Record<"categoryId" | "amount" | "note", string>>;
+type FieldExpenseRequest = RouteRequest<
+  typeof booksMoneyContract.requestFieldExpense
+>;
+
+/** The footer's button sits outside the form, and submits it by this id. */
+const FORM_ID = "field-expense";
 
 /** Amounts a Junior spends most often: one tap instead of the keypad. */
 const QUICK_AMOUNTS = ["20", "50", "100", "200"] as const;
@@ -61,12 +72,12 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
   const [mine, setMine] = useState<Expense[] | null>(null);
   const [position, setPosition] = useState<CashPosition | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [errors, setErrors] = useState<Errors>({});
-  const [saving, setSaving] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const form = useZodForm(booksMoneyContract.requestFieldExpense.body, {
+    defaultValues: { categoryId: "", amount: "", note: "" },
+  });
+  const amount = useWatch({ control: form.control, name: "amount" }) ?? "";
+  const saving = form.formState.isSubmitting;
   // A second tap must not ask twice.
   const inFlight = useRef(false);
 
@@ -102,49 +113,23 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
     return () => window.clearTimeout(timer);
   }, [load, connected]);
 
-  async function submit() {
+  async function submit(body: FieldExpenseRequest["body"]) {
     if (inFlight.current) return;
-    const parsed = booksMoneyContract.requestFieldExpense.body.safeParse({
-      categoryId,
-      amount,
-      note,
-    });
-    if (!parsed.success) {
-      const found: Errors = {};
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0] as keyof Errors;
-        found[field] ??=
-          field === "categoryId"
-            ? "Choose an expense type."
-            : field === "amount"
-              ? "Enter the amount in rupees, like 50 or 49.50."
-              : "Say what it was for.";
-      }
-      setErrors(found);
-      return;
-    }
     inFlight.current = true;
-    setSaving(true);
-    setErrors({});
-    setProblem(null);
-    const result = await apiWrite(
-      booksMoneyContract.requestFieldExpense,
-      { body: parsed.data },
-      { fields: { categoryId: "Category", amount: "Amount", note: "Note" } },
-    );
+    const result = await apiWrite(booksMoneyContract.requestFieldExpense, {
+      body,
+    });
     inFlight.current = false;
-    setSaving(false);
     if (!result.ok) {
-      const fields = result.fields as Errors;
-      if (Object.keys(fields).length > 0) return setErrors(fields);
-      return setProblem(result.form ?? "Not sent. Try again.");
+      return applyWriteFailure(form.setError, result, {
+        fields: ["categoryId", "amount", "note"],
+        fallback: "Not sent. Try again.",
+      });
     }
     setSent(
       `${formatCurrency(result.body.amount)} for ${result.body.category.name.toLowerCase()} sent for approval.`,
     );
-    setCategoryId("");
-    setAmount("");
-    setNote("");
+    form.reset();
     void load();
   }
 
@@ -158,8 +143,9 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
       footer={
         offline || !categories ? undefined : (
           <Button
+            type="submit"
+            form={FORM_ID}
             tone="primary"
-            onClick={() => void submit()}
             disabled={!connected || saving}
             className="h-13 w-full rounded-pill text-lg font-semibold"
           >
@@ -213,27 +199,30 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
             </div>
           ) : null}
           {categories ? (
-            <div className={cn(cardClass, "flex flex-col gap-5 p-4")}>
-              <CategoryTiles
-                categories={categories}
-                value={categoryId}
-                onChange={setCategoryId}
-                {...(errors.categoryId ? { error: errors.categoryId } : {})}
-              />
+            <Form
+              id={FORM_ID}
+              form={form}
+              onSubmit={submit}
+              className={cn(cardClass, "flex flex-col gap-5 p-4")}
+            >
+              <CategoryTiles categories={categories} />
               <div className="flex flex-col gap-2">
-                <Field
+                <FormField
+                  name="amount"
                   label="Amount (₹)"
-                  {...(errors.amount ? { error: errors.amount } : {})}
+                  rewrite={(message) =>
+                    message.startsWith("must be an amount")
+                      ? "Enter the amount in rupees, like 50 or 49.50."
+                      : message
+                  }
                 >
                   <Input
                     inputMode="decimal"
                     autoComplete="off"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
                     className="h-14 text-2xl font-semibold"
                     data-numeric
                   />
-                </Field>
+                </FormField>
                 <div
                   role="group"
                   aria-label="Quick amounts"
@@ -244,7 +233,12 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
                       key={quick}
                       type="button"
                       aria-pressed={amount === quick}
-                      onClick={() => setAmount(quick)}
+                      onClick={() =>
+                        form.setValue("amount", quick, {
+                          shouldDirty: true,
+                          shouldValidate: form.formState.isSubmitted,
+                        })
+                      }
                       className={cn(
                         "h-11 min-w-16 rounded-pill border px-4 text-sm font-medium transition-colors",
                         amount === quick
@@ -258,20 +252,16 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
                   ))}
                 </div>
               </div>
-              <Field
+              <FormField
+                name="note"
                 label="Note"
                 hint="“Petrol for the round”."
-                {...(errors.note ? { error: errors.note } : {})}
               >
-                <Textarea
-                  rows={2}
-                  maxLength={500}
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                />
-              </Field>
+                <Textarea rows={2} maxLength={500} />
+              </FormField>
               <HandoverPreview position={position} amount={amount} />
-            </div>
+              <FormRootError />
+            </Form>
           ) : null}
 
           {mine && mine.length > 0 ? (
@@ -295,18 +285,26 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
   );
 }
 
-/** What it was for: a grid of icon tiles, one radio each. */
-function CategoryTiles({
-  categories,
-  value,
-  onChange,
-  error,
-}: {
-  categories: ExpenseCategory[];
-  value: string;
-  onChange: (id: string) => void;
-  error?: string;
-}) {
+/**
+ * What it was for: a grid of icon tiles, one radio each — the form's
+ * `categoryId`. A radio group has no single control for a `<label>` to name,
+ * so it is not a `FormControlField`; it names itself with `aria-labelledby`.
+ */
+function CategoryTiles({ categories }: { categories: ExpenseCategory[] }) {
+  const { field } = useController<{ categoryId: string }, "categoryId">({
+    name: "categoryId",
+  });
+  const { errors } = useFormState<{ categoryId: string }>({
+    name: "categoryId",
+  });
+  const value = field.value;
+  // The API's own word for this field (a retired type) is kept; the schema's
+  // is only ever "nothing chosen".
+  const error = errors.categoryId
+    ? errors.categoryId.type === "server" && errors.categoryId.message
+      ? errors.categoryId.message
+      : "Choose an expense type."
+    : undefined;
   return (
     <div className="flex flex-col gap-2">
       <span id="expense-what-for" className="text-sm font-medium text-ink">
@@ -319,15 +317,18 @@ function CategoryTiles({
         aria-describedby={error ? "expense-what-for-error" : undefined}
         className="grid grid-cols-2 gap-2"
       >
-        {categories.map((category) => {
+        {categories.map((category, index) => {
           const selected = category.id === value;
+          // The tile a failed submit focuses: the chosen one, else the first.
+          const focusTarget = selected || (index === 0 && !value);
           return (
             <button
               key={category.id}
+              ref={focusTarget ? field.ref : undefined}
               type="button"
               role="radio"
               aria-checked={selected}
-              onClick={() => onChange(category.id)}
+              onClick={() => field.onChange(category.id)}
               className={cn(
                 "flex min-h-16 items-center gap-2.5 rounded-surface border px-3 py-2.5 text-left text-sm transition-colors",
                 selected

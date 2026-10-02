@@ -24,6 +24,7 @@ import {
 } from "@repo/ui";
 import Link from "next/link";
 
+import { EntryLines } from "../../../../../components/entry-lines";
 import { ListFallback } from "../../../../../components/list-state";
 import { PageTrail } from "../../../../../components/page-trail";
 import { Pager } from "../../../../../components/pager";
@@ -253,44 +254,21 @@ function PostingCard({ posting }: { posting: Posting }) {
             {formatCurrency(posting.amount)}
           </span>
         </div>
-        <table className="w-full text-body">
-          <caption className="sr-only">Entries</caption>
-          <thead className="text-caption text-ink-muted">
-            <tr>
-              <th scope="col" className="py-1 text-left font-normal">
-                Account
-              </th>
-              <th scope="col" className="py-1 text-right font-normal">
-                Debit
-              </th>
-              <th scope="col" className="py-1 text-right font-normal">
-                Credit
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {posting.entries.map((entry, index) => (
-              <tr key={index} className="border-t border-border">
-                <td className="py-1.5 text-ink">
-                  {ACCOUNTS[entry.accountType]}
-                  {entry.ownerName ? ` · ${entry.ownerName}` : ""}
-                  {entry.referenceName ? ` · ${entry.referenceName}` : ""}
-                  {entry.accountCode ? ` · ${entry.accountCode}` : ""}
-                </td>
-                <td className="py-1.5 text-right text-ink" data-numeric>
-                  {entry.direction === "DEBIT"
-                    ? formatCurrency(entry.amount)
-                    : ""}
-                </td>
-                <td className="py-1.5 text-right text-ink" data-numeric>
-                  {entry.direction === "CREDIT"
-                    ? formatCurrency(entry.amount)
-                    : ""}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <EntryLines
+          caption="Entries"
+          lines={posting.entries.map((entry) => ({
+            particulars: [
+              ACCOUNTS[entry.accountType],
+              entry.ownerName,
+              entry.referenceName,
+              entry.accountCode,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            direction: entry.direction,
+            amount: entry.amount,
+          }))}
+        />
       </Card.Body>
     </Card.Root>
   );

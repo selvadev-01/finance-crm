@@ -17,17 +17,21 @@ import {
   Badge,
   Button,
   cn,
-  Field,
+  Form,
+  FormField,
   FormMessage,
+  FormRootError,
   formatBusinessDate,
   formatCurrency,
   Skeleton,
   Textarea,
+  useZodForm,
 } from "@repo/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api } from "../../lib/api-client";
 import { apiWrite } from "../../lib/api-write";
+import { applyWriteFailure } from "../../lib/form-errors";
 import {
   countedTotal,
   countsBody,
@@ -174,60 +178,63 @@ function HandoverCard({
   disabled: boolean;
   onSent: () => void;
 }) {
+  // DenominationCount is shared with the console, so the counts stay plain
+  // state; the note is the form's.
   const [counts, setCounts] = useState(emptyCounts);
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const form = useZodForm(noteSchema, { defaultValues: { note: "" } });
+  const saving = form.formState.isSubmitting;
   // A second tap must not submit a second handover.
   const inFlight = useRef(false);
   const declared = countedTotal(counts);
   const diff = difference(declared, item.toHandOver);
   const matches = /^-?0\.00$/.test(diff);
 
-  async function submit() {
+  async function submit({ note }: { note?: string | undefined }) {
     if (inFlight.current) return;
     // US-061: a count that differs needs a reason. Ask for it here rather than
     // sending a request the API is bound to refuse.
-    if (!matches && !note.trim()) {
-      setNoteError("Say why the count differs before handing over.");
-      noteRef.current?.focus();
+    if (!matches && !note) {
+      form.setError(
+        "note",
+        {
+          type: "server",
+          message: "Say why the count differs before handing over.",
+        },
+        { shouldFocus: true },
+      );
       return;
     }
     inFlight.current = true;
-    setSaving(true);
-    setProblem(null);
-    setNoteError(null);
-    const result = await apiWrite(
-      cashContract.handOver,
-      {
-        body: {
-          lineId: item.lineId,
-          businessDate: item.businessDate,
-          counts: countsBody(counts),
-          ...(note.trim() ? { note } : {}),
-        },
+    const result = await apiWrite(cashContract.handOver, {
+      body: {
+        lineId: item.lineId,
+        businessDate: item.businessDate,
+        counts: countsBody(counts),
+        ...(note ? { note } : {}),
       },
-      { fields: { note: "Note" } },
-    );
+    });
     inFlight.current = false;
-    setSaving(false);
     if (!result.ok) {
-      if (result.fields["note"]) {
-        setNoteError(result.fields["note"]);
-        noteRef.current?.focus();
-        return;
-      }
-      return setProblem(result.form ?? "Not handed over. Try again.");
+      return applyWriteFailure(form.setError, result, {
+        fields: ["note"],
+        fallback: "Not handed over. Try again.",
+      });
     }
     setCounts(emptyCounts());
-    setNote("");
+    form.reset();
     onSent();
   }
 
   return (
-    <section
+    <Form
+      form={form}
+      onSubmit={submit}
+      // Enter while typing a count must not hand the cash over — the total is
+      // still being read.
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target instanceof HTMLInputElement)
+          event.preventDefault();
+      }}
       className="flex flex-col gap-3"
       data-testid={`cash-${item.businessDate}`}
     >
@@ -299,27 +306,16 @@ function HandoverCard({
             </div>
           </div>
           {!matches ? (
-            <Field
+            <FormField
+              name="note"
               label="Why the count differs"
               hint="Required. Your Senior sees it."
-              {...(noteError ? { error: noteError } : {})}
               className="[&>label]:text-base [&>label]:font-medium"
             >
-              <Textarea
-                ref={noteRef}
-                rows={2}
-                maxLength={500}
-                value={note}
-                onChange={(event) => {
-                  setNote(event.target.value);
-                  if (noteError) setNoteError(null);
-                }}
-              />
-            </Field>
+              <Textarea rows={2} maxLength={500} />
+            </FormField>
           ) : null}
-          {problem ? (
-            <FormMessage tone="critical">{problem}</FormMessage>
-          ) : null}
+          <FormRootError />
           {/* The total and the one action stay under the thumb while counting. */}
           <div
             className="sticky bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 -mx-4 flex flex-col gap-2 border-t border-border bg-surface-raised px-4 py-3"
@@ -349,8 +345,8 @@ function HandoverCard({
               )}
             </div>
             <Button
+              type="submit"
               tone="primary"
-              onClick={() => void submit()}
               disabled={disabled || saving || declared === "0.00"}
               className="h-14 w-full rounded-pill text-lg font-semibold"
             >
@@ -364,9 +360,12 @@ function HandoverCard({
           </div>
         </>
       )}
-    </section>
+    </Form>
   );
 }
+
+/** The one field the Junior types; the line, date and counts are added on send. */
+const noteSchema = cashContract.handOver.body.pick({ note: true });
 
 function RecentRow({ handover }: { handover: Handover }) {
   return (
