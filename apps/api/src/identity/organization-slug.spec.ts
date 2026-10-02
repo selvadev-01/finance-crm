@@ -8,7 +8,7 @@ import {
   randomSlug,
   slugFromName,
 } from './organization-slug.js';
-import { SignUpRateLimiter } from './sign-up-rate-limiter.js';
+import { MemorySignUpRateLimiter } from './sign-up-rate-limiter.js';
 
 describe('organization slugs (ADR-0012)', () => {
   it.each([
@@ -93,15 +93,16 @@ describe('organization slugs (ADR-0012)', () => {
   });
 });
 
-describe('SignUpRateLimiter (ADR-0012)', () => {
-  it('allows the limit per address, then refuses until the window passes', () => {
-    const limiter = new SignUpRateLimiter({ limit: 2, windowMs: 1_000 });
-    expect(limiter.tryConsume('10.0.0.1', 0)).toBe(true);
-    expect(limiter.tryConsume('10.0.0.1', 10)).toBe(true);
-    expect(limiter.tryConsume('10.0.0.1', 20)).toBe(false);
+describe('MemorySignUpRateLimiter (ADR-0012)', () => {
+  it('allows the limit per address, then refuses until the window passes', async () => {
+    const limiter = new MemorySignUpRateLimiter({ limit: 2, windowMs: 1_000 });
+    const at = (ms: number) => new Date(ms);
+    expect(await limiter.tryConsume('10.0.0.1', at(0))).toBe(true);
+    expect(await limiter.tryConsume('10.0.0.1', at(10))).toBe(true);
+    expect(await limiter.tryConsume('10.0.0.1', at(20))).toBe(false);
     // Another address has its own window.
-    expect(limiter.tryConsume('10.0.0.2', 20)).toBe(true);
+    expect(await limiter.tryConsume('10.0.0.2', at(20))).toBe(true);
     // A new window opens once the old one has passed.
-    expect(limiter.tryConsume('10.0.0.1', 1_000)).toBe(true);
+    expect(await limiter.tryConsume('10.0.0.1', at(1_000))).toBe(true);
   });
 });

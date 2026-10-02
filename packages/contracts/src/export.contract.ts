@@ -2,9 +2,11 @@ import { z } from "zod";
 
 import { collectionContract } from "./collection.contract.js";
 import { dashboardContract } from "./dashboard.contract.js";
+import { ledgerContract } from "./ledger.contract.js";
 import { reportContract } from "./report.contract.js";
 import { route } from "./route.js";
 import { errorSchema } from "./shared.js";
+import { statementsContract } from "./statements.contract.js";
 
 /**
  * M12 export — the reports, the dashboards and the collection list (S-16) as
@@ -133,6 +135,49 @@ export const exportContract = {
     path: "/api/exports/dashboards/line",
     summary: "One line's day (US-083, S-19) as Excel or PDF",
     query: dashboardContract.getLine.query.extend(format),
+    file: true,
+    responses: { 200: fileBodySchema, ...exportErrors },
+  }),
+  // Books and the ledger (ADR-0018), under `ledger.view` like their screens.
+  trialBalance: route({
+    method: "GET",
+    path: "/api/exports/ledger/trial-balance",
+    summary: "The trial balance (M09) as Excel, PDF or CSV",
+    query: ledgerContract.getTrialBalance.query.extend(format),
+    file: true,
+    responses: { 200: fileBodySchema, ...exportErrors },
+  }),
+  profitAndLoss: route({
+    method: "GET",
+    path: "/api/exports/books/profit-and-loss",
+    summary: "Profit and loss (ADR-0018) as Excel, PDF or CSV",
+    query: statementsContract.getProfitAndLoss.query.extend(format),
+    file: true,
+    responses: { 200: fileBodySchema, ...exportErrors },
+  }),
+  balanceSheet: route({
+    method: "GET",
+    path: "/api/exports/books/balance-sheet",
+    summary: "The balance sheet (ADR-0018) as Excel, PDF or CSV",
+    query: statementsContract.getBalanceSheet.query.extend(format),
+    file: true,
+    responses: { 200: fileBodySchema, ...exportErrors },
+  }),
+  accountStatement: route({
+    method: "GET",
+    path: "/api/exports/ledger/accounts/:ledgerAccountId/statement",
+    summary: "One ledger account's statement (ADR-0018) as Excel, PDF or CSV",
+    pathParams: statementsContract.getAccountStatement.pathParams,
+    query: statementsContract.getAccountStatement.query.extend(format),
+    file: true,
+    responses: { 200: fileBodySchema, ...exportErrors },
+  }),
+  cashBook: route({
+    method: "GET",
+    path: "/api/exports/books/cash-book",
+    summary:
+      "The cash book of office cash or a bank (ADR-0018) as Excel, PDF or CSV",
+    query: statementsContract.getCashBook.query.extend(format),
     file: true,
     responses: { 200: fileBodySchema, ...exportErrors },
   }),

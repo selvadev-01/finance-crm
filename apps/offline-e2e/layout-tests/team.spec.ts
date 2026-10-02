@@ -173,6 +173,79 @@ test.describe("one staff member (US-092)", () => {
   });
 });
 
+test.describe("adding a staff member (US-092)", () => {
+  /**
+   * "Joined on" says blank means today, and the API defaults it so — but the
+   * field once sent `""`, which the contract's optional date refuses, so the
+   * form stopped at "Joined on is required" (found by the regression journey,
+   * 2026-09-22). A blank date must reach the API as no date at all.
+   */
+  async function addWithBlankJoinedOn(
+    page: Page,
+    fillThenClear: boolean,
+  ): Promise<Record<string, unknown>> {
+    await page.setViewportSize(COMPUTER);
+    await signedInAs(page, "ADMIN", answers);
+    let sent: Record<string, unknown> | undefined;
+    // Registered after `signedInAs`, so it answers the POST first; the GET
+    // falls through to the list fixture.
+    await page.route("**/api/staff", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      sent = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 201,
+        json: {
+          staff: {
+            ...detail(junior),
+            staffProfileId: "staff-new",
+            userId: "user-new",
+            name: "Anbu S",
+            email: "anbu@example.com",
+            phone: "+919811112222",
+            staffCode: "ST-0008",
+            currentAssignment: null,
+            assignments: [],
+          },
+          temporaryPassword: "tmp-Pass-2026",
+        },
+      });
+    });
+
+    await page.goto("/team");
+    await page.getByRole("button", { name: "Add staff" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Add a staff member" });
+    await dialog.getByLabel("Name").fill("Anbu S");
+    await dialog.getByLabel("Email").fill("anbu@example.com");
+    await dialog.getByLabel("Mobile number").fill("9811112222");
+    await dialog.getByLabel("Role").selectOption("JUNIOR");
+    if (fillThenClear) {
+      await dialog.getByLabel("Joined on").fill("2026-09-01");
+      await dialog.getByLabel("Joined on").fill("");
+    }
+    await dialog.getByRole("button", { name: "Create staff member" }).click();
+
+    await expect(
+      page.getByRole("dialog", { name: "Temporary password for Anbu S" }),
+    ).toBeVisible();
+    expect(sent).toBeDefined();
+    return sent ?? {};
+  }
+
+  test("a Joined on date left blank is sent as no date, for the API to make today", async ({
+    page,
+  }) => {
+    const sent = await addWithBlankJoinedOn(page, false);
+    expect(sent).not.toHaveProperty("joinedAt");
+  });
+
+  test("a Joined on date typed and then cleared is also sent as no date", async ({
+    page,
+  }) => {
+    const sent = await addWithBlankJoinedOn(page, true);
+    expect(sent).not.toHaveProperty("joinedAt");
+  });
+});
+
 test.describe("at every width", () => {
   for (const [name, viewport] of WIDTHS) {
     test(`the team list and a staff page fit a ${name}`, async ({ page }) => {

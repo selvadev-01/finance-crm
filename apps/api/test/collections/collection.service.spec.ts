@@ -14,6 +14,7 @@ import { RouteService } from '../../src/collections/route.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { createTestPrismaClient } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
 import { testNotifications } from '../notifications/notices.js';
@@ -64,7 +65,12 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
     const database = new Database(tx);
     const audit = new AuditWriter(database);
     const ledger = new LedgerService(database);
-    const accounts = new AccountService(database, audit, ledger);
+    const accounts = new AccountService(
+      database,
+      audit,
+      ledger,
+      testNotifications(database).notices,
+    );
     const warnings: string[] = [];
     const logger = {
       warn: (_: object, message: string) => warnings.push(message),
@@ -108,7 +114,14 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         },
       });
 
-    /** A disbursed account, day one on Saturday 3 January. */
+    /**
+     * A disbursed account, day one on Saturday 3 January — funded and paid
+     * out by the owner, as only the Super Admin may (decided 2026-10-02).
+     */
+    const ownerContext: RequestContext = {
+      ...adminContext,
+      role: 'SUPER_ADMIN',
+    };
     const account = async (
       terms: {
         accountAmount?: string;
@@ -116,13 +129,15 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         dailyAmount?: string;
       } = {},
       customerId?: string,
-    ) =>
-      accounts.create(
-        adminContext,
+    ) => {
+      const invested = terms.investedAmount ?? '8500';
+      await fundOfficeCash(database, ownerContext, invested, SATURDAY);
+      return accounts.create(
+        ownerContext,
         {
           customerId: customerId ?? (await customer()).id,
           accountAmount: terms.accountAmount ?? '10000',
-          investedAmount: terms.investedAmount ?? '8500',
+          investedAmount: invested,
           dailyAmount: terms.dailyAmount ?? '100',
           termDays: 100,
           collectionFrequency: 'DAILY',
@@ -131,6 +146,7 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         },
         SATURDAY,
       );
+    };
 
     const collect = (
       accountLoanId: string,
@@ -204,7 +220,9 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         expect(slot).toMatchObject({ sequence: 1, status: 'COLLECTED' });
         expect(await w.balances()).toMatchObject({
           CASH_IN_HAND: '100.00',
-          CASH_AT_OFFICE: '-8500.00',
+          // The owner's 8,500 went straight out as the loan.
+          CASH_AT_OFFICE: '0.00',
+          CAPITAL: '8500.00',
           UNEARNED_PROFIT: '1485.00',
           EARNED_PROFIT: '15.00',
         });
@@ -651,7 +669,8 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
 
         expect(closed.status).toBe('WRITTEN_OFF');
         expect(await w.balances()).toMatchObject({
-          CASH_AT_OFFICE: '-8500.00',
+          CASH_AT_OFFICE: '0.00',
+          CAPITAL: '8500.00',
           // 1,500 − the 15 earned on the 100 collected.
           UNEARNED_PROFIT: '0.00',
           EARNED_PROFIT: '15.00',

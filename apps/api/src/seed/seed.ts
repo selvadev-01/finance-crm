@@ -16,6 +16,7 @@ import {
   toUtcMidnight,
 } from '@repo/domain';
 
+import { STARTER_EXPENSE_CATEGORIES } from '../books/expense-category.service.js';
 import { createRandom, type Random } from './prng.js';
 
 /**
@@ -37,6 +38,12 @@ import { createRandom, type Random } from './prng.js';
  *   no visit is `MISSED` (BR-09 keeps the distinction on the collection row).
  * - Cash moves Junior → Senior daily; Senior → Admin is not seeded.
  * - Nothing is written to `audit_log`.
+ * - Books (ADR-0018) are a handful of entries, not a month of bookkeeping: the
+ *   starter categories, one bank, a deposit, rent, stationery, a salary from
+ *   the bank, bank interest, an owner drawing, a bank-charges journal, and on
+ *   Line 1 one approved field expense (taken off the Junior's handover and
+ *   counted in the day close), one rejected and one still waiting. No capital
+ *   is seeded, so office cash stays negative from the disbursements.
  */
 export const SEED_ORGANIZATION_NAME = 'Rasi Seed';
 export const SEED_PASSWORD = 'rasi-seed-password';
@@ -75,6 +82,8 @@ export interface SeedReport {
     discrepancyDayCloseId: string;
     correctedCollectionId: string;
     concurrentCustomerIds: string[];
+    /** The approved field expense on Line 1 (ADR-0018). */
+    fieldExpenseId: string;
   };
 }
 
@@ -470,10 +479,64 @@ export async function seedDataset(
     });
   }
 
+  // Books (ADR-0018): the starter categories, as sign-up writes them, one
+  // bank, and their keyed ledger accounts — one EXPENSE per category, one
+  // BANK per bank — plus the two Books singletons.
+  const categoryIds = Object.fromEntries(
+    STARTER_EXPENSE_CATEGORIES.map((name) => [name, randomUUID()]),
+  ) as Record<(typeof STARTER_EXPENSE_CATEGORIES)[number], string>;
+  const expenseAccount = Object.fromEntries(
+    STARTER_EXPENSE_CATEGORIES.map((name) => {
+      const id = randomUUID();
+      ledgerAccounts.push({
+        id,
+        organizationId: orgId,
+        accountType: 'EXPENSE',
+        expenseCategoryId: categoryIds[name],
+        normalBalance: 'DEBIT',
+      });
+      return [name, id];
+    }),
+  ) as Record<(typeof STARTER_EXPENSE_CATEGORIES)[number], string>;
+  const bankId = randomUUID();
+  const bankLedger = randomUUID();
+  ledgerAccounts.push({
+    id: bankLedger,
+    organizationId: orgId,
+    accountType: 'BANK',
+    bankAccountId: bankId,
+    normalBalance: 'DEBIT',
+  });
+  const otherIncome = randomUUID();
+  const ownerDrawings = randomUUID();
+  ledgerAccounts.push(
+    {
+      id: otherIncome,
+      organizationId: orgId,
+      accountType: 'OTHER_INCOME',
+      normalBalance: 'CREDIT',
+    },
+    {
+      id: ownerDrawings,
+      organizationId: orgId,
+      accountType: 'OWNER_DRAWINGS',
+      normalBalance: 'DEBIT',
+    },
+  );
+
   const transactions: Prisma.LedgerTransactionCreateManyInput[] = [];
   const entries: Prisma.LedgerEntryCreateManyInput[] = [];
   const post = (
-    type: 'DISBURSEMENT' | 'COLLECTION' | 'HANDOVER' | 'ADJUSTMENT',
+    type:
+      | 'DISBURSEMENT'
+      | 'COLLECTION'
+      | 'HANDOVER'
+      | 'ADJUSTMENT'
+      | 'EXPENSE'
+      | 'BANK_TRANSFER'
+      | 'OTHER_INCOME'
+      | 'DRAWINGS'
+      | 'JOURNAL',
     source: { table: string; id: string },
     date: CalendarDate,
     description: string,
@@ -818,6 +881,14 @@ export async function seedDataset(
   const discrepancyDate = workingDaysBack(5);
   const discrepancyLine = Math.min(2, options.lines - 1);
   let discrepancyDayCloseId = '';
+  const expenseRows: Prisma.ExpenseCreateManyInput[] = [];
+  // One ₹50 petrol on Line 1, approved by the line's Senior: it is paid from
+  // the day's collections, so the Junior hands over that much less and the day
+  // still tallies (ADR-0018: received + expenses − collected).
+  const fieldExpenseDate = workingDaysBack(3);
+  const fieldExpenseAmount = toMoney('50');
+  let fieldExpense: { id: string; junior: string; senior: string } | null =
+    null;
 
   for (const today of [...days.values()].sort((a, b) =>
     a.date < b.date ? -1 : 1,
@@ -825,8 +896,54 @@ export async function seedDataset(
     const dayCloseId = randomUUID();
     const senior = staffOnLine(today.lineIndex, today.date, 'senior');
     let received = toMoney('0');
-    for (const [junior, system] of today.byCollector) {
-      if (system.lessThanOrEqualTo(0)) continue;
+    let expenses = toMoney('0');
+    for (const [junior, collected] of today.byCollector) {
+      if (collected.lessThanOrEqualTo(0)) continue;
+      let system = collected;
+      if (
+        !fieldExpense &&
+        today.lineIndex === 0 &&
+        today.date === fieldExpenseDate &&
+        collected.greaterThan(fieldExpenseAmount.times(2))
+      ) {
+        fieldExpense = { id: randomUUID(), junior, senior };
+        expenseRows.push({
+          id: fieldExpense.id,
+          organizationId: orgId,
+          expenseCategoryId: categoryIds['Fuel & travel'],
+          amount: fieldExpenseAmount.toString(),
+          businessDate: toUtcMidnight(today.date),
+          note: 'Petrol for the round',
+          paidFrom: 'CASH_IN_HAND',
+          spenderUserId: userIds[junior]!,
+          lineId: lineIds[0]!,
+          hop: 'JUNIOR_TO_SENIOR',
+          status: 'APPROVED',
+          decidedByUserId: userIds[senior]!,
+          decidedAt: ist(today.date, '18:30:00'),
+          createdByUserId: userIds[junior]!,
+        });
+        post(
+          'EXPENSE',
+          { table: 'expense', id: fieldExpense.id },
+          today.date,
+          'Fuel & travel: Petrol for the round',
+          [
+            {
+              account: expenseAccount['Fuel & travel'],
+              direction: 'DEBIT',
+              amount: fieldExpenseAmount,
+            },
+            {
+              account: cashInHand[junior]!,
+              direction: 'CREDIT',
+              amount: fieldExpenseAmount,
+            },
+          ],
+        );
+        system = collected.minus(fieldExpenseAmount);
+        expenses = expenses.plus(fieldExpenseAmount);
+      }
       const short =
         today.lineIndex === discrepancyLine &&
         today.date === discrepancyDate &&
@@ -877,7 +994,7 @@ export async function seedDataset(
       received = received.plus(declared);
       if (short) discrepancyDayCloseId = dayCloseId;
     }
-    const discrepancy = received.minus(today.collected);
+    const discrepancy = received.plus(expenses).minus(today.collected);
     dayCloseRows.push({
       id: dayCloseId,
       lineId: lineIds[today.lineIndex]!,
@@ -885,12 +1002,191 @@ export async function seedDataset(
       expectedTotal: today.expected.toString(),
       collectedTotal: today.collected.toString(),
       cashReceivedTotal: received.toString(),
+      expenseTotal: expenses.toString(),
       discrepancy: discrepancy.toString(),
       status: discrepancy.isZero() ? 'TALLIED' : 'CLOSED',
       closedByUserId: userIds[senior]!,
       closedAt: ist(today.date, '19:30:00'),
     });
   }
+
+  // -------------------------------------------------------------------- books
+  if (fieldExpense) {
+    // Rejected (posts nothing, so the Junior hands it all over) and waiting
+    // (posts nothing until it is decided).
+    expenseRows.push(
+      {
+        organizationId: orgId,
+        expenseCategoryId: categoryIds['Miscellaneous'],
+        amount: '30.00',
+        businessDate: toUtcMidnight(fieldExpenseDate),
+        note: 'Tea for the round',
+        paidFrom: 'CASH_IN_HAND',
+        spenderUserId: userIds[fieldExpense.junior]!,
+        lineId: lineIds[0]!,
+        hop: 'JUNIOR_TO_SENIOR',
+        status: 'REJECTED',
+        decidedByUserId: userIds[fieldExpense.senior]!,
+        decidedAt: ist(fieldExpenseDate, '18:30:00'),
+        decisionNote: 'Tea is not a business expense',
+        createdByUserId: userIds[fieldExpense.junior]!,
+      },
+      {
+        organizationId: orgId,
+        expenseCategoryId: categoryIds['Phone & internet'],
+        amount: '99.00',
+        businessDate: toUtcMidnight(lastHistoryDate),
+        note: 'Mobile recharge for the route app',
+        paidFrom: 'CASH_IN_HAND',
+        spenderUserId: userIds[staffOnLine(0, lastHistoryDate, 'junior')]!,
+        lineId: lineIds[0]!,
+        hop: 'JUNIOR_TO_SENIOR',
+        status: 'PENDING',
+        createdByUserId: userIds[staffOnLine(0, lastHistoryDate, 'junior')]!,
+      },
+    );
+  }
+
+  // The office side, recorded by the Admin (the drawing and the journal by
+  // the Super Admin, whose alone they are).
+  const officeExpense = (
+    date: CalendarDate,
+    category: (typeof STARTER_EXPENSE_CATEGORIES)[number],
+    amount: string,
+    note: string,
+    fromBank: boolean,
+  ) => {
+    const id = randomUUID();
+    expenseRows.push({
+      id,
+      organizationId: orgId,
+      expenseCategoryId: categoryIds[category],
+      amount,
+      businessDate: toUtcMidnight(date),
+      note,
+      paidFrom: fromBank ? 'BANK' : 'OFFICE_CASH',
+      bankAccountId: fromBank ? bankId : null,
+      status: 'APPROVED',
+      decidedByUserId: userIds['admin']!,
+      decidedAt: ist(date, '11:00:00'),
+      createdByUserId: userIds['admin']!,
+    });
+    post('EXPENSE', { table: 'expense', id }, date, `${category}: ${note}`, [
+      {
+        account: expenseAccount[category],
+        direction: 'DEBIT',
+        amount: toMoney(amount),
+      },
+      {
+        account: fromBank ? bankLedger : officeCash,
+        direction: 'CREDIT',
+        amount: toMoney(amount),
+      },
+    ]);
+  };
+  const depositDate = workingDaysBack(20);
+  const salaryDate = workingDaysBack(10);
+  const sundriesDate = workingDaysBack(7);
+  const journalDate = workingDaysBack(4);
+
+  const transferRows: Prisma.BankTransferCreateManyInput[] = [
+    {
+      id: randomUUID(),
+      organizationId: orgId,
+      amount: '50000.00',
+      businessDate: toUtcMidnight(depositDate),
+      note: 'Deposit of office cash',
+      toBankAccountId: bankId,
+      createdByUserId: userIds['admin']!,
+    },
+  ];
+  post(
+    'BANK_TRANSFER',
+    { table: 'bank_transfer', id: transferRows[0]!.id! },
+    depositDate,
+    'Cash-in-hand → Seed Bank: Deposit of office cash',
+    [
+      { account: bankLedger, direction: 'DEBIT', amount: toMoney('50000') },
+      { account: officeCash, direction: 'CREDIT', amount: toMoney('50000') },
+    ],
+  );
+  officeExpense(depositDate, 'Rent', '6000.00', 'Office rent', false);
+  officeExpense(salaryDate, 'Salary', '15000.00', 'Staff salaries', true);
+  officeExpense(
+    sundriesDate,
+    'Stationery & printing',
+    '450.00',
+    'Receipt books',
+    false,
+  );
+
+  const incomeRows: Prisma.IncomeEntryCreateManyInput[] = [
+    {
+      id: randomUUID(),
+      organizationId: orgId,
+      amount: '125.50',
+      businessDate: toUtcMidnight(sundriesDate),
+      note: 'Interest on the bank balance',
+      bankAccountId: bankId,
+      createdByUserId: userIds['admin']!,
+    },
+  ];
+  post(
+    'OTHER_INCOME',
+    { table: 'income_entry', id: incomeRows[0]!.id! },
+    sundriesDate,
+    'Other income: Interest on the bank balance',
+    [
+      { account: bankLedger, direction: 'DEBIT', amount: toMoney('125.50') },
+      { account: otherIncome, direction: 'CREDIT', amount: toMoney('125.50') },
+    ],
+  );
+
+  const drawingRows: Prisma.DrawingEntryCreateManyInput[] = [
+    {
+      id: randomUUID(),
+      organizationId: orgId,
+      amount: '5000.00',
+      businessDate: toUtcMidnight(salaryDate),
+      note: 'Owner drawing',
+      bankAccountId: bankId,
+      createdByUserId: userIds['superadmin']!,
+    },
+  ];
+  post(
+    'DRAWINGS',
+    { table: 'drawing_entry', id: drawingRows[0]!.id! },
+    salaryDate,
+    'Drawing: Owner drawing',
+    [
+      { account: ownerDrawings, direction: 'DEBIT', amount: toMoney('5000') },
+      { account: bankLedger, direction: 'CREDIT', amount: toMoney('5000') },
+    ],
+  );
+
+  const journalRows: Prisma.JournalEntryCreateManyInput[] = [
+    {
+      id: randomUUID(),
+      organizationId: orgId,
+      businessDate: toUtcMidnight(journalDate),
+      note: 'Bank charges found on the passbook',
+      createdByUserId: userIds['superadmin']!,
+    },
+  ];
+  post(
+    'JOURNAL',
+    { table: 'journal_entry', id: journalRows[0]!.id! },
+    journalDate,
+    'Journal: Bank charges found on the passbook',
+    [
+      {
+        account: expenseAccount['Bank charges'],
+        direction: 'DEBIT',
+        amount: toMoney('118'),
+      },
+      { account: bankLedger, direction: 'CREDIT', amount: toMoney('118') },
+    ],
+  );
 
   // -------------------------------------------------------------------- write
   const inBatches = async <Row>(
@@ -912,6 +1208,26 @@ export async function seedDataset(
   await inBatches(denominationRows, (data) =>
     tx.cashDenomination.createMany({ data }),
   );
+  await tx.expenseCategory.createMany({
+    data: STARTER_EXPENSE_CATEGORIES.map((name) => ({
+      id: categoryIds[name],
+      organizationId: orgId,
+      name,
+    })),
+  });
+  await tx.bankAccount.create({
+    data: {
+      id: bankId,
+      organizationId: orgId,
+      name: 'Seed Bank',
+      last4: '4321',
+    },
+  });
+  await tx.expense.createMany({ data: expenseRows });
+  await tx.bankTransfer.createMany({ data: transferRows });
+  await tx.incomeEntry.createMany({ data: incomeRows });
+  await tx.drawingEntry.createMany({ data: drawingRows });
+  await tx.journalEntry.createMany({ data: journalRows });
   await tx.ledgerAccount.createMany({ data: ledgerAccounts });
   await inBatches(transactions, (data) =>
     tx.ledgerTransaction.createMany({ data }),
@@ -947,6 +1263,7 @@ export async function seedDataset(
       ledgerEntries: entries.length,
       dayCloses: dayCloseRows.length,
       cashHandovers: handoverRows.length,
+      expenses: expenseRows.length,
     },
     cases: {
       unevenCompletedAccountId: uneven.id,
@@ -957,6 +1274,7 @@ export async function seedDataset(
       concurrentCustomerIds: customers
         .slice(options.customers)
         .map((c) => c.id!),
+      fieldExpenseId: fieldExpense?.id ?? '',
     },
   };
 }

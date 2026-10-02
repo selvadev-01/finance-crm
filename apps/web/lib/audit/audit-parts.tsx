@@ -33,6 +33,14 @@ export const TABLE_LABEL: Record<AuditedTable, string> = {
   holiday: "Holiday",
   organization: "Business",
   setting: "Business setting",
+  capital_entry: "Capital",
+  expense_category: "Expense category",
+  bank_account: "Bank account",
+  expense: "Expense",
+  bank_transfer: "Bank transfer",
+  income_entry: "Other income",
+  drawing_entry: "Owner drawings",
+  journal_entry: "Journal entry",
   /** Not a table: the entity id names what was exported, `reports/line-wise`. */
   export: "Export",
 };

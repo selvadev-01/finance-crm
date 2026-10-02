@@ -128,6 +128,21 @@ export async function deleteTestRunData(prisma: PrismaClient): Promise<void> {
       OR: [{ code: taggedCode }, { organization: { name: taggedCode } }],
     },
   });
+  // M14's job history: a running worker records a row for every organization
+  // that exists while it runs, this run's included, and it restricts the
+  // organization's delete.
+  await prisma.jobStatus.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
+  // Books (ADR-0018): sign-up gives every organization the starter expense
+  // categories, and a test may add a bank. Tier 2 never posts, so no ledger
+  // account names them; one that did would fail here loudly, by design.
+  await prisma.expenseCategory.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
+  await prisma.bankAccount.deleteMany({
+    where: { organization: { name: taggedCode } },
+  });
   await prisma.organization.deleteMany({ where: { name: taggedCode } });
 }
 

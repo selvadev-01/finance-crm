@@ -35,8 +35,10 @@ export interface Fixture {
 /**
  * Builds a fresh organization through the real paths a business would use:
  * staff directly (there is no staff-creation endpoint yet, US-092), then
- * customers and **disbursed** accounts through the API as an Admin — so the
- * ledger is real. **Every row is permanent** (see playwright.config.ts).
+ * customers and **disbursed** accounts through the API as the Super Admin,
+ * who puts capital in first — only the Super Admin pays a loan out, and only
+ * from cash-in-hand (decided 2026-10-02) — so the ledger is real. **Every row
+ * is permanent** (see playwright.config.ts).
  *
  * One shortcut, recorded here: an account created today first expects a
  * collection tomorrow (BR-03), so nothing would be due on today's route. The
@@ -76,7 +78,7 @@ export default async function globalSetup(): Promise<void> {
   });
 
   const hash = await hashPassword(PASSWORD);
-  const staff = async (role: "ADMIN" | "JUNIOR") => {
+  const staff = async (role: "SUPER_ADMIN" | "JUNIOR") => {
     const userId = randomUUID();
     const email = `offline-e2e-${role.toLowerCase()}-${runId}@offline-e2e.rasi.test`;
     await prisma.user.create({
@@ -102,14 +104,13 @@ export default async function globalSetup(): Promise<void> {
         userId,
         staffCode: `OE2E-${role}-${runId}`,
         role,
-        phone: `+9170${runId.slice(-8)}${role === "ADMIN" ? "1" : "2"}`,
+        phone: `+9170${runId.slice(-8)}${role === "SUPER_ADMIN" ? "1" : "2"}`,
         joinedAt: new Date("2026-01-01"),
       },
     });
     return { email, userId, staffProfileId: profile.id };
   };
-  await staff("ADMIN");
-  const admin = { email: `offline-e2e-admin-${runId}@offline-e2e.rasi.test` };
+  const owner = await staff("SUPER_ADMIN");
   const junior = await staff("JUNIOR");
   await prisma.lineAssignment.create({
     data: {
@@ -121,7 +122,7 @@ export default async function globalSetup(): Promise<void> {
   });
 
   await waitFor(`${API}/health/live`);
-  const cookie = await signIn(admin.email);
+  const cookie = await signIn(owner.email);
   const call = async (path: string, body: object) => {
     const response = await fetch(`${API}${path}`, {
       method: "POST",
@@ -143,6 +144,12 @@ export default async function globalSetup(): Promise<void> {
       outstandingAmount: string;
     }>;
   };
+
+  // The six loans below invest 5,525; the owner puts in more than that.
+  await call("/api/capital", {
+    amount: "10000",
+    note: "Offline E2E: funds the loans",
+  });
 
   const accounts: Fixture["accounts"] = [];
   // One account per scenario, so each starts from an untouched balance.

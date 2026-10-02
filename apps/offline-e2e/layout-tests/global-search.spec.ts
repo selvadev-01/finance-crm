@@ -43,6 +43,7 @@ const account = {
   profitAmount: "1500.00",
   dailyAmount: "100.00",
   termDays: 100,
+  collectionFrequency: "DAILY" as const,
   disbursementDate: "2026-06-01",
   firstCollectionDate: "2026-06-02",
   targetCompletionDate: "2026-09-20",

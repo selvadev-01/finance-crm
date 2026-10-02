@@ -54,7 +54,7 @@ A first version gated sign-up behind a deployment setup key. The owner rejected 
 
 **Bad**
 
-- **The rate limit is per process and forgets on restart.** Running more than one API process needs a shared counter (a PostgreSQL table would do) before it is relied on
+- ~~**The rate limit is per process and forgets on restart.**~~ **Resolved 2026-09-24, as this ADR proposed:** the counter is the `rate_limit_window` table, one row per address, counted by a single upsert, so every API process shares it and a restart keeps it (`PostgresSignUpRateLimiter`). HTTP tests use an in-memory counter per app, so no run spends a real address's window
 - **No email verification.** Anyone can sign up with an address they do not own. The account is useless to them, but it blocks the real owner of that address from signing up. SMTP email now exists (M10, 2026-09-15) and sends the owner a welcome email; verifying the address before the organization is usable is the next layer, not yet built
 - **A slug is fixed once issued.** Renaming the business does not change the link, and there is no rename endpoint. Changing a slug later means deciding what happens to links already shared
 - **Slugs reveal business names.** Anyone who guesses a slug learns the name behind it, as with Slack workspace URLs. Nothing else is exposed

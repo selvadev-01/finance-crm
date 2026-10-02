@@ -72,7 +72,7 @@ export function NotificationPanel({ onNavigate }: { onNavigate: () => void }) {
           <div className="flex flex-col gap-[var(--stack-gap)]">
             <NotificationList
               notifications={list.rows}
-              linkable
+              links="follow"
               onChanged={list.reload}
               onFollowLink={onNavigate}
             />

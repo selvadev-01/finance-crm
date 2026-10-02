@@ -26,6 +26,7 @@ describe("the phone layout's navigation", () => {
     const more = mobileNav("SUPER_ADMIN").more.flatMap((group) => group.items);
     expect(hrefs(more)).toEqual([
       "/reports",
+      "/books",
       "/lines",
       "/sectors",
       "/team",
@@ -38,6 +39,7 @@ describe("the phone layout's navigation", () => {
       mobileNav("SENIOR").more.flatMap((group) => group.items),
     );
     expect(more).not.toContain("/sectors");
+    expect(more).not.toContain("/books");
     expect(more).toContain("/reports");
   });
 

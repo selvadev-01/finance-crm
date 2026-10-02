@@ -4,7 +4,10 @@ import { randomInt } from 'node:crypto';
 import type { Server } from 'node:http';
 import request from 'supertest';
 
-import { SignUpRateLimiter } from '../src/identity/sign-up-rate-limiter.js';
+import {
+  MemorySignUpRateLimiter,
+  SignUpRateLimiter,
+} from '../src/identity/sign-up-rate-limiter.js';
 import { createTestApp, recordedAudit } from './app.js';
 import {
   createTestPrismaClient,
@@ -136,7 +139,7 @@ describe('organization sign-up (US-006, e2e)', () => {
       overrides: [
         [
           SignUpRateLimiter,
-          new SignUpRateLimiter({ limit: 1, windowMs: 60_000 }),
+          new MemorySignUpRateLimiter({ limit: 1, windowMs: 60_000 }),
         ],
       ],
     });

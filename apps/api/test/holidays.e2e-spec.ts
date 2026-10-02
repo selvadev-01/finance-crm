@@ -268,7 +268,12 @@ describe('holidays (M06, US-093, e2e)', () => {
       const past = await as('ADMIN')
         .get('/api/holidays?period=past')
         .expect(200);
-      expect(past.body).toEqual({ data: [], nextCursor: null, hasMore: false });
+      expect(past.body).toEqual({
+        data: [],
+        nextCursor: null,
+        hasMore: false,
+        total: 0,
+      });
     });
 
     it('pages with a cursor', async () => {

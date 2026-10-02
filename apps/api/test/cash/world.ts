@@ -15,6 +15,7 @@ import { CollectionService } from '../../src/collections/collection.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
 import { testNotifications } from '../notifications/notices.js';
 
@@ -75,6 +76,8 @@ export async function cashWorld(tx: PrismaClient) {
     };
   };
   const admin = await person('ADMIN', null, null);
+  // Disbursing pays the owner's money out, so the owner does it.
+  const owner = await person('SUPER_ADMIN', null, null);
   const senior = await person('SENIOR', line.id, 'SENIOR');
   const junior = await person('JUNIOR', line.id, 'JUNIOR');
   const otherSenior = await person('SENIOR', otherLine.id, 'SENIOR');
@@ -101,7 +104,7 @@ export async function cashWorld(tx: PrismaClient) {
     notices,
   );
   const devices = new DeviceSyncService(database);
-  const accounts = new AccountService(database, audit, ledger);
+  const accounts = new AccountService(database, audit, ledger, notices);
   const collections = new CollectionService(
     database,
     audit,
@@ -126,12 +129,14 @@ export async function cashWorld(tx: PrismaClient) {
         linePeriods: openLinePeriod(line.id),
       },
     });
+    const invested = toMoney(dailyAmount).times(17).toFixed(2);
+    await fundOfficeCash(database, owner, invested, SATURDAY);
     return accounts.create(
-      admin,
+      owner,
       {
         customerId: customer.id,
         accountAmount: toMoney(dailyAmount).times(20).toFixed(2),
-        investedAmount: toMoney(dailyAmount).times(17).toFixed(2),
+        investedAmount: invested,
         dailyAmount,
         termDays: 20,
         collectionFrequency: 'DAILY',
@@ -189,6 +194,8 @@ export async function cashWorld(tx: PrismaClient) {
     line,
     otherLine,
     admin,
+    owner,
+    database,
     senior,
     junior,
     otherSenior,

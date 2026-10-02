@@ -146,6 +146,16 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
 
   | `ACCOUNT_OVERDUE` | `WARNING` | Senior of the line — one summary per line per run, not one per account | the nightly overdue job (M14, BR-05) |
 
+  | `ACCOUNT_DISBURSED` | `INFORMATION` | Senior of the customer's line today — never the Admin who disbursed | disbursement, and a mid-term account's entry (US-032, US-030a, M05) |
+
+  | `JOB_FAILED` | `ALERT` | Admins and Super Admins of the organization whose scheduled job was dead-lettered; links home, as there is no job screen yet | M14 (migration `job_failed_event`, 2026-09-24) |
+
+  | `EXPENSE_REQUESTED` | `WARNING` | A Junior's: the line's Senior and the Admins; a Senior's own: the Admins — never the spender; links to `/cash#field-expenses` | a field expense asked for (ADR-0018, migration `expense_notification_events`, 2026-10-01) |
+
+  | `EXPENSE_DECIDED` | `SUCCESS` approved / `WARNING` rejected | The spender, with a rejection's reason; links to `/route#expense` | a field expense approved or rejected (ADR-0018) |
+
+  **Decided 2026-09-24 with the business** (migration `account_disbursed_event`): a disbursed account is a new visit on the round, so the Senior hears the instalment and the day it starts — "₹150.00 a day from 05 Jan 2026". A mid-term account says "running account" and gives its first unpaid slot, not its original first day. The recipient is the Senior of the customer's **current** line, which a transfer can make different from the line the account was opened on. Links to the account.
+
   **Decided 2026-09-20 with the business:** an overdue account is a `WARNING`, not an `ALERT` — going overdue is expected on a slow account, and the loud events stay the low and no-payment visits of a single day. The notice links to the overdue report filtered to that line (US-087), which is where the list belongs.
 
   **Still not raised, both by decision:** a day closed with no discrepancy (the events cover discrepancies only), and anything about staff being created, suspended or removed — the audit log already records who did what, and a notification would tell other Admins about routine administration (decided 2026-09-20).
@@ -158,7 +168,9 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
 
 **Tests.** Tier 1 `test/notifications/notifications.spec.ts`: each Senior alert and who does not receive it, the missed summary, reopen, the three cash events, correction approvers, preferences, delivery rows per device, dispatch with sent / retry / gone, and the centre; assignment and reconciliation notices in their own specs; three constraint specs. HTTP `test/notifications.e2e-spec.ts` and the RBAC matrix cover all nine routes; Tier 2 writes only notifications, devices and preferences, which cascade with the run's staff.
 
-**Not built:** real delivery through Web Push or FCM (no keys configured; providers are proven with fake transports), `deactivate-stale-subscriptions`, FCM registration from a native client, a dead-letter alert.
+**Web Push is live in development** (2026-09-24): the `.env` carries VAPID keys and `PUSH_PROVIDER=WEB_PUSH`, and `pnpm --filter api push:test <email>` (after `pnpm build`) sends one test push to each browser that person has registered, through the real provider, writing nothing. Its first run was accepted by Microsoft's push service for a Windows browser.
+
+**Not built:** FCM delivery, which waits for a Firebase project (decided 2026-09-24: later), and FCM registration from a native client. (`deactivate-stale-subscriptions` and the dead-letter alert were built on 2026-09-24 — see [M14](M14-jobs.md#as-built).)
 
 ### As built — email (decided 2026-09-15)
 

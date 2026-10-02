@@ -1,4 +1,5 @@
 import type { InvestmentReport } from '@repo/contracts';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { openLinePeriod } from '../database.js';
 import type { PrismaClient } from '@repo/db';
 import { addCalendarDays, parseCalendarDate, toMoney } from '@repo/domain';
@@ -185,8 +186,9 @@ describe('InvestmentReportService (US-085)', () => {
         linePeriods: openLinePeriod(w.lineC.id),
       },
     });
+    await fundOfficeCash(w.database, w.owner, '8500.00', SATURDAY);
     return w.accounts.create(
-      w.admin,
+      w.owner,
       {
         customerId: customer.id,
         accountAmount: '9999.00',

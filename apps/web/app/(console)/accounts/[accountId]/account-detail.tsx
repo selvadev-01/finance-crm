@@ -3,11 +3,13 @@
 import {
   type Account,
   accountContract,
+  booksMoneyContract,
   type ScheduleSlotView,
 } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
 import {
   Button,
+  buttonClass,
   DataView,
   Dialog,
   DialogActions,
@@ -37,7 +39,9 @@ import {
 } from "../../../../components/status-badge";
 import { apiWrite } from "../../../../lib/api-write";
 import { CADENCE } from "../../../../lib/cadence";
-import { canManageOrganisation } from "../../../../lib/roles";
+import { isNegativeMoney, subtractMoney } from "../../../../lib/money";
+import { signedAmount } from "../../books/visuals";
+import { canDisburse, canManageOrganisation } from "../../../../lib/roles";
 import { CloseAccount } from "./close-account";
 import { CorrectTerms } from "./correct-terms";
 import { useApiQuery } from "../../../../lib/use-api-query";
@@ -63,21 +67,26 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
   const record = account.data;
   const today = toBusinessDate(new Date());
   const canClose = me.role === "SUPER_ADMIN" && record.status === "ACTIVE";
-  const canDisburse =
-    canManageOrganisation(me.role) && record.status === "PENDING";
+  const pending = canManageOrganisation(me.role) && record.status === "PENDING";
+  // Paying the money out is the Super Admin's alone (decided 2026-10-02).
+  const mayDisburse = pending && canDisburse(me.role);
 
   const actions = [
-    canDisburse && record.disbursementDate > today ? (
+    pending && record.disbursementDate > today ? (
       <p key="waiting" className="text-body text-ink-muted">
         Can be disbursed from {formatBusinessDate(record.disbursementDate)}
       </p>
-    ) : canDisburse ? (
+    ) : mayDisburse ? (
       <Button key="disburse" tone="primary" onClick={() => setConfirming(true)}>
         Disburse
       </Button>
+    ) : pending ? (
+      <p key="owner" className="text-body text-ink-muted">
+        Waiting for the Super Admin to disburse
+      </p>
     ) : null,
     // US-030: terms are correctable only before disbursement.
-    canDisburse ? (
+    pending ? (
       <Button key="correct" onClick={() => setCorrecting(true)}>
         Correct terms
       </Button>
@@ -285,6 +294,16 @@ function DisburseDialog({
   const [pending, setPending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const redated = account.disbursementDate < today;
+  // The loan is paid from cash-in-hand (decided 2026-10-02): show what is
+  // there now and after, and stop here when it is not enough.
+  const books = useApiQuery(booksMoneyContract.getBooksOverview, {
+    query: {},
+  });
+  const invested = account.investedAmount;
+  const held = books.status === "ready" ? books.data.officeCash : null;
+  const after =
+    held !== null && invested ? subtractMoney(held, invested) : null;
+  const short = after !== null && isNegativeMoney(after);
 
   async function disburse() {
     setPending(true);
@@ -306,6 +325,46 @@ function DisburseDialog({
       title={`Disburse ${account.accountCode}`}
       description={`${account.investedAmount ? formatCurrency(account.investedAmount) : "The invested amount"} is handed to ${account.customerName}, who repays ${formatCurrency(account.accountAmount)}. The amounts can no longer be changed.`}
     >
+      {held !== null && after !== null ? (
+        <dl
+          aria-label="Cash-in-hand"
+          className="grid grid-cols-2 gap-3 rounded-control bg-surface-sunken px-4 py-3"
+        >
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-caption text-ink-muted">Cash-in-hand now</dt>
+            <dd className="text-heading text-ink" data-numeric>
+              {signedAmount(held)}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-caption text-ink-muted">After this loan</dt>
+            <dd
+              className={
+                short ? "text-heading text-critical" : "text-heading text-ink"
+              }
+              data-numeric
+            >
+              {signedAmount(after)}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
+      {short ? (
+        <FormMessage
+          tone="critical"
+          action={
+            <Link
+              href="/books/money?action=capital"
+              className={buttonClass("secondary", undefined, "sm")}
+            >
+              Add capital
+            </Link>
+          }
+        >
+          Not enough cash-in-hand to pay out {formatCurrency(invested!)}. Add
+          capital first.
+        </FormMessage>
+      ) : null}
       {redated ? (
         <FormMessage tone="info">
           It was planned for {formatBusinessDate(account.disbursementDate)}. It
@@ -321,7 +380,7 @@ function DisburseDialog({
         <Button
           tone="primary"
           onClick={() => void disburse()}
-          disabled={pending}
+          disabled={pending || short}
         >
           {pending ? "Disbursing…" : `Disburse ${account.accountCode}`}
         </Button>

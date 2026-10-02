@@ -40,6 +40,23 @@ export const SETTINGS_TABS: SettingsTab[] = [
     label: "Refused attempts",
     shownTo: canManageOrganisation,
   },
+  // Books (ADR-0018): Admins read them; the Super Admin manages them.
+  {
+    href: "/settings/expense-categories",
+    label: "Expense heads",
+    shownTo: canManageOrganisation,
+  },
+  {
+    href: "/settings/bank-accounts",
+    label: "Bank accounts",
+    shownTo: canManageOrganisation,
+  },
+  // M14: whether the scheduled jobs ran. Admin and above.
+  {
+    href: "/settings/jobs",
+    label: "Scheduled jobs",
+    shownTo: canManageOrganisation,
+  },
 ];
 
 /** The tabs this role may open, in order. */

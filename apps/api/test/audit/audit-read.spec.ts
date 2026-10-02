@@ -73,7 +73,8 @@ describe('audit log and account history (M13, US-090, US-091)', () => {
           ),
         ).toMatchObject({
           entityId: account.id,
-          actor: { userId: w.admin.userId },
+          // Created and paid out by the owner (decided 2026-10-02).
+          actor: { userId: w.owner.userId },
         });
       });
     });

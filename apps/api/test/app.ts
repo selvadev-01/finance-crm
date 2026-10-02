@@ -18,6 +18,10 @@ import {
   type AppConfig,
   loadConfig,
 } from '../src/platform/config/config.js';
+import {
+  MemorySignUpRateLimiter,
+  SignUpRateLimiter,
+} from '../src/identity/sign-up-rate-limiter.js';
 import { configureApp } from '../src/platform/configure-app.js';
 import { LOG_DESTINATION } from '../src/platform/logging/logger.options.js';
 
@@ -115,7 +119,12 @@ export async function createTestApp(
     .overrideProvider(AuditWriter)
     .useClass(RecordingAuditWriter)
     .overrideProvider(SecurityEventRecorder)
-    .useClass(RecordingSecurityEventRecorder);
+    .useClass(RecordingSecurityEventRecorder)
+    // The real limiter counts in `rate_limit_window`, keyed by address: every
+    // HTTP sign-up would spend 127.0.0.1's real window in the shared schema.
+    // Each app gets its own in-memory counter; the table is proven in Tier 1.
+    .overrideProvider(SignUpRateLimiter)
+    .useValue(new MemorySignUpRateLimiter());
   if (options.logDestination) {
     builder = builder
       .overrideProvider(LOG_DESTINATION)

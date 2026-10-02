@@ -66,6 +66,7 @@ Collections (tab)               J-03   what was recorded today, and its sync sta
 ├─ Sync                         J-04   also from the sync chip on every screen
 └─ Ask for a correction         J-06   needs signal
 Cash (tab)                      J-05   count notes, hand over to the Senior; needs signal
+└─ Field expense                J-11   spent from the cash, for approval; needs signal (ADR-0018)
 Profile (tab)                   J-08   who and which line, this phone, password, sign out
 Notifications                   J-07   the bell on every screen; needs signal
 ```
@@ -181,6 +182,7 @@ The Junior's bell opens `/route#notifications`, a view of the one cached page, w
 /route#collect/:customerId        entry (J-02, S-02), every account of that customer
 /route#sync                       Sync (J-04, S-03)
 /route#correct                    ask for a correction (J-06, US-044, needs signal)
+/route#expense                    a field expense (J-11, US-102, needs signal)
 /route#notifications              notifications (J-07, S-21, needs signal)
 
 /cash                             handovers to acknowledge, cash for the office, day close picker

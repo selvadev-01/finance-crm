@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@repo/db';
+import { parseCalendarDate } from '@repo/domain';
 import type { PushProvider, PushResult } from '@repo/notifications';
 import type { PinoLogger } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
@@ -15,8 +16,8 @@ import { NotificationService } from '../../src/notifications/notification.servic
 import { PushDispatchService } from '../../src/notifications/push-dispatch.service.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import { Database } from '../../src/platform/database/database.js';
-import { at, cashWorld, counts, MONDAY } from '../cash/world.js';
-import { createTestPrismaClient } from '../database.js';
+import { at, cashWorld, counts, MONDAY, SATURDAY } from '../cash/world.js';
+import { createTestPrismaClient, openLinePeriod } from '../database.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -35,9 +36,21 @@ describe('notifications (M10, US-070…US-073)', () => {
     await prisma.$disconnect();
   });
 
-  const inbox = (tx: PrismaClient, userId: string) =>
+  /** Everything a user was told, oldest first. */
+  const everything = (tx: PrismaClient, userId: string) =>
     tx.notification.findMany({
       where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+  /**
+   * What a user was told after the world was set up. `w.account` disburses,
+   * which tells the Senior (US-032) — proven on its own below, and noise in
+   * every test about what happens next.
+   */
+  const inbox = (tx: PrismaClient, userId: string) =>
+    tx.notification.findMany({
+      where: { userId, eventType: { not: 'ACCOUNT_DISBURSED' } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -236,6 +249,72 @@ describe('notifications (M10, US-070…US-073)', () => {
         expect(
           (await inbox(tx, w.admin.userId)).map((n) => n.eventType),
         ).not.toContain('NEW_CUSTOMER');
+      });
+    });
+
+    it('US-032: disbursing tells the line’s Senior what to collect and from when, and never the Admin who did it', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await cashWorld(tx);
+        const account = await w.account('150', 'Guru');
+
+        const senior = await everything(tx, w.senior.userId);
+        expect(senior).toHaveLength(1);
+        expect(senior[0]).toMatchObject({
+          eventType: 'ACCOUNT_DISBURSED',
+          category: 'INFORMATION',
+          title: `Account disbursed · ${account.accountCode}`,
+          payload: { url: `/accounts/${account.id}` },
+        });
+        expect(senior[0]!.body).toMatch(
+          /disbursed Guru's account: ₹150\.00 a day from 05 Jan 2026$/,
+        );
+        expect(await everything(tx, w.admin.userId)).toEqual([]);
+        expect(await everything(tx, w.junior.userId)).toEqual([]);
+        expect(await everything(tx, w.otherSenior.userId)).toEqual([]);
+      });
+    });
+
+    it('US-030a: a mid-term account tells the Senior the day it joins the round, not its original first day', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await cashWorld(tx);
+        const customer = await tx.customer.create({
+          data: {
+            organizationId: w.organizationId,
+            customerCode: `C-${randomUUID()}`,
+            name: 'Hema',
+            mobile: '+919800000002',
+            address: '3 Temple Street',
+            sectorId: w.line.sectorId,
+            lineId: w.line.id,
+            linePeriods: openLinePeriod(w.line.id),
+          },
+        });
+        // Disbursed Saturday 3 January, entered Saturday 10 January with the
+        // first three slots paid: the tail starts Monday 12 January.
+        const account = await w.accounts.create(
+          w.admin,
+          {
+            customerId: customer.id,
+            accountAmount: '2000.00',
+            investedAmount: '1700.00',
+            dailyAmount: '100.00',
+            termDays: 20,
+            collectionFrequency: 'DAILY',
+            disbursementDate: SATURDAY,
+            collectedToDate: '300.00',
+            disburse: false,
+          },
+          parseCalendarDate('2026-01-10'),
+        );
+
+        const [notice] = await everything(tx, w.senior.userId);
+        expect(notice).toMatchObject({
+          eventType: 'ACCOUNT_DISBURSED',
+          title: `Running account added · ${account.accountCode}`,
+        });
+        expect(notice!.body).toMatch(
+          /entered Hema's running account: ₹100\.00 a day from 12 Jan 2026$/,
+        );
       });
     });
 
@@ -612,17 +691,23 @@ describe('notifications (M10, US-070…US-073)', () => {
   it("US-070 centre: newest first with the unread count; marking read is the recipient's own; another user's is 404", async () => {
     await withRollback(prisma, async (tx) => {
       const w = await cashWorld(tx);
-      await w.collect((await w.account('100', 'First')).id, '80');
-      await w.collect((await w.account('100', 'Second')).id, '0');
+      const first = await w.account('100', 'First');
+      const second = await w.account('100', 'Second');
       const centre = new NotificationCentreService(new Database(tx), {
         PUSH_PROVIDER: 'NONE',
       } as AppConfig);
+      // The Senior has read the two disbursements (US-032) before the day.
+      await centre.markAllRead(w.senior);
+      await w.collect(first.id, '80');
+      await w.collect(second.id, '0');
 
       const page = await centre.list(w.senior, { limit: 50 });
       expect(page.unreadCount).toBe(2);
       expect(page.data.map((n) => n.eventType)).toEqual([
         'NO_PAYMENT_COLLECTION',
         'LOW_COLLECTION',
+        'ACCOUNT_DISBURSED',
+        'ACCOUNT_DISBURSED',
       ]);
       expect(page.data[0]!.link).toMatchObject({ entityType: 'collection' });
 

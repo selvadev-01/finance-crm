@@ -28,7 +28,7 @@ export const PERMISSIONS = {
   // Accounts (M05)
   'account.view': ALL,
   'account.create': ADMINS,
-  'account.disburse': ADMINS,
+  'account.disburse': SUPER_ADMIN,
   'account.updateTerms': ADMINS,
   'account.close': SUPER_ADMIN,
   'account.viewSchedule': ALL,
@@ -48,6 +48,20 @@ export const PERMISSIONS = {
   'handover.acknowledge': ADMINS_AND_SENIOR,
   'handover.dispute': ALL,
   'handover.recordDenominations': ['SENIOR', 'JUNIOR'],
+  // US-032: money the owner puts in funds office cash — the owner's act alone.
+  'capital.add': SUPER_ADMIN,
+
+  // Books (ADR-0018): the business's own money beside the loan book.
+  'expense.view': ALL,
+  'expense.record': ADMINS,
+  'expense.requestField': ['SENIOR', 'JUNIOR'],
+  'expense.approve': ADMINS_AND_SENIOR,
+  'expenseCategory.manage': SUPER_ADMIN,
+  'bank.manage': SUPER_ADMIN,
+  'bank.transfer': ADMINS,
+  'income.record': ADMINS,
+  'drawings.record': SUPER_ADMIN,
+  'journal.post': SUPER_ADMIN,
 
   // Organisation (M03)
   'organisation.view': ALL,
@@ -82,6 +96,8 @@ export const PERMISSIONS = {
   'staff.resetPassword': ADMINS,
   'staff.delete': ADMINS,
   'audit.view': ADMINS,
+  // M14: whether the scheduled jobs ran. Read-only; there is no replay.
+  'job.view': ADMINS,
   // Reading the settings shows how the business behaves; changing one alters
   // it for everyone (M15). Both are the owner's alone.
   'settings.view': SUPER_ADMIN,

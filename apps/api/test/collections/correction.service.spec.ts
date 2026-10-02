@@ -16,6 +16,7 @@ import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
 import { createTestPrismaClient } from '../database.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
 import { testNotifications } from '../notifications/notices.js';
 import { withRollback } from '../with-rollback.js';
@@ -82,7 +83,12 @@ describe('CorrectionService (US-044, BR-14)', () => {
       new HandoverViews(),
       notices,
     );
-    const accounts = new AccountService(database, audit, ledger);
+    const accounts = new AccountService(
+      database,
+      audit,
+      ledger,
+      testNotifications(database).notices,
+    );
     const collections = new CollectionService(
       database,
       audit,
@@ -119,8 +125,11 @@ describe('CorrectionService (US-044, BR-14)', () => {
           linePeriods: openLinePeriod(line.id),
         },
       });
+      // The owner funds the loan and pays it out (decided 2026-10-02).
+      const owner: RequestContext = { ...admin, role: 'SUPER_ADMIN' };
+      await fundOfficeCash(database, owner, investedAmount, SATURDAY);
       return accounts.create(
-        admin,
+        owner,
         {
           customerId: customer.id,
           accountAmount,

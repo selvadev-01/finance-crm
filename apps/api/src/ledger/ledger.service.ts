@@ -13,7 +13,9 @@ export type OrganizationAccountType =
   | 'CAPITAL'
   | 'UNEARNED_PROFIT'
   | 'EARNED_PROFIT'
-  | 'WRITE_OFF_LOSS';
+  | 'WRITE_OFF_LOSS'
+  | 'OTHER_INCOME'
+  | 'OWNER_DRAWINGS';
 
 const NORMAL_BALANCE: Record<LedgerAccountType, 'DEBIT' | 'CREDIT'> = {
   CASH_IN_HAND: 'DEBIT',
@@ -24,6 +26,12 @@ const NORMAL_BALANCE: Record<LedgerAccountType, 'DEBIT' | 'CREDIT'> = {
   EARNED_PROFIT: 'CREDIT',
   // An expense: what a written-off account cost the business (US-035).
   WRITE_OFF_LOSS: 'DEBIT',
+  // Books (ADR-0018): what is spent, and the bank, are debit-normal like cash;
+  // income is credit-normal like profit; drawings reduce equity, so debit.
+  EXPENSE: 'DEBIT',
+  BANK: 'DEBIT',
+  OTHER_INCOME: 'CREDIT',
+  OWNER_DRAWINGS: 'DEBIT',
 };
 
 export interface PostingLine {
@@ -35,7 +43,17 @@ export interface PostingLine {
 
 export interface Posting {
   transactionType:
-    'DISBURSEMENT' | 'COLLECTION' | 'HANDOVER' | 'ADJUSTMENT' | 'WRITE_OFF';
+    | 'DISBURSEMENT'
+    | 'COLLECTION'
+    | 'HANDOVER'
+    | 'ADJUSTMENT'
+    | 'WRITE_OFF'
+    | 'CAPITAL'
+    | 'EXPENSE'
+    | 'BANK_TRANSFER'
+    | 'DRAWINGS'
+    | 'OTHER_INCOME'
+    | 'JOURNAL';
   source: { table: string; id: string };
   businessDate: CalendarDate;
   eventAt: Date;
@@ -73,7 +91,7 @@ export class LedgerService {
       VALUES (${randomUUID()}, ${organizationId},
               ${type}::"LedgerAccountType", ${NORMAL_BALANCE[type]}::"Direction")
       ON CONFLICT ("organizationId", "accountType")
-        WHERE "accountType" = ANY (ARRAY['CASH_AT_OFFICE'::"LedgerAccountType", 'CAPITAL'::"LedgerAccountType", 'UNEARNED_PROFIT'::"LedgerAccountType", 'EARNED_PROFIT'::"LedgerAccountType", 'WRITE_OFF_LOSS'::"LedgerAccountType"])
+        WHERE "accountType" = ANY (ARRAY['CASH_AT_OFFICE'::"LedgerAccountType", 'CAPITAL'::"LedgerAccountType", 'UNEARNED_PROFIT'::"LedgerAccountType", 'EARNED_PROFIT'::"LedgerAccountType", 'WRITE_OFF_LOSS'::"LedgerAccountType", 'OTHER_INCOME'::"LedgerAccountType", 'OWNER_DRAWINGS'::"LedgerAccountType"])
       DO NOTHING`;
     const account = await tx.ledgerAccount.findFirstOrThrow({
       where: { organizationId, accountType: type },
@@ -96,6 +114,50 @@ export class LedgerService {
       DO NOTHING`;
     const account = await tx.ledgerAccount.findFirstOrThrow({
       where: { accountType: 'CASH_IN_HAND', ownerUserId: userId },
+      select: { id: true },
+    });
+    return account.id;
+  }
+
+  /**
+   * An expense category's `EXPENSE` account, created on first use —
+   * conflict-safe against `ledger_account_expense_category_key` (ADR-0018).
+   */
+  async expenseAccount(
+    organizationId: string,
+    expenseCategoryId: string,
+  ): Promise<string> {
+    const tx = this.database.client;
+    await tx.$executeRaw`
+      INSERT INTO ledger_account (id, "organizationId", "accountType", "expenseCategoryId", "normalBalance")
+      VALUES (${randomUUID()}, ${organizationId}, 'EXPENSE'::"LedgerAccountType",
+              ${expenseCategoryId}, 'DEBIT'::"Direction")
+      ON CONFLICT ("expenseCategoryId") WHERE "accountType" = 'EXPENSE'::"LedgerAccountType"
+      DO NOTHING`;
+    const account = await tx.ledgerAccount.findFirstOrThrow({
+      where: { accountType: 'EXPENSE', expenseCategoryId },
+      select: { id: true },
+    });
+    return account.id;
+  }
+
+  /**
+   * A bank account's `BANK` ledger account, created on first use —
+   * conflict-safe against `ledger_account_bank_account_key` (ADR-0018).
+   */
+  async bankAccount(
+    organizationId: string,
+    bankAccountId: string,
+  ): Promise<string> {
+    const tx = this.database.client;
+    await tx.$executeRaw`
+      INSERT INTO ledger_account (id, "organizationId", "accountType", "bankAccountId", "normalBalance")
+      VALUES (${randomUUID()}, ${organizationId}, 'BANK'::"LedgerAccountType",
+              ${bankAccountId}, 'DEBIT'::"Direction")
+      ON CONFLICT ("bankAccountId") WHERE "accountType" = 'BANK'::"LedgerAccountType"
+      DO NOTHING`;
+    const account = await tx.ledgerAccount.findFirstOrThrow({
+      where: { accountType: 'BANK', bankAccountId },
       select: { id: true },
     });
     return account.id;

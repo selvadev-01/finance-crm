@@ -59,6 +59,8 @@ const configSchema = z
     JOBS_RECONCILE_CRON: z.string().min(9).default('0 1 * * *'),
     JOBS_OVERDUE_CRON: z.string().min(9).default('30 0 * * *'),
     JOBS_PURGE_KEYS_CRON: z.string().min(9).default('0 2 * * *'),
+    /** Weekly, Sunday 03:00 — no collections run on a Sunday (BR-02). */
+    JOBS_STALE_SUBSCRIPTIONS_CRON: z.string().min(9).default('0 3 * * 0'),
     /**
      * notifications.md: which push providers deliver. `NONE` (the development
      * default) still writes every in-app notification.

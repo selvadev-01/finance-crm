@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CloudSlash,
   Hourglass,
+  Receipt,
   Wallet,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
@@ -102,6 +103,16 @@ export function HandoverScreen({
         </Banner>
       ) : null}
       {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
+
+      {/* ADR-0018: petrol and the like, paid from today's cash with approval. */}
+      <Button
+        tone="secondary"
+        onClick={() => openView("#expense")}
+        className="h-12 w-full rounded-pill text-base font-semibold"
+      >
+        <Receipt aria-hidden size={20} weight="regular" />
+        Spent from the cash? Record a field expense
+      </Button>
 
       {position === null && !problem ? (
         <div
@@ -230,10 +241,15 @@ function HandoverCard({
           <p className="text-sm text-ink-muted">
             To {item.receiver?.name ?? "no Senior assigned"}
           </p>
+          {item.expenses !== "0.00" ? (
+            <p className="text-sm text-ink-muted" data-numeric>
+              {formatCurrency(item.expenses)} approved expenses taken off
+            </p>
+          ) : null}
         </div>
         <p className="flex shrink-0 flex-col items-end" data-numeric>
           <span className="text-2xs font-semibold tracking-[0.08em] text-ink-muted uppercase">
-            Recorded
+            To hand over
           </span>{" "}
           <span className="text-xl font-semibold text-ink">
             {formatCurrency(item.toHandOver)}

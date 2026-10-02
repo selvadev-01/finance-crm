@@ -44,6 +44,7 @@ const loan = (
   profitAmount: "2000.00",
   dailyAmount: "400.00",
   termDays: 30,
+  collectionFrequency: "DAILY",
   disbursementDate: "2026-08-20",
   firstCollectionDate: "2026-08-21",
   targetCompletionDate: "2026-09-27",

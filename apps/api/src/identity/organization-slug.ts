@@ -22,6 +22,7 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // folder check in the spec cannot see.
   'apple-icon',
   'pwa-icon',
+  'books',
   'cash',
   'change-password',
   'collections',

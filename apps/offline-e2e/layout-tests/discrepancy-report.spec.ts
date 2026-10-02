@@ -38,6 +38,7 @@ const short = {
     handedOver: "4300.00",
     acknowledged: "4300.00",
     awaiting: "0.00",
+    expenses: "0.00",
     difference: "-20.00",
     state: "SHORT" as const,
     handovers: [
@@ -70,6 +71,7 @@ const tallied = {
     handedOver: "3000.00",
     acknowledged: "3000.00",
     awaiting: "0.00",
+    expenses: "0.00",
     difference: "0.00",
     state: "TALLIED" as const,
     handovers: [],
@@ -93,6 +95,7 @@ const report = {
       handedOver: "7300.00",
       acknowledged: "7300.00",
       awaiting: "0.00",
+      expenses: "0.00",
       short: "20.00",
       over: "0.00",
       net: "-20.00",
@@ -201,4 +204,91 @@ test.describe("at every width", () => {
       expect(overflows, `the report scrolls sideways at ${name}`).toBe(false);
     });
   }
+});
+
+/**
+ * The Export menu (M12), on this report as the example of all ten screens
+ * that carry it — one component, `components/export-menu.tsx`. The file route
+ * is answered here with bytes and a filename; building the files is proven at
+ * the API (`apps/api/test/exports/`).
+ */
+test.describe("the Export menu (M12)", () => {
+  const FILES = [
+    ["Excel (.xlsx)", "xlsx", "discrepancies-2026-09-14-to-2026-09-20.xlsx"],
+    ["CSV", "csv", "discrepancies-2026-09-14-to-2026-09-20.csv"],
+    ["PDF", "pdf", "discrepancies-2026-09-14-to-2026-09-20.pdf"],
+  ] as const;
+
+  for (const [item, format, filename] of FILES) {
+    test(`${item} asks for this view's rows as ${format} and saves the file under the server's name`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await signedInAs(page, "ADMIN", answers);
+      const asked: URL[] = [];
+      await page.route(
+        "**/api/exports/reports/discrepancy**",
+        async (route) => {
+          asked.push(new URL(route.request().url()));
+          await route.fulfill({
+            status: 200,
+            body: "file bytes",
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "Content-Disposition": `attachment; filename="${filename}"`,
+            },
+          });
+        },
+      );
+      await page.goto(PATH);
+
+      await page.getByRole("button", { name: "Export" }).click();
+      const download = page.waitForEvent("download");
+      await page.getByRole("menuitem", { name: item }).click();
+
+      expect((await download).suggestedFilename()).toBe(filename);
+      expect(asked).toHaveLength(1);
+      expect(asked[0]!.searchParams.get("format")).toBe(format);
+      expect(asked[0]!.searchParams.get("from")).toBe("2026-09-14");
+      expect(asked[0]!.searchParams.get("to")).toBe("2026-09-20");
+    });
+  }
+
+  test("a refused export says so instead of saving anything", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signedInAs(page, "ADMIN", answers);
+    await page.route("**/api/exports/reports/discrepancy**", (route) =>
+      route.fulfill({
+        status: 403,
+        json: {
+          code: "PERMISSION_DENIED",
+          message: "You do not have permission to do that.",
+          correlationId: "req_test",
+        },
+      }),
+    );
+    let downloads = 0;
+    page.on("download", () => {
+      downloads += 1;
+    });
+    await page.goto(PATH);
+
+    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("menuitem", { name: "PDF" }).click();
+
+    await expect(page.getByText("Couldn’t export").first()).toBeVisible();
+    expect(downloads).toBe(0);
+  });
+
+  test("the menu is off while the range is invalid, as the API would refuse it", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signedInAs(page, "ADMIN", answers);
+    await page.goto("/reports/discrepancy?from=2026-09-20&to=2026-09-14");
+
+    await expect(page.getByRole("button", { name: "Export" })).toBeDisabled();
+  });
 });

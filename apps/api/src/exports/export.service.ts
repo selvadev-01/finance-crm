@@ -27,7 +27,12 @@ export type ExportName =
   | 'dashboards/overview'
   | 'dashboards/operations'
   | 'dashboards/sectors'
-  | 'dashboards/line';
+  | 'dashboards/line'
+  | 'ledger/trial-balance'
+  | 'ledger/account-statement'
+  | 'books/profit-and-loss'
+  | 'books/balance-sheet'
+  | 'books/cash-book';
 
 export interface ExportRequest {
   name: ExportName;

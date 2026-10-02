@@ -61,12 +61,14 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | -------------------------------- | :---------: | :---: | :------: | :----------: |
 | List / view                      |      ✓      |   ✓   | own line | own assigned |
 | Create                           |      ✓      |   ✓   |    —     |      —       |
-| Disburse                         |      ✓      |   ✓   |    —     |      —       |
+| Disburse                         |      ✓      |   —   |    —     |      —       |
 | Update terms (pre-disbursement)  |      ✓      |   ✓   |    —     |      —       |
 | Mark `DEFAULTED` / `WRITTEN_OFF` |      ✓      |   —   |    —     |      —       |
 | View schedule                    |      ✓      |   ✓   | own line | own assigned |
 
 > Amounts are immutable after disbursement (BR-01) — no role may change them. Writing off is Super Admin only: it destroys receivable value and must not be a routine operational action.
+>
+> **Disbursing is Super Admin only (decided 2026-10-02):** it pays the owner's money out, so an Admin creates the customer and the account as `PENDING` and the Super Admin releases it — from the account page or by "Save and disburse", which the API refuses an Admin with `403 PERMISSION_DENIED`. A day-one disbursement is refused with `422 INSUFFICIENT_CASH_IN_HAND` when office cash holds less than the invested amount; the owner adds capital first. A mid-term account (US-030a) is history being entered, so an Admin still creates one and it is not checked against office cash.
 
 ### Collections (M07)
 
@@ -93,10 +95,32 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Acknowledge handover |      ✓      |   ✓   | own line |    —     |
 | Dispute handover     |      ✓      |   ✓   | own line | own cash |
 | Record denominations |      —      |   —   |    ✓     |    ✓     |
+| Add capital          |      ✓      |   —   |    —     |    —     |
 
+> **Adding capital is Super Admin only** (US-032, decided 2026-09-24): it records money the owner put into the business, debiting office cash and crediting `CAPITAL`, and entries are never edited. Reading the entries is "Ledger entries" below, Admin and above.
+>
 > Manual reopen is Admin-and-above: it unlocks a settled day's figures. Automatic reopening by a late offline sync (BR-16a) is a system action requiring no permission.
 >
 > **As built:** acknowledging is further limited to the handover's receiver, and a Senior hands over only their current line's cash. The phone's queue report (`POST /api/devices/sync-report`) reuses `collection.record` — only a phone that records collections reports — and has no row of its own here.
+
+### Books (ADR-0018)
+
+| Action                           | Super Admin | Admin |  Senior  |   Junior    |
+| -------------------------------- | :---------: | :---: | :------: | :---------: |
+| View expenses                    |      ✓      |   ✓   | own line | own entries |
+| View expense categories          |      ✓      |   ✓   |    ✓     |      ✓      |
+| Record office expense            |      ✓      |   ✓   |    —     |      —      |
+| Request field expense            |      —      |   —   | own cash |  own cash   |
+| Approve field expense            |      ✓      |   ✓   | own line |      —      |
+| Manage expense categories        |      ✓      |   —   |    —     |      —      |
+| View bank accounts               |      ✓      |   ✓   |    —     |      —      |
+| Manage bank accounts             |      ✓      |   —   |    —     |      —      |
+| Move money between cash and bank |      ✓      |   ✓   |    —     |      —      |
+| Record other income              |      ✓      |   ✓   |    —     |      —      |
+| Record owner drawings            |      ✓      |   —   |    —     |      —      |
+| Post a manual journal            |      ✓      |   —   |    —     |      —      |
+
+> **Nobody approves money they spent** (decided 2026-09-24): a Junior's field expense is approved by their line's Senior or an Admin; a Senior's own only by an Admin. The permission cell is half the rule; the other half is an API-level test. Categories, banks, drawings and journals are the owner's alone; statements are "Ledger entries" below.
 
 ### Organisation (M03)
 
@@ -133,6 +157,8 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 >
 > **As built (export, 2026-09-19):** each Excel and PDF export (`GET /api/exports/…`, M12) carries the permission of the view it exports — the reports `report.view`, the collection list `collection.view`, S-07 and S-20 "Business totals", the sector comparison "Sector totals", S-19 "Line totals" — and reads through the same scope, so a file never shows more than the screen, and another line or sector is `404`. No cell changed.
 >
+> **As built (trial balance and postings, 2026-09-24):** `GET /api/ledger/trial-balance` and `GET /api/ledger/transactions` are guarded by "Ledger entries" (`ledger.view`) — Super Admin and Admin; a Senior is `403`, and the reports index does not list it for them. No cell changed.
+>
 > Appendix A's "Limited" for Senior investment/profit is interpreted as **their own line only**. The raw ledger is Admin-and-above: it is the audit substrate, and a Senior reading it could infer business-wide figures from cash and capital accounts.
 
 ### Notifications (M10)
@@ -157,6 +183,7 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Reset another's password  |      ✓      |   ✓   |    —     |    —     |
 | **View audit log**        |      ✓      |   ✓   |    —     |    —     |
 | View an account's history |      ✓      |   ✓   |    —     |    —     |
+| View scheduled jobs       |      ✓      |   ✓   |    —     |    —     |
 | **View settings**         |      ✓      |   —   |    —     |    —     |
 | **Change settings**       |      ✓      |   —   |    —     |    —     |
 | View holidays             |      ✓      |   ✓   | own line | own line |
@@ -164,6 +191,8 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Remove a future holiday   |      ✓      |   ✓   |    —     |    —     |
 | View own profile          |      ✓      |   ✓   |    ✓     |    ✓     |
 
+> **Scheduled jobs** (M14, 2026-09-24) are Admin and above: whether the nightly reconciliation and the other jobs ran for their business. Read-only — there is no replay.
+>
 > Role change is Super Admin only — otherwise an Admin could promote themselves. Settings likewise: they alter business rules, and changing one is not an operational act.
 >
 > **Nobody manages a role above their own, and nobody manages themselves out of their own access** (US-092). Creating, updating, suspending or resetting the password of someone senior to you is refused, and so is changing your own role or your own status — the permission cell is only half the rule, and both halves are API-level tests.

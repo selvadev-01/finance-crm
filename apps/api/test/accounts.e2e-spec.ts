@@ -322,7 +322,8 @@ describe('accounts (M05, US-030, e2e)', () => {
         terms({ disbursementDate: addCalendarDays(today, 7) }),
       )
       .expect(201);
-    const refused = await as('ADMIN')
+    // Disbursing is the Super Admin's alone (decided 2026-10-02).
+    const refused = await as('SUPER_ADMIN')
       .post(`/api/accounts/${later.body.id}/disbursement`)
       .expect(422);
     expect(refused.body.code).toBe('DISBURSEMENT_DATE_IN_FUTURE');
@@ -333,6 +334,23 @@ describe('accounts (M05, US-030, e2e)', () => {
       .get(`/api/accounts/${later.body.id}`)
       .expect(200)
       .then((response) => expect(response.body.status).toBe('PENDING'));
+  });
+
+  it('an Admin\'s "Save and disburse" is refused 403 and saves nothing — only the Super Admin pays money out', async () => {
+    const before = await prisma.accountLoan.count({
+      where: { organizationId },
+    });
+    const refused = await as('ADMIN')
+      .post('/api/accounts', terms({ disburse: true }))
+      .expect(403);
+    expect(refused.body.code).toBe('PERMISSION_DENIED');
+    // The account's creation is in the same transaction, and rolled back.
+    expect(await prisma.accountLoan.count({ where: { organizationId } })).toBe(
+      before,
+    );
+    expect(
+      await prisma.ledgerAccount.count({ where: { organizationId } }),
+    ).toBe(0);
   });
 
   /**

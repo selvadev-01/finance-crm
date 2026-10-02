@@ -47,6 +47,19 @@ const RANK: Record<Role, number> = {
   JUNIOR: 3,
 };
 
+/** `capital.add` (US-032): the Super Admin alone. */
+export function canAddCapital(role: Role): boolean {
+  return role === "SUPER_ADMIN";
+}
+
+/**
+ * `account.disburse` (US-032): the Super Admin alone — it pays the owner's
+ * money out (decided 2026-10-02). An Admin saves the account as pending.
+ */
+export function canDisburse(role: Role): boolean {
+  return role === "SUPER_ADMIN";
+}
+
 /** `staff.create`: Admin and Super Admin. */
 export function canCreateStaff(role: Role): boolean {
   return canManageOrganisation(role);

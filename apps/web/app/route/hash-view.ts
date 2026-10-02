@@ -15,7 +15,8 @@ import { useSyncExternalStore } from "react";
  * `#handover` cash, `#profile` the Junior and this phone. The rest are
  * **screens opened over a tab**, each with a back arrow: `#collect/<id>`
  * (J-02), `#customer/<id>` (J-10, a customer's portfolio), `#sync` (J-04), `#correct` (J-06) and `#notifications` (J-07).
- * `#handover`, `#notifications` and `#correct` need signal.
+ * `#expense` (J-11, a field expense) opens over the Cash tab. `#handover`,
+ * `#notifications`, `#correct` and `#expense` need signal.
  */
 export type View =
   | { name: "route" }
@@ -27,7 +28,8 @@ export type View =
   | { name: "customer"; customerId: string }
   | { name: "sync" }
   | { name: "notifications" }
-  | { name: "correct" };
+  | { name: "correct" }
+  | { name: "expense" };
 
 export type Tab =
   "route" | "customers" | "collections" | "handover" | "profile";
@@ -43,6 +45,7 @@ export function parseView(hash: string): View {
   if (value === "sync") return { name: "sync" };
   if (value === "notifications") return { name: "notifications" };
   if (value === "correct") return { name: "correct" };
+  if (value === "expense") return { name: "expense" };
   const collect = /^collect\/([\w-]+)$/.exec(value);
   if (collect) return { name: "collect", customerId: collect[1]! };
   const customer = /^customer\/([\w-]+)$/.exec(value);

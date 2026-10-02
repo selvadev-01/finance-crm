@@ -227,9 +227,10 @@ describe('HandoverService (US-061, US-062, US-063, US-064)', () => {
           receiver: null,
         }),
       ]);
-      expect(position.officeReceivers.map((r) => r.userId)).toEqual([
-        w.admin.userId,
-      ]);
+      // Anyone at the office can take it: the Admin, or the owner.
+      expect(position.officeReceivers.map((r) => r.userId).sort()).toEqual(
+        [w.admin.userId, w.owner.userId].sort(),
+      );
 
       await expect(
         w.handovers.handOver(

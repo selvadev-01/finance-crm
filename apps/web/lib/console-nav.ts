@@ -1,5 +1,6 @@
 import {
   AddressBook,
+  BookOpenText,
   ChartBar,
   MapTrifold,
   Money,
@@ -55,6 +56,13 @@ export const NAV: NavGroup[] = [
         label: "Reports",
         icon: ChartBar,
         shownTo: seesReports,
+      },
+      // ADR-0018: the business's own money — Admins and above.
+      {
+        href: "/books",
+        label: "Books",
+        icon: BookOpenText,
+        shownTo: canManageOrganisation,
       },
     ],
   },

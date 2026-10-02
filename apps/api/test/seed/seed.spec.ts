@@ -1,11 +1,16 @@
 import type { PrismaClient } from '@repo/db';
 import { parseCalendarDate } from '@repo/domain';
-import { randomInt } from 'node:crypto';
+import type { PinoLogger } from 'nestjs-pino';
+import { randomInt, randomUUID } from 'node:crypto';
 
+import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { PasswordHasher } from '../../src/identity/password-hasher.js';
+import { ReconciliationService } from '../../src/ledger/reconciliation.service.js';
+import { Database } from '../../src/platform/database/database.js';
 import { seedDataset, SEED_PASSWORD } from '../../src/seed/seed.js';
 import { verifySeed } from '../../src/seed/verify.js';
 import { createTestPrismaClient } from '../database.js';
+import { testNotifications } from '../notifications/notices.js';
 import { withRollback } from '../with-rollback.js';
 
 /**
@@ -82,6 +87,32 @@ describe('seed dataset', () => {
       expect(report.counts.accounts).toBe(48);
       expect(report.counts.collections).toBeGreaterThan(500);
       expect(report.cases.concurrentCustomerIds).toHaveLength(4);
+      // Books (ADR-0018): the approved, rejected and waiting field expenses
+      // and the three office expenses.
+      expect(report.counts.expenses).toBe(6);
+
+      // The nightly reconciliation (US-095) finds nothing to rebuild or report
+      // over a seeded month, Books entries included (Definition of Done).
+      const database = new Database(tx as unknown as PrismaClient);
+      const errors: string[] = [];
+      const logger = {
+        error: (_: object, message: string) => errors.push(message),
+      } as unknown as PinoLogger;
+      const reconciliation = await new ReconciliationService(
+        database,
+        new AuditWriter(database),
+        logger,
+        testNotifications(database).notices,
+      ).reconcile({
+        organizationId: report.organizationId,
+        runId: `run_${randomUUID()}`,
+      });
+      expect(reconciliation).toMatchObject({
+        rebuilt: [],
+        accountMismatches: [],
+        unearnedMismatch: null,
+      });
+      expect(errors).toEqual([]);
     });
   }, 120_000);
 

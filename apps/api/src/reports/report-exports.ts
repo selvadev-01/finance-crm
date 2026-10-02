@@ -511,6 +511,11 @@ export function discrepancyDocument(
             value: known(summary.cash, (c) => c.awaiting),
           },
           {
+            label: 'Approved field expenses',
+            kind: 'money',
+            value: known(summary.cash, (c) => c.expenses),
+          },
+          {
             label: 'Short',
             kind: 'money',
             value: known(summary.cash, (c) => c.short),
@@ -544,6 +549,7 @@ export function discrepancyDocument(
           { header: 'Handed over', kind: 'money' },
           { header: 'Acknowledged', kind: 'money' },
           { header: 'Awaiting', kind: 'money' },
+          { header: 'Field expenses', kind: 'money' },
           { header: 'Difference', kind: 'money' },
           { header: 'State', kind: 'text' },
           { header: 'Day', kind: 'text' },
@@ -557,6 +563,7 @@ export function discrepancyDocument(
           known(row.cash, (c) => c.handedOver),
           known(row.cash, (c) => c.acknowledged),
           known(row.cash, (c) => c.awaiting),
+          known(row.cash, (c) => c.expenses),
           known(row.cash, (c) => c.difference),
           known(row.cash, (c) => humanize(c.state)),
           known(row.dayCloseStatus, humanize),

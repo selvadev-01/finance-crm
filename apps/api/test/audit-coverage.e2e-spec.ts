@@ -27,6 +27,26 @@ type Decision =
 const WRITE_ROUTES: Record<string, Decision> = {
   // M03 organisation
   'POST /api/sectors': { audits: [['sector', 'CREATE']] },
+  'POST /api/expense-categories': { audits: [['expense_category', 'CREATE']] },
+  'PATCH /api/expense-categories/:categoryId': {
+    audits: [['expense_category', 'UPDATE']],
+  },
+  'POST /api/bank-accounts': { audits: [['bank_account', 'CREATE']] },
+  'POST /api/expenses': { audits: [['expense', 'CREATE']] },
+  'POST /api/expenses/field': { audits: [['expense', 'CREATE']] },
+  'POST /api/expenses/:expenseId/decision': {
+    audits: [
+      ['expense', 'APPROVE'],
+      ['expense', 'REJECT'],
+    ],
+  },
+  'POST /api/bank-transfers': { audits: [['bank_transfer', 'CREATE']] },
+  'POST /api/other-income': { audits: [['income_entry', 'CREATE']] },
+  'POST /api/drawings': { audits: [['drawing_entry', 'CREATE']] },
+  'POST /api/journal-entries': { audits: [['journal_entry', 'CREATE']] },
+  'PATCH /api/bank-accounts/:bankAccountId': {
+    audits: [['bank_account', 'UPDATE']],
+  },
   'PATCH /api/sectors/:sectorId': { audits: [['sector', 'UPDATE']] },
   'POST /api/sectors/:sectorId/deactivation': {
     audits: [['sector', 'UPDATE']],
@@ -57,6 +77,7 @@ const WRITE_ROUTES: Record<string, Decision> = {
     ],
   },
   // M06 working calendar (US-093)
+  'POST /api/capital': { audits: [['capital_entry', 'CREATE']] },
   'POST /api/holidays': { audits: [['holiday', 'CREATE']] },
   'DELETE /api/holidays/:holidayId': { audits: [['holiday', 'DELETE']] },
   // M01 identity

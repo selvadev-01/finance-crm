@@ -136,6 +136,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
           handedOver: '880.00',
           acknowledged: '880.00',
           awaiting: '0.00',
+          expenses: '0.00',
           // Short: the sign points at the Junior, and is never made absolute.
           difference: '-20.00',
           state: 'SHORT',
@@ -176,6 +177,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
           handedOver: '1550.00',
           acknowledged: '1550.00',
           awaiting: '0.00',
+          expenses: '0.00',
           short: '20.00',
           over: '20.00',
           net: '0.00',
@@ -202,6 +204,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
           handedOver: '150.00',
           acknowledged: '150.00',
           awaiting: '0.00',
+          expenses: '0.00',
           // Real zero: this Junior's cash is accounted for to the paisa.
           difference: '0.00',
           state: 'TALLIED',
@@ -256,6 +259,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
         handedOver: '500.00',
         acknowledged: '0.00',
         awaiting: '500.00',
+        expenses: '0.00',
         difference: '0.00',
         state: 'AWAITING',
       });
@@ -265,6 +269,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
       expect(settled.cash).toMatchObject({
         acknowledged: '500.00',
         awaiting: '0.00',
+        expenses: '0.00',
         difference: '0.00',
         state: 'TALLIED',
       });
@@ -417,6 +422,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
         handedOver: sumMoney((day) => day.summary.cash!.handedOver),
         acknowledged: sumMoney((day) => day.summary.cash!.acknowledged),
         awaiting: sumMoney((day) => day.summary.cash!.awaiting),
+        expenses: sumMoney((day) => day.summary.cash!.expenses),
         short: sumMoney((day) => day.summary.cash!.short),
         over: sumMoney((day) => day.summary.cash!.over),
         net: sumMoney((day) => day.summary.cash!.net),
@@ -523,6 +529,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
           handedOver: '0.00',
           acknowledged: '0.00',
           awaiting: '0.00',
+          expenses: '0.00',
           short: '0.00',
           over: '0.00',
           net: '0.00',

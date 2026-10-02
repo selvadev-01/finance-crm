@@ -127,6 +127,30 @@ A single debit or credit line in the ledger. Every transaction has at least two 
 
 ---
 
+## Books screen terms
+
+The Books screens (ADR-0018) use the Indian, Tally-style words an accountant here already knows (decided 2026-10-02). **They are screen labels only** — code, the API and the database keep the names on the left, as the rest of this glossary defines them.
+
+| In code and docs                     | On screen                  |
+| ------------------------------------ | -------------------------- |
+| Office cash (`CASH_AT_OFFICE`)       | Cash-in-hand               |
+| Cash in hand of a Senior or Junior   | Cash with collection staff |
+| Loans receivable (`LOAN_RECEIVABLE`) | Loans & advances           |
+| Equity                               | Capital & liabilities      |
+| Capital                              | Capital A/c                |
+| Retained profit                      | Reserves & surplus         |
+| Bank transfer (`BANK_TRANSFER`)      | Contra / contra entry      |
+| Other income (`OTHER_INCOME`)        | Other receipts             |
+| Owner drawings (`OWNER_DRAWINGS`)    | Drawings                   |
+| Journal entry (`JOURNAL`)            | Journal voucher            |
+| Expense category                     | Expense head               |
+| Note on an entry                     | Narration                  |
+| Debit / credit columns               | Dr / Cr                    |
+| Money in / money out (statements)    | Receipts / payments        |
+| Recent ledger transactions           | Day book                   |
+
+---
+
 ## Technical
 
 **Outbox**

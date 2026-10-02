@@ -54,7 +54,7 @@ export function AddStaffDialog({
       email: "",
       phone: "",
       role: "JUNIOR",
-      joinedAt: "",
+      joinedAt: undefined,
     },
   });
 
@@ -116,6 +116,7 @@ export function AddStaffDialog({
         name="joinedAt"
         label="Joined on"
         hint="Leave blank for today. An assignment cannot start before this date."
+        valueAs="optional"
       >
         <Input type="date" />
       </FormField>

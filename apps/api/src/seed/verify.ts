@@ -111,9 +111,10 @@ export async function verifySeed(
     );
   }
 
-  // Cash: everything collected sits in some staff member's hand.
+  // Cash: everything collected sits in some staff member's hand, less what an
+  // approved field expense spent from it (ADR-0018).
   const [cash] = await tx.$queryRaw<
-    { held: string | null; collected: string | null }[]
+    { held: string | null; collected: string | null; spent: string | null }[]
   >`
     SELECT
       (SELECT SUM(a.balance)::text FROM ledger_account a
@@ -121,10 +122,33 @@ export async function verifySeed(
         WHERE a."accountType" = 'CASH_IN_HAND' AND s."organizationId" = ${organizationId}) AS held,
       (SELECT SUM(c.amount)::text FROM collection c
         JOIN account_loan l ON l.id = c."accountLoanId"
-        WHERE l."organizationId" = ${organizationId}) AS collected`;
-  if (!toMoney(cash?.held ?? '0').equals(cash?.collected ?? '0')) {
+        WHERE l."organizationId" = ${organizationId}) AS collected,
+      (SELECT SUM(x.amount)::text FROM expense x
+        WHERE x."organizationId" = ${organizationId}
+          AND x."paidFrom" = 'CASH_IN_HAND' AND x.status = 'APPROVED') AS spent`;
+  const expectedHeld = toMoney(cash?.collected ?? '0').minus(
+    toMoney(cash?.spent ?? '0'),
+  );
+  if (!toMoney(cash?.held ?? '0').equals(expectedHeld)) {
     problems.push(
-      `CASH_IN_HAND ${cash?.held} ≠ cash collected ${cash?.collected}`,
+      `CASH_IN_HAND ${cash?.held} ≠ cash collected ${cash?.collected} less approved field expenses ${cash?.spent ?? '0'}`,
+    );
+  }
+
+  // Every expense that is approved is posted once, and nothing else is.
+  const [posted] = await tx.$queryRaw<{ unposted: bigint; stray: bigint }[]>`
+    SELECT
+      (SELECT COUNT(*) FROM expense x
+        WHERE x."organizationId" = ${organizationId} AND x.status = 'APPROVED'
+          AND NOT EXISTS (SELECT 1 FROM ledger_transaction t
+            WHERE t."sourceTable" = 'expense' AND t."sourceId" = x.id)) AS unposted,
+      (SELECT COUNT(*) FROM expense x
+        WHERE x."organizationId" = ${organizationId} AND x.status <> 'APPROVED'
+          AND EXISTS (SELECT 1 FROM ledger_transaction t
+            WHERE t."sourceTable" = 'expense' AND t."sourceId" = x.id)) AS stray`;
+  if (Number(posted?.unposted ?? 0) > 0 || Number(posted?.stray ?? 0) > 0) {
+    problems.push(
+      `expenses: ${posted?.unposted} approved without a posting, ${posted?.stray} posted without approval`,
     );
   }
 
@@ -154,6 +178,32 @@ export async function verifySeed(
     problems.push('no cash discrepancy was seeded');
   if (!report.cases.correctedCollectionId)
     problems.push('no approved correction was seeded');
+  const fieldExpense = report.cases.fieldExpenseId
+    ? await tx.expense.findUnique({
+        where: { id: report.cases.fieldExpenseId },
+        select: { lineId: true, businessDate: true, amount: true },
+      })
+    : null;
+  if (!fieldExpense) {
+    problems.push('no approved field expense was seeded');
+  } else {
+    const day = await tx.dayClose.findUnique({
+      where: {
+        lineId_businessDate: {
+          lineId: fieldExpense.lineId!,
+          businessDate: fieldExpense.businessDate,
+        },
+      },
+      select: { expenseTotal: true },
+    });
+    if (
+      !day ||
+      !toMoney(day.expenseTotal.toString()).equals(
+        fieldExpense.amount.toString(),
+      )
+    )
+      problems.push("the field expense's day close does not count it");
+  }
   const transferLines = await tx.collection.findMany({
     where: { accountLoan: { customerId: report.cases.transferredCustomerId } },
     distinct: ['lineId'],

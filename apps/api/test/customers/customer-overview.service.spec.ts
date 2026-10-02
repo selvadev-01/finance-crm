@@ -1,14 +1,16 @@
 import type { PrismaClient } from '@repo/db';
-import { parseCalendarDate } from '@repo/domain';
+import { parseCalendarDate, toMoney } from '@repo/domain';
 import { randomUUID } from 'node:crypto';
 
 import { AccountService } from '../../src/accounts/account.service.js';
+import { testNotifications } from '../notifications/notices.js';
 import { AuditWriter } from '../../src/audit/audit.writer.js';
 import { CustomerOverviewService } from '../../src/customers/customer-overview.service.js';
 import { LinePortfolioService } from '../../src/customers/line-portfolio.service.js';
 import { LedgerService } from '../../src/ledger/ledger.service.js';
 import type { RequestContext } from '../../src/platform/context/request-context.js';
 import { Database } from '../../src/platform/database/database.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { createTestPrismaClient, openLinePeriod } from '../database.js';
 import { createLine, createStaff } from '../db-constraints/fixtures.js';
 import { withRollback } from '../with-rollback.js';
@@ -48,6 +50,7 @@ describe('CustomerOverviewService (US-022)', () => {
       database,
       audit,
       new LedgerService(database),
+      testNotifications(database).notices,
     );
     const overview = new CustomerOverviewService(database);
 
@@ -66,13 +69,17 @@ describe('CustomerOverviewService (US-022)', () => {
       });
 
     /** A disbursed account of `amount`, daily 100 over its own term. */
-    const account = async (customerId: string, amount: string) =>
-      accounts.create(
-        context,
+    const owner: RequestContext = { ...context, role: 'SUPER_ADMIN' };
+    const account = async (customerId: string, amount: string) => {
+      const invested = toMoney(amount).times('0.85').toFixed(2);
+      // The owner funds the loan and pays it out (decided 2026-10-02).
+      await fundOfficeCash(database, owner, invested, SATURDAY);
+      return accounts.create(
+        owner,
         {
           customerId,
           accountAmount: amount,
-          investedAmount: (Number(amount) * 0.85).toFixed(2),
+          investedAmount: invested,
           dailyAmount: '100',
           termDays: Number(amount) / 100,
           collectionFrequency: 'DAILY',
@@ -81,6 +88,7 @@ describe('CustomerOverviewService (US-022)', () => {
         },
         SATURDAY,
       );
+    };
 
     return { organizationId, line, context, overview, customer, account, tx };
   }
