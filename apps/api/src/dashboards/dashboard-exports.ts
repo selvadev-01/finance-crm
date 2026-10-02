@@ -357,7 +357,7 @@ export function operationsDocument(
             known(pendingApprovals, (p) => p.total),
           ),
           count(
-            'Waiting for you',
+            'Pending acknowledgement',
             known(pendingApprovals, (p) => p.awaitingYou),
           ),
         ],

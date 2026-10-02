@@ -8,15 +8,18 @@ import {
   CloudArrowDown,
   Key,
   SignOut,
+  Translate,
   WifiHigh,
   WifiSlash,
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
-import type { Me } from "@repo/contracts";
+import { type Me, notificationContract } from "@repo/contracts";
 import { Badge, Button, cn } from "@repo/ui";
 import { useState } from "react";
 
 import { ChangePasswordDialog } from "../(console)/profile/change-password-dialog";
+import { apiWrite } from "../../lib/api-write";
+import { useApiQuery } from "../../lib/use-api-query";
 import type { LocalRoute } from "../../lib/offline/outbox";
 import { Banner, cardClass, FieldPage, Section } from "./app-chrome";
 import { openView } from "./hash-view";
@@ -129,6 +132,7 @@ export function ProfileScreen({
             value={connected ? null : "Needs signal"}
             onClick={connected ? () => setChanging(true) : undefined}
           />
+          <LanguageTile connected={connected} />
         </ul>
         {changed ? (
           <p role="status" className="px-1 text-sm text-positive">
@@ -174,6 +178,52 @@ export function ProfileScreen({
         />
       ) : null}
     </FieldPage>
+  );
+}
+
+/**
+ * US-074: what this Junior's notifications are written in. Read and saved
+ * only with signal — like the password, it lives on the server, not the phone.
+ */
+function LanguageTile({ connected }: { connected: boolean }) {
+  const preferences = useApiQuery(
+    notificationContract.getPreferences,
+    connected ? {} : null,
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function choose(language: "EN" | "TA") {
+    setSaving(true);
+    await apiWrite(notificationContract.updatePreferences, {
+      body: { language },
+    });
+    setSaving(false);
+    preferences.reload();
+  }
+
+  return (
+    <Tile
+      icon={<Translate size={22} />}
+      label="Notification language"
+      value={
+        connected && preferences.status === "ready" ? (
+          <select
+            aria-label="Notification language"
+            value={preferences.data.language}
+            disabled={saving}
+            onChange={(event) =>
+              void choose(event.target.value as "EN" | "TA")
+            }
+            className="rounded-control border border-border bg-surface px-2 py-1 text-sm text-ink"
+          >
+            <option value="EN">English</option>
+            <option value="TA">தமிழ்</option>
+          </select>
+        ) : connected ? null : (
+          "Needs signal"
+        )
+      }
+    />
   );
 }
 

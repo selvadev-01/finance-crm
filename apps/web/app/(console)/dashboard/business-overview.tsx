@@ -304,7 +304,7 @@ export function BusinessOverview({
           <SectionHeader
             id="needs-you"
             variant="overline"
-            title="Needs you"
+            title="Action required"
             dot={attention.length > 0}
             aside={
               <HeaderLink href="/collections/pending-approval">
@@ -318,7 +318,7 @@ export function BusinessOverview({
             </FormMessage>
           ) : null}
           <ListCard
-            label="Needs your attention"
+            label="Pending actions"
             rows={attention}
             empty="Nothing is waiting on you."
           />
@@ -558,7 +558,7 @@ function FundsSummary({
       ])
     : null;
   return (
-    <SummaryCard label="Your money">
+    <SummaryCard label="Fund position">
       <div className="flex items-center justify-between gap-2">
         <span className="text-2xs font-semibold tracking-wider uppercase opacity-80">
           Total funds
@@ -665,7 +665,7 @@ function HeroBand({
     : null;
   return (
     <section
-      aria-label="Your money"
+      aria-label="Fund position"
       className={cn(
         heroBandClass,
         "grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center",
@@ -832,7 +832,7 @@ function MoneyDonut({ sheet }: { sheet: SheetQuery }) {
   return (
     <Card.Root surface="flat" className="min-w-0">
       <Card.Header
-        title="Where your money is"
+        title="Fund deployment"
         actions={
           sheet.status === "ready" ? (
             sheet.data.balanced ? (
@@ -940,7 +940,7 @@ function DonutBody({ sheet }: { sheet: BalanceSheet }) {
           </span>
         </span>
         <ul
-          aria-label="Where your money is"
+          aria-label="Fund deployment"
           className="flex min-w-0 flex-1 flex-col gap-1.5"
         >
           {slices.map((slice) => (
@@ -1244,7 +1244,7 @@ function AttentionCard({
 }) {
   return (
     <ActionList
-      title="Needs your attention"
+      title="Pending actions"
       rows={[
         ...pendingExpensesRow(pendingExpenses),
         ...attentionRows(operations?.attention ?? [], date),

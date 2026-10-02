@@ -41,6 +41,7 @@ export {
   useBackdropPress,
 } from "./dialog";
 export {
+  ActivityBar,
   Breadcrumbs,
   Card,
   CodeChip,

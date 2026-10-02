@@ -167,7 +167,31 @@ const WRITE_ROUTES: Record<string, Decision> = {
     notAudited: 'stops push to a device; delivery only',
   },
   'PATCH /api/notification-preferences': {
-    notAudited: "the caller's own notification categories",
+    notAudited: "the caller's own notification categories and language",
+  },
+  // US-074 message templates: the business's voice, audited like a setting.
+  'PATCH /api/notification-templates/:key/:language': {
+    audits: [
+      ['notification_template', 'CREATE'],
+      ['notification_template', 'UPDATE'],
+      ['notification_template', 'DELETE'],
+    ],
+  },
+  'DELETE /api/notification-templates/:key/:language': {
+    audits: [['notification_template', 'DELETE']],
+  },
+  'PATCH /api/notification-templates/:key': {
+    audits: [
+      ['notification_channel', 'CREATE'],
+      ['notification_channel', 'UPDATE'],
+    ],
+  },
+  'POST /api/notification-templates/:key/preview': {
+    notAudited: 'renders unsaved words with sample values; writes nothing',
+  },
+  'POST /api/notification-templates/:key/test': {
+    notAudited:
+      "a test copy to the caller's own centre, devices and inbox; no business record changes",
   },
 };
 

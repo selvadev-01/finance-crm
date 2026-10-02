@@ -268,7 +268,7 @@ function DisputeHandover({ handover, onClose, onDone }: ActProps) {
     >
       <FormField
         name="note"
-        label="What is wrong"
+        label="Discrepancy details"
         hint="Say what you counted — “one ₹200 note short”."
       >
         <Textarea rows={3} maxLength={500} />
@@ -381,7 +381,7 @@ export function HandToOfficeDialog({
       {!matches ? (
         <FormField
           name="note"
-          label="Why the count differs"
+          label="Reason for difference"
           hint="Required when the count differs from what was recorded."
         >
           <Textarea rows={2} maxLength={500} />

@@ -67,7 +67,7 @@ export function ProfileScreen() {
         description={`Your details at ${me.organization.name}.`}
       />
 
-      <Section title="Your details">
+      <Section title="Profile details">
         <Card.Root>
           <Card.Body>
             <DescriptionList layout="rows">

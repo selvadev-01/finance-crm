@@ -178,7 +178,7 @@ export function CollectionDetailView({
                 }),
                 displayColumn<Adjustment>({
                   id: "why",
-                  header: "Why",
+                  header: "Reason",
                   cell: (adjustment) =>
                     adjustment.approval ? (
                       <span className="flex flex-col">

@@ -169,6 +169,10 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Scope received         |     All     | Operational | Own line | Own entries |
 | Register push device   |      ✓      |      ✓      |    ✓     |      ✓      |
 | Manage preferences     |      ✓      |      ✓      |    ✓     |      ✓      |
+| **View message templates** |      ✓      |      —      |    —     |      —      |
+| **Edit message templates** |      ✓      |      —      |    —     |      —      |
+
+> **Message templates** (US-074, 2026-10-02) are the words of every notification and email, and whether each is pushed and emailed. Super Admin only, like the settings: they are how the business speaks to all its staff. Viewing includes the preview; editing includes saving, resetting, the channel switches and sending a test to oneself. An alert's push and email cannot be switched off by anyone. "Manage preferences" now also covers the reader's own language, English or Tamil.
 
 ### Administration (M01, M13, M15)
 

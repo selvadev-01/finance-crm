@@ -130,7 +130,7 @@ test.describe("creating a business (US-006)", () => {
 
     await expect(page.getByText("Your business is ready.")).toBeVisible();
     // The link is the point of this screen: it must be readable and complete.
-    await expect(page.getByLabel("Your business’s sign-in link")).toHaveValue(
+    await expect(page.getByLabel("Business sign-in link")).toHaveValue(
       new RegExp(`/${SLUG}/sign-in$`),
     );
     await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();

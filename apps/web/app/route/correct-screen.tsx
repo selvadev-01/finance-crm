@@ -233,7 +233,7 @@ function RequestForm({
       </h2>
       <FormField
         name="correctedAmount"
-        label="What you actually collected (₹)"
+        label="Actual amount collected (₹)"
         rewrite={(message) =>
           message.startsWith("must be an amount")
             ? "Enter the amount in rupees, like 100 or 100.50."
@@ -249,7 +249,7 @@ function RequestForm({
       </FormField>
       <FormField
         name="reason"
-        label="Why"
+        label="Reason"
         hint="Required. Your Senior sees it."
       >
         <Textarea rows={3} maxLength={500} />

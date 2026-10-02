@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { type Me, staffContract } from "@repo/contracts";
 import { toBusinessDate } from "@repo/domain";
-import { buttonClass, formatCurrency } from "@repo/ui";
+import { buttonClass, formatCurrency, Skeleton } from "@repo/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -191,13 +191,10 @@ export function FieldRoute() {
           className="mx-auto flex w-full max-w-md flex-col gap-3 p-4"
           aria-hidden
         >
-          <div className="h-40 animate-pulse rounded-overlay border border-border bg-surface-raised" />
-          <div className="h-14 animate-pulse rounded-pill bg-surface-sunken" />
+          <Skeleton className="h-40 rounded-overlay" />
+          <Skeleton className="h-14 rounded-pill" />
           {[0, 1, 2].map((card) => (
-            <div
-              key={card}
-              className="h-20 animate-pulse rounded-overlay border border-border bg-surface-raised"
-            />
+            <Skeleton key={card} className="h-20 rounded-overlay" />
           ))}
         </div>
         <div className="fixed inset-x-0 bottom-0 h-20 border-t border-border bg-surface-raised" />

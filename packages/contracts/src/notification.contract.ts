@@ -100,6 +100,8 @@ export const preferencesSchema = z.object({
       emailed: z.boolean(),
     }),
   ),
+  /** What the caller's notifications and emails are written in (US-074). */
+  language: z.enum(["EN", "TA"]),
 });
 
 export const notificationContract = {
@@ -191,18 +193,26 @@ export const notificationContract = {
   updatePreferences: route({
     method: "PATCH",
     path: "/api/notification-preferences",
-    summary: "Switch categories on or off; ALERT stays on (US-073)",
-    body: z.object({
-      categories: z
-        .array(
-          z.object({
-            category: notificationCategorySchema,
-            enabled: z.boolean(),
-          }),
-        )
-        .min(1)
-        .max(4),
-    }),
+    summary:
+      "Switch categories on or off, ALERT staying on (US-073), or choose the language (US-074)",
+    body: z
+      .object({
+        categories: z
+          .array(
+            z.object({
+              category: notificationCategorySchema,
+              enabled: z.boolean(),
+            }),
+          )
+          .min(1)
+          .max(4)
+          .optional(),
+        language: z.enum(["EN", "TA"]).optional(),
+      })
+      .refine(
+        (body) => body.categories !== undefined || body.language !== undefined,
+        { message: "Name categories, a language or both" },
+      ),
     responses: { 200: preferencesSchema, ...errors, 422: errorSchema },
   }),
 } as const;

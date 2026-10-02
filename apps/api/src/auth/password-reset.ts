@@ -1,7 +1,12 @@
 import type { PrismaClient } from '@repo/db';
 
-import { passwordResetEmail } from '../email/email-templates.js';
+import { templateDefinition } from '../notifications/templates/catalogue.js';
+import {
+  NotificationTemplates,
+  renderMessage,
+} from '../notifications/templates/notification-templates.js';
 import { Database } from '../platform/database/database.js';
+import { InternalError } from '../platform/errors/errors.js';
 
 /**
  * US-003 self-service password reset — the half a staff member starts alone,
@@ -67,17 +72,35 @@ export async function sendPasswordReset(
 ): Promise<boolean> {
   const staff = await client.staffProfile.findFirst({
     where: { userId: request.userId, status: 'ACTIVE', deletedAt: null },
-    select: { organizationId: true },
+    select: {
+      organizationId: true,
+      language: true,
+      organization: { select: { name: true } },
+    },
   });
   if (!staff || !request.emailEnabled) return false;
 
-  const content = passwordResetEmail({
-    name: request.name,
-    resetUrl: request.url,
-    validForMinutes: RESET_LINK_MINUTES,
-  });
-
   await new Database(client).transaction(async (tx) => {
+    // US-074: the business's own words for the link, in the reader's language.
+    const definition = templateDefinition('PASSWORD_RESET');
+    if (!definition) {
+      throw new InternalError(
+        'TEMPLATE_MISSING',
+        'PASSWORD_RESET is not in the catalogue',
+      );
+    }
+    const template = await new NotificationTemplates().resolve(
+      tx,
+      staff.organizationId,
+      definition,
+    );
+    const content = renderMessage(
+      definition,
+      template.content(staff.language),
+      staff.language,
+      { name: request.name, validForMinutes: String(RESET_LINK_MINUTES) },
+      { url: request.url, organizationName: staff.organization.name },
+    ).email;
     await tx.emailOutbox.create({
       data: {
         organizationId: staff.organizationId,

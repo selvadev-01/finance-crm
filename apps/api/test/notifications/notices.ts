@@ -4,6 +4,7 @@ import {
   NotificationService,
   Recipients,
 } from '../../src/notifications/notification.service.js';
+import { NotificationTemplates } from '../../src/notifications/templates/notification-templates.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import type { Database } from '../../src/platform/database/database.js';
 
@@ -23,7 +24,12 @@ export function testNotifications(
     WEB_ORIGIN: 'https://rasi.example',
   } as AppConfig;
   const emails = new EmailOutbox(database, config);
-  const notifications = new NotificationService(database, config, emails);
+  const notifications = new NotificationService(
+    database,
+    config,
+    emails,
+    new NotificationTemplates(),
+  );
   const recipients = new Recipients(database);
   return {
     config,

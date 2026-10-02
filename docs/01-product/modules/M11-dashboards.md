@@ -284,8 +284,8 @@ The business-wide dashboards now show the ledger beside the day's collections. *
 - **S-07 redesigned** (`business-overview.tsx`, after the Stitch screen "Super Admin Dashboard (Compact)") as a compact, money-first page for the owner:
   - **Hero:** total funds is the balance sheet's `equity.total` on the date (capital + profit kept − drawings), with its change against the balance sheet on the day before the month began. Beside it: to collect (`loansReceivable`), cash and bank (office, banks and cash with staff), and profit this month (the P&L's `netProfit` from the first of the month to the date).
   - **Four cards:** collected today, with a sparkline from the trend; pending today; overdue loans, from the overdue report's `summary`, which is a position now, not dated; and expenses this month, with the field expenses waiting from Books' overview.
-  - **Where your money is:** a donut of the balance sheet's assets. "Lent out" is the receivables less the profit not yet earned in them, so the four parts add up to the total funds whenever the books balance. A badge says whether they do.
-  - **Also on the page:** the existing trend card, a P&L card for the month, sectors with rings, and "Needs your attention". The attention list is Books' pending field expenses plus S-20's own attention list (`GET /api/dashboards/operations`).
+  - **Fund deployment:** a donut of the balance sheet's assets. "Lent out" is the receivables less the profit not yet earned in them, so the four parts add up to the total funds whenever the books balance. A badge says whether they do.
+  - **Also on the page:** the existing trend card, a P&L card for the month, sectors with rings, and "Pending actions". The attention list is Books' pending field expenses plus S-20's own attention list (`GET /api/dashboards/operations`).
   - **§17's structural and all-time figures** close the page in one strip, so nothing US-080 specified was dropped.
 - **S-20 redesigned** (`operations-dashboard.tsx`, after the Stitch screen "Today's operations"):
   - **Teal hero:** a ring for collected against expected, then lines closed, pending (BR-16 per line), extra, and corrections waiting with how many are the caller's to decide.
@@ -296,8 +296,8 @@ The business-wide dashboards now show the ledger beside the day's collections. *
 - **S-19 redesigned** (`line-dashboard.tsx`, after the Stitch Senior line dashboard):
   - **Teal hero:** rings for collected, cash in hand (acknowledged of collected) and phones synced, then short or surplus, and the cash still with Juniors (collected less acknowledged).
   - **Four cards:** expected; collected, with visits and a sparkline; short, with how many paid less; not visited.
-  - **"My Juniors":** visits, collected, handed over and the **signed** difference come from the discrepancy report's rows for the line and day (`GET /api/reports/discrepancy`, `report.view`, BR-17), so they are the report's figures. An "Acknowledge" link opens the day close when cash is waiting, and "Review dispute" when a handover is disputed. If that read fails, those two columns show "—" and the rest of the page stands.
-  - **"Waiting on you":** corrections, handovers to acknowledge or disputed, customers not visited, and phones still to send.
+  - **"Junior staff":** visits, collected, handed over and the **signed** difference come from the discrepancy report's rows for the line and day (`GET /api/reports/discrepancy`, `report.view`, BR-17), so they are the report's figures. An "Acknowledge" link opens the day close when cash is waiting, and "Review dispute" when a handover is disputed. If that read fails, those two columns show "—" and the rest of the page stands.
+  - **"Pending approvals":** corrections, handovers to acknowledge or disputed, customers not visited, and phones still to send.
   - **Lower row:** today's exceptions, accounts finishing soon and overdue accounts as compact cards, and a line-trend strip.
   - The primary action reads "Close the day" while the day is open.
   - Not built from the design: visits *due* per Junior, because customers are not assigned to a Junior in Rasi, so only visits done are shown.
@@ -325,7 +325,7 @@ The business-wide dashboards now show the ledger beside the day's collections. *
     - Search, filters and the customer list are unchanged below.
     - The field app's own five-tab bottom navigation (Route, Customers, Collections, Cash, Profile) is kept as it was. The design's different tab set was not adopted, by decision (2026-10-02).
   - **Not built:** an Accounts tile, because there is no accounts list page.
-- **Layout.** "Lines today" with the trend (S-20) and "My Juniors" with "Waiting on you" (S-19) sit side by side only from the 2xl breakpoint; below it the table takes the full width, so no column is cut off.
+- **Layout.** "Lines today" with the trend (S-20) and "Junior staff" with "Pending approvals" (S-19) sit side by side only from the 2xl breakpoint; below it the table takes the full width, so no column is cut off.
 - **Each source is read on its own.** One that fails shows "—" or its own retry and leaves the rest of the page standing (S-07's rule).
 - **Hero figures** use `formatCompactCurrency` (₹52.96 L, ₹1.25 Cr), computed in exact paise in `apps/web/lib/money.ts`. The full amount stays in a tooltip and for screen readers.
 - **Not built from the design:**

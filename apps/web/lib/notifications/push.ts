@@ -67,11 +67,17 @@ export async function enablePush(
   deviceLabel: string,
 ): Promise<PushState> {
   if (!supported()) return "unsupported";
+  // First, while the tap still counts: Safari ignores a permission request
+  // made after a network round trip. Both callers offer this only once the
+  // server has said push is on.
+  if ((await Notification.requestPermission()) !== "granted") return "blocked";
   const key = await vapidKey();
   if (!key) return "not-offered";
-  if ((await Notification.requestPermission()) !== "granted") return "blocked";
   const worked = await registration(worker);
-  await navigator.serviceWorker.ready;
+  // Not `navigator.serviceWorker.ready`: that waits for a worker whose scope
+  // covers *this page*, and the console's push worker is scoped to `/push/`,
+  // so on any console page it never resolves and the switch hangs.
+  await activated(worked);
   const subscription =
     (await worked.pushManager.getSubscription()) ??
     (await worked.pushManager.subscribe({
@@ -89,6 +95,35 @@ export async function enablePush(
     },
   });
   return saved.ok ? "on" : "off";
+}
+
+/** Resolves once this registration's worker is active — subscribing needs one. */
+function activated(registration: ServiceWorkerRegistration): Promise<void> {
+  if (registration.active) return Promise.resolve();
+  const worker = registration.installing ?? registration.waiting;
+  if (!worker) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    worker.addEventListener("statechange", () => {
+      if (worker.state === "activated") resolve();
+      if (worker.state === "redundant") {
+        reject(new Error("The push worker could not be installed"));
+      }
+    });
+  });
+}
+
+/**
+ * Whether to offer push on this device when someone arrives (the dashboard):
+ * supported, offered by the server, not blocked, and **not registered**. A
+ * browser that allowed notifications but never finished registering — a
+ * closed tab, a failed attempt — still receives nothing, so it is offered too;
+ * its "Turn on" then registers without the browser asking again.
+ */
+export async function shouldOfferPush(worker: {
+  url: string;
+  scope: string;
+}): Promise<boolean> {
+  return (await pushState(worker)) === "off";
 }
 
 function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {

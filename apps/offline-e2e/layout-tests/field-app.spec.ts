@@ -584,7 +584,7 @@ test.describe("the Junior's field app at 360px", () => {
       page.getByRole("button", { name: /Hand ₹1,000\.00 to Murugan/ }),
     ).toBeEnabled();
     await expect(page.getByText("₹7,450.00 short")).toBeVisible();
-    await expect(page.getByLabel("Why the count differs")).toBeVisible();
+    await expect(page.getByLabel("Reason for difference")).toBeVisible();
     await noSidewaysScroll(page, "Cash");
   });
 
@@ -606,7 +606,7 @@ test.describe("the Junior's field app at 360px", () => {
     await page
       .getByRole("button", { name: /Hand ₹500\.00 to Murugan/ })
       .click();
-    const note = page.getByLabel("Why the count differs");
+    const note = page.getByLabel("Reason for difference");
     await expect(note).toBeFocused();
     await expect(note).toHaveAttribute("aria-invalid", "true");
     await expect(
@@ -854,7 +854,7 @@ test.describe("J-11 field expense (ADR-0018) at 360px", () => {
       .click();
     await expect(page.getByTestId("expense")).toBeVisible();
 
-    const mine = page.getByRole("list", { name: "Your field expenses" });
+    const mine = page.getByRole("list", { name: "Field expenses" });
     await expect(mine.getByText("Rejected — hand it over")).toBeVisible();
     await expect(mine.getByText("Tea is not a business expense")).toBeVisible();
 

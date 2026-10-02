@@ -28,7 +28,7 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   INFORMATION: "Information",
 };
 
-const CATEGORY_TONE: Record<
+export const CATEGORY_TONE: Record<
   NotificationCategory,
   NonNullable<BadgeProps["tone"]>
 > = {

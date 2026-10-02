@@ -473,15 +473,41 @@ export function Breadcrumbs({
  * Skeletons — the loading state is the page's own shape, not a spinner.
  * ---------------------------------------------------------------------- */
 
+/**
+ * One placeholder bar. A highlight sweeps across it — read as "on its way",
+ * where a pulse reads as "stuck". Reduced motion gets the still block.
+ */
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
       className={cn(
-        "h-4 animate-pulse rounded-sm bg-surface-sunken motion-reduce:animate-none",
+        "relative h-4 overflow-hidden rounded-sm bg-surface-sunken",
+        "after:absolute after:inset-0 after:animate-shimmer after:bg-linear-to-r after:from-transparent after:via-surface-raised/70 after:to-transparent motion-reduce:after:hidden",
         className,
       )}
     />
+  );
+}
+
+/**
+ * A thin indeterminate bar along the top of the viewport while a read is in
+ * flight — the only sign a reload is happening, since a reloaded list keeps
+ * its rows on screen. Feedback, not decoration: it renders nothing when idle.
+ */
+export function ActivityBar({ active }: { active: boolean }) {
+  return (
+    <div
+      role="progressbar"
+      aria-label="Loading"
+      aria-hidden={!active}
+      className={cn(
+        "pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden transition-opacity duration-200",
+        active ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <div className="h-full w-2/5 animate-progress rounded-pill bg-accent motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-60" />
+    </div>
   );
 }
 

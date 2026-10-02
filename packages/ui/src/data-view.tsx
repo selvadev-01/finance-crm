@@ -31,7 +31,7 @@ import {
 import { Button } from "./button";
 import { cn } from "./cn";
 import { formatCount } from "./format";
-import { flatSurfaceClass } from "./layout";
+import { flatSurfaceClass, Skeleton } from "./layout";
 import { LoadMoreSentinel } from "./load-more";
 import { Select } from "./select";
 
@@ -468,12 +468,9 @@ export function ListSkeleton({
           className="flex gap-6 border-b border-border px-[var(--cell-padding-x)] py-[var(--row-padding-y)] last:border-b-0"
         >
           {cells.map((cell) => (
-            <div
+            <Skeleton
               key={cell}
-              className={cn(
-                "h-4 flex-1 animate-pulse rounded-sm bg-surface-sunken motion-reduce:animate-none",
-                cell > 1 && "hidden md:block",
-              )}
+              className={cn("flex-1", cell > 1 && "hidden md:block")}
             />
           ))}
         </div>
