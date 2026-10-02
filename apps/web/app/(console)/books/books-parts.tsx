@@ -10,7 +10,7 @@ import { FormField, Select } from "@repo/ui";
 import { useApiQuery } from "../../../lib/use-api-query";
 
 /** The words for office cash wherever money can be held (ADR-0018). */
-export const OFFICE_CASH = "Cash-in-hand";
+export const OFFICE_CASH = "Cash in hand";
 
 /**
  * The business's banks, retired ones included, so a past entry still shows

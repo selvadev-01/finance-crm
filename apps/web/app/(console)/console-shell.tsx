@@ -21,6 +21,7 @@ import { navFor } from "../../lib/console-nav";
 import {
   decideLayout,
   useInstalled,
+  usePhoneScreen,
   useSavedLayout,
 } from "../../lib/device-layout";
 import { useCanInstall } from "../../lib/install-prompt";
@@ -48,6 +49,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const saved = useSavedLayout();
   const installed = useInstalled();
+  const phoneScreen = usePhoneScreen();
   // The bell (navigation-ia.md#notifications): polled, never for a Junior.
   const unread = useUnreadCount(Boolean(me) && me?.role !== "JUNIOR");
 
@@ -77,7 +79,7 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
 
-  const decision = decideLayout(saved, installed);
+  const decision = decideLayout(saved, installed, phoneScreen);
 
   if (decision.kind === "ask") {
     return <FirstLaunch name={me.name} />;

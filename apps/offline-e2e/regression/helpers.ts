@@ -239,11 +239,11 @@ export async function addCapital(
   capital: { amount: string; note: string },
 ): Promise<void> {
   await page.goto("/books/money");
-  await page.getByRole("button", { name: "Add capital" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Add capital" });
+  await page.getByRole("button", { name: "Add money" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Add money" });
   await dialog.getByLabel("Amount (₹)").fill(capital.amount);
-  await dialog.getByLabel("Narration").fill(capital.note);
-  await dialog.getByRole("button", { name: "Add capital" }).click();
+  await dialog.getByLabel("Note").fill(capital.note);
+  await dialog.getByRole("button", { name: "Add money" }).click();
   await expect(dialog).toBeHidden();
 }
 

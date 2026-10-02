@@ -91,20 +91,20 @@ const SETTINGS_PARTS = [
 
 const EXPECTED: Record<
   ConsoleRole,
-  { dashboardTab: string; inMore: string[]; notInMore: string[] }
+  { tabs: string[]; inMore: string[]; notInMore: string[] }
 > = {
   SUPER_ADMIN: {
-    dashboardTab: "Overview",
+    tabs: ["Home", "Collections", "Customers", "Books", "More"],
     inMore: ["Sectors", "Team", "Settings"],
     notInMore: SETTINGS_PARTS,
   },
   ADMIN: {
-    dashboardTab: "Today",
+    tabs: ["Home", "Collections", "Customers", "Cash", "More"],
     inMore: ["Sectors", "Team", "Settings"],
     notInMore: SETTINGS_PARTS,
   },
   SENIOR: {
-    dashboardTab: "My line",
+    tabs: ["Home", "Collections", "Cash", "Customers", "More"],
     inMore: ["Reports", "Lines", "Team", "Settings"],
     notInMore: ["Sectors", ...SETTINGS_PARTS],
   },
@@ -125,13 +125,8 @@ for (const [role, expected] of Object.entries(EXPECTED) as [
     await page.goto("/customers");
 
     const tabs = tabBar(page);
-    await expect(tabs.getByRole("listitem")).toHaveText([
-      expected.dashboardTab,
-      "Collections",
-      "Customers",
-      "Cash",
-      "More",
-    ]);
+    // The bars of the Stitch homes in "Rasi Mobile, all roles" (2026-10-02).
+    await expect(tabs.getByRole("listitem")).toHaveText(expected.tabs);
 
     await tabs.getByRole("button", { name: "More" }).click();
     const more = page.getByRole("navigation", { name: "More" });

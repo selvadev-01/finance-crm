@@ -69,6 +69,46 @@ export function formatPerMille(value: number): string {
   return `${Math.floor(value / 10)}.${value % 10}%`;
 }
 
+/**
+ * How far `now` moved from `before`, in signed tenths of a percent of
+ * `before`, rounded toward zero: ₹52,95,950 against ₹51,86,000 is 21 (+2.1%).
+ * Null when `before` is not above zero — a change from nothing has no share.
+ */
+export function changePerMille(now: string, before: string): number | null {
+  const base = toPaise(before);
+  if (base <= 0n) return null;
+  return Number(((toPaise(now) - base) * 1000n) / base);
+}
+
+const LAKH = 10_000_000n; // ₹1,00,000 in paise
+const CRORE = 1_000_000_000n; // ₹1,00,00,000 in paise
+
+/**
+ * A headline figure the way the business says it: ₹52.96 L, ₹1.25 Cr, and
+ * below a lakh the plain amount. Rounded half up to two places of the unit,
+ * in exact paise — for a hero figure only; the full amount stays a click away.
+ */
+export function formatCompactCurrency(amount: string): string {
+  const paise = toPaise(amount);
+  const negative = paise < 0n;
+  const abs = negative ? -paise : paise;
+  const sign = negative ? "−" : "";
+  const unit = abs >= CRORE ? CRORE : abs >= LAKH ? LAKH : null;
+  if (unit === null) {
+    // Below a lakh there is at most one comma, at the thousands.
+    const rupees = abs / 100n;
+    const grouped =
+      rupees >= 1000n
+        ? `${rupees / 1000n},${String(rupees % 1000n).padStart(3, "0")}`
+        : `${rupees}`;
+    return `${sign}₹${grouped}.${String(abs % 100n).padStart(2, "0")}`;
+  }
+  const hundredths = (abs * 100n + unit / 2n) / unit;
+  const whole = hundredths / 100n;
+  const fraction = String(hundredths % 100n).padStart(2, "0");
+  return `${sign}₹${whole}.${fraction} ${unit === CRORE ? "Cr" : "L"}`;
+}
+
 /** `a` compared with `b`: negative, zero or positive. */
 export function compareMoney(a: string, b: string): -1 | 0 | 1 {
   const difference = toPaise(a) - toPaise(b);

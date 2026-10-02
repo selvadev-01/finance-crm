@@ -1104,7 +1104,7 @@ export async function seedDataset(
     'BANK_TRANSFER',
     { table: 'bank_transfer', id: transferRows[0]!.id! },
     depositDate,
-    'Cash-in-hand → Seed Bank: Deposit of office cash',
+    'Cash in hand → Seed Bank: Deposit of office cash',
     [
       { account: bankLedger, direction: 'DEBIT', amount: toMoney('50000') },
       { account: officeCash, direction: 'CREDIT', amount: toMoney('50000') },

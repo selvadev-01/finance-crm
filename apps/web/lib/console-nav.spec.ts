@@ -5,28 +5,38 @@ import { mobileNav } from "./console-nav";
 const hrefs = (items: { href: string }[]) => items.map((item) => item.href);
 
 describe("the phone layout's navigation", () => {
-  it("gives every console role the same four tabs, in order", () => {
-    for (const role of ["SUPER_ADMIN", "ADMIN", "SENIOR"] as const) {
-      expect(hrefs(mobileNav(role).tabs)).toEqual([
-        "/dashboard",
-        "/collections",
-        "/customers",
-        "/cash",
-      ]);
-    }
+  it("gives each console role the four tabs of its Stitch home, in order", () => {
+    expect(hrefs(mobileNav("SUPER_ADMIN").tabs)).toEqual([
+      "/dashboard",
+      "/collections",
+      "/customers",
+      "/books",
+    ]);
+    expect(hrefs(mobileNav("ADMIN").tabs)).toEqual([
+      "/dashboard",
+      "/collections",
+      "/customers",
+      "/cash",
+    ]);
+    expect(hrefs(mobileNav("SENIOR").tabs)).toEqual([
+      "/dashboard",
+      "/collections",
+      "/cash",
+      "/customers",
+    ]);
   });
 
-  it("names the dashboard tab for what each role lands on", () => {
-    expect(mobileNav("SUPER_ADMIN").tabs[0]?.label).toBe("Overview");
-    expect(mobileNav("ADMIN").tabs[0]?.label).toBe("Today");
-    expect(mobileNav("SENIOR").tabs[0]?.label).toBe("My line");
+  it("calls every role's dashboard tab Home", () => {
+    for (const role of ["SUPER_ADMIN", "ADMIN", "SENIOR"] as const) {
+      expect(mobileNav(role).tabs[0]?.label).toBe("Home");
+    }
   });
 
   it("puts every other area the role may see under More, and no tab twice", () => {
     const more = mobileNav("SUPER_ADMIN").more.flatMap((group) => group.items);
     expect(hrefs(more)).toEqual([
+      "/cash",
       "/reports",
-      "/books",
       "/lines",
       "/sectors",
       "/team",

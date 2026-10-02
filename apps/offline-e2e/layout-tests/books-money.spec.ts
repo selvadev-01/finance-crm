@@ -1,6 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { BOOKS_SIMPLE } from "../../web/lib/books-mode";
 import { type ApiAnswers, signedInAs, withSavedLayout } from "./fake-api";
+
+/** Why a test of a screen hidden in simple Books skips (lib/books-mode.ts). */
+const HIDDEN = "Hidden in simple Books; kept for when BOOKS_SIMPLE is off";
 
 /**
  * Books slice 2 (ADR-0018): the Books overview, the expenses list and the
@@ -181,9 +185,100 @@ async function capture(page: Page, pattern: string, reply: unknown) {
 }
 
 test.describe("books (ADR-0018)", () => {
+  test("simple Books: four numbers, the buttons, what is waiting, and the latest entries", async ({
+    page,
+  }) => {
+    test.skip(!BOOKS_SIMPLE, "Simple Books is off");
+    await page.setViewportSize(COMPUTER);
+    await signedInAs(page, "SUPER_ADMIN", answers);
+    await page.goto("/books");
+
+    await expect(page.getByRole("heading", { name: "Money" })).toBeVisible();
+    const today = page.getByRole("definition");
+    await expect(today.getByText("−₹1,200.00")).toBeVisible();
+    await expect(today.getByText("₹100.00")).toBeVisible();
+    await expect(today.getByText("₹1,900.00")).toBeVisible();
+    await expect(today.getByText("−₹2,785.00")).toBeVisible();
+    await expect(
+      page.getByText("1 staff expense is waiting for approval."),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Cash in hand is below zero", { exact: false }),
+    ).toBeVisible();
+    const actions = page.getByRole("list", { name: "Actions" });
+    for (const name of [
+      "Add money",
+      "Add expense",
+      "Other income",
+      "Owner took money",
+    ]) {
+      await expect(actions.getByRole("link", { name })).toBeVisible();
+    }
+    // No bank anywhere.
+    await expect(page.getByText("SBI Mylapore")).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("list", { name: "Latest entries" })
+        .getByText("Rent: September rent", { exact: false }),
+    ).toBeVisible();
+  });
+
+  test("an Admin sees no Add money or Owner took money — those are the owner's", async ({
+    page,
+  }) => {
+    test.skip(!BOOKS_SIMPLE, "Simple Books is off");
+    await page.setViewportSize(COMPUTER);
+    await signedInAs(page, "ADMIN", answers);
+    await page.goto("/books");
+    const actions = page.getByRole("list", { name: "Actions" });
+    await expect(actions.getByRole("link")).toHaveCount(2);
+    await expect(actions.getByRole("link", { name: "Add money" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("an Admin records an expense from cash in hand, with nothing to choose", async ({
+    page,
+  }) => {
+    test.skip(!BOOKS_SIMPLE, "Simple Books is off");
+    await page.setViewportSize(COMPUTER);
+    await signedInAs(page, "ADMIN", answers);
+    const sent = await capture(page, "**/api/expenses**", {
+      ...rent,
+      id: "exp-new",
+      amount: "500.00",
+      note: "Broadband",
+    });
+    await page.goto("/books/expenses");
+
+    await page.getByRole("button", { name: "Record expense" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Record expense" });
+    await dialog
+      .getByRole("radiogroup", { name: "Expense type" })
+      .getByRole("radio", { name: "Rent" })
+      .click();
+    await dialog.getByLabel("Amount (₹)").fill("500");
+    await expect(
+      dialog.getByRole("radiogroup", { name: "Paid from" }),
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByText("Cash in hand −₹1,200.00 → −₹1,700.00 after this"),
+    ).toBeVisible();
+    await dialog.getByLabel("Note").fill("Broadband");
+    await dialog.getByRole("button", { name: "Record ₹500.00" }).click();
+    await expect(dialog).toBeHidden();
+    expect(sent.at(-1)).toEqual({
+      categoryId: "cat-rent",
+      amount: "500",
+      note: "Broadband",
+      paidFrom: "OFFICE_CASH",
+    });
+  });
+
   test("the overview shows where the money is, the month as a result, what needs the owner, and the latest movements", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", answers);
     await page.goto("/books");
@@ -226,6 +321,7 @@ test.describe("books (ADR-0018)", () => {
   test("an Admin records an office expense paid from the bank", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", answers);
     const sent = await capture(page, "**/api/expenses**", {
@@ -280,6 +376,7 @@ test.describe("books (ADR-0018)", () => {
   test("an expense paid from a bank is refused without the bank", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", answers);
     const sent = await capture(page, "**/api/expenses**", rent);
@@ -305,6 +402,7 @@ test.describe("books (ADR-0018)", () => {
   test("an Admin moves office cash into the bank, and is not offered a drawing", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", answers);
     const sent = await capture(page, "**/api/bank-transfers**", deposit);
@@ -352,9 +450,9 @@ test.describe("books (ADR-0018)", () => {
     await page.goto("/books/money");
 
     await page.getByRole("button", { name: "Record drawing" }).click();
-    const dialog = page.getByRole("dialog", { name: "Drawings" });
+    const dialog = page.getByRole("dialog", { name: "Owner took money" });
     await dialog.getByLabel("Amount (₹)").fill("1000");
-    await dialog.getByLabel("Narration").fill("For home");
+    await dialog.getByLabel("Note").fill("For home");
     await dialog.getByRole("button", { name: "Record drawing" }).click();
     await expect(dialog).toBeHidden();
     expect(sent.at(-1)).toEqual({ amount: "1000", note: "For home" });
@@ -383,9 +481,12 @@ test.describe("books (ADR-0018)", () => {
       await signedInAs(page, "SUPER_ADMIN", answers);
       await page.setViewportSize(viewport);
       for (const [path, text] of [
-        ["/books", "SBI Mylapore"],
+        ["/books", BOOKS_SIMPLE ? "Latest entries" : "SBI Mylapore"],
         ["/books/expenses", "September rent"],
-        ["/books/money", "Deposit of Monday's collections"],
+        [
+          "/books/money",
+          BOOKS_SIMPLE ? "Owner took money" : "Deposit of Monday's collections",
+        ],
       ] as const) {
         await page.goto(path);
         await expect(

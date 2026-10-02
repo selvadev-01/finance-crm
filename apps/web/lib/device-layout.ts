@@ -33,10 +33,16 @@ export type LayoutDecision =
 export function decideLayout(
   saved: DeviceLayout | null,
   installed: boolean,
+  /**
+   * A small touch screen (decided 2026-10-02): a browser tab on a phone opens
+   * in the phone layout, the Stitch "Rasi Mobile, all roles" screens, rather
+   * than the computer layout folded into a drawer.
+   */
+  phoneScreen = false,
 ): LayoutDecision {
   if (saved) return { kind: "use", layout: saved };
   if (installed) return { kind: "ask" };
-  return { kind: "use", layout: "desktop" };
+  return { kind: "use", layout: phoneScreen ? "mobile" : "desktop" };
 }
 
 /** The option the chooser marks as suggested: a small touch screen is a phone. */
@@ -112,6 +118,44 @@ function subscribeInstalled(listener: () => void) {
 
 export function useInstalled(): boolean {
   return useSyncExternalStore(subscribeInstalled, readInstalled, () => false);
+}
+
+/* -------------------------------------------------------------------------
+ * Whether this is a phone's screen: narrow, and touched rather than pointed.
+ * ---------------------------------------------------------------------- */
+
+const PHONE_SCREEN = "(max-width: 767px) and (pointer: coarse)";
+
+function readPhoneScreen(): boolean {
+  return window.matchMedia(PHONE_SCREEN).matches;
+}
+
+function subscribePhoneScreen(listener: () => void) {
+  const query = window.matchMedia(PHONE_SCREEN);
+  query.addEventListener("change", listener);
+  return () => query.removeEventListener("change", listener);
+}
+
+export function usePhoneScreen(): boolean {
+  return useSyncExternalStore(
+    subscribePhoneScreen,
+    readPhoneScreen,
+    () => false,
+  );
+}
+
+/**
+ * The layout the console is showing right now — the one decision both the
+ * frame (`ConsoleShell`) and a page laid out for each (the dashboards) read,
+ * so they can never disagree. `null` while the installed app is asking.
+ */
+export function useLayoutInUse(): DeviceLayout | null {
+  const decision = decideLayout(
+    useSavedLayout(),
+    useInstalled(),
+    usePhoneScreen(),
+  );
+  return decision.kind === "use" ? decision.layout : null;
 }
 
 /** The chooser's suggestion for this screen. */

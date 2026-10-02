@@ -1,6 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { BOOKS_SIMPLE } from "../../web/lib/books-mode";
 import { type ApiAnswers, signedInAs, withSavedLayout } from "./fake-api";
+
+/** Why a test of a screen hidden in simple Books skips (lib/books-mode.ts). */
+const HIDDEN = "Hidden in simple Books; kept for when BOOKS_SIMPLE is off";
 
 /**
  * Books slice 4 (ADR-0018): profit and loss, the balance sheet, the cash book
@@ -149,7 +153,7 @@ test.describe("statements (ADR-0018)", () => {
     const expenses = page.getByRole("region", { name: "Expenses" });
     await expect(
       expenses
-        .getByRole("list", { name: "Expenses by head" })
+        .getByRole("list", { name: "Expenses by type" })
         .getByText("Rent"),
     ).toBeVisible();
     await expect(
@@ -161,6 +165,7 @@ test.describe("statements (ADR-0018)", () => {
   test("the balance sheet's two sides agree, with deductions in brackets", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", answers);
     await page.goto(`/books/balance-sheet?date=${MONDAY}`);
@@ -182,6 +187,7 @@ test.describe("statements (ADR-0018)", () => {
   test("an unbalanced sheet says it is a fault, not a figure", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "ADMIN", {
       ...answers,
@@ -196,6 +202,7 @@ test.describe("statements (ADR-0018)", () => {
   test("the cash book opens on office cash, switches to a bank, and runs its balance", async ({
     page,
   }) => {
+    test.skip(BOOKS_SIMPLE, HIDDEN);
     await page.setViewportSize(COMPUTER);
     const asked: string[] = [];
     await signedInAs(page, "ADMIN", answers);
@@ -278,8 +285,12 @@ test.describe("statements (ADR-0018)", () => {
       await page.setViewportSize(viewport);
       for (const [path, text] of [
         ["/books/profit-and-loss", "Total income"],
-        ["/books/balance-sheet", "Reserves & surplus"],
-        ["/books/cash-book", "Rent: January rent"],
+        ...(BOOKS_SIMPLE
+          ? []
+          : ([
+              ["/books/balance-sheet", "Reserves & surplus"],
+              ["/books/cash-book", "Rent: January rent"],
+            ] as const)),
         ["/books/statements/la-capital", "Opening capital"],
       ] as const) {
         await page.goto(path);

@@ -33,7 +33,7 @@ import { decodeCursor, encodeCursor } from '../platform/pagination.js';
 
 type Tx = Database['client'];
 
-const OFFICE_CASH = 'Cash-in-hand';
+const OFFICE_CASH = 'Cash in hand';
 
 /** Where money is held: office cash, or one of the business's active banks. */
 interface Place {

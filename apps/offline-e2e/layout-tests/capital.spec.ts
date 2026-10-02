@@ -56,7 +56,7 @@ const answers = (officeCash: string): ApiAnswers => ({
 });
 
 const section = (page: Page) =>
-  page.getByRole("region", { name: "Capital A/c" });
+  page.getByRole("region", { name: "Money added by owner" });
 
 test.describe("capital on Books (US-032)", () => {
   test("the Super Admin sees office cash, what was put in, and may add capital", async ({
@@ -68,7 +68,7 @@ test.describe("capital on Books (US-032)", () => {
 
     const capital = section(page);
     await expect(
-      capital.getByText("Cash-in-hand", { exact: true }),
+      capital.getByText("Cash in hand", { exact: true }),
     ).toBeVisible();
     await expect(capital.getByText("₹18,300.00")).toBeVisible();
     await expect(capital.getByText("₹20,000.00").first()).toBeVisible();
@@ -77,7 +77,7 @@ test.describe("capital on Books (US-032)", () => {
     ).toBeVisible();
     await expect(capital.getByText("by Sri Murugan")).toBeVisible();
     await expect(
-      capital.getByRole("button", { name: "Add capital" }),
+      capital.getByRole("button", { name: "Add money" }),
     ).toBeVisible();
   });
 
@@ -113,22 +113,18 @@ test.describe("capital on Books (US-032)", () => {
     };
     await signedInAs(page, "SUPER_ADMIN", none);
     await page.goto("/books/money");
-    await expect(
-      section(page).getByText("No capital recorded yet"),
-    ).toBeVisible();
+    await expect(section(page).getByText("No money added yet")).toBeVisible();
     // The header's button and the empty state's.
     await expect(
-      section(page).getByRole("button", { name: "Add capital" }),
+      section(page).getByRole("button", { name: "Add money" }),
     ).toHaveCount(2);
 
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await signedInAs(page, "ADMIN", none);
     await page.goto("/books/money");
+    await expect(section(page).getByText("No money added yet")).toBeVisible();
     await expect(
-      section(page).getByText("No capital recorded yet"),
-    ).toBeVisible();
-    await expect(
-      section(page).getByRole("button", { name: "Add capital" }),
+      section(page).getByRole("button", { name: "Add money" }),
     ).toHaveCount(0);
   });
 
@@ -140,10 +136,10 @@ test.describe("capital on Books (US-032)", () => {
     await page.goto("/books/money");
 
     await expect(
-      section(page).getByText("Cash-in-hand", { exact: true }),
+      section(page).getByText("Cash in hand", { exact: true }),
     ).toBeVisible();
     await expect(
-      section(page).getByRole("button", { name: "Add capital" }),
+      section(page).getByRole("button", { name: "Add money" }),
     ).toHaveCount(0);
   });
 
@@ -185,14 +181,14 @@ test.describe("capital on Books (US-032)", () => {
     });
 
     await page.goto("/books/money");
-    await section(page).getByRole("button", { name: "Add capital" }).click();
-    const dialog = page.getByRole("dialog", { name: "Add capital" });
+    await section(page).getByRole("button", { name: "Add money" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add money" });
     await expect(
-      dialog.getByText("An entry cannot be changed afterwards"),
+      dialog.getByText("An entry cannot be changed later"),
     ).toBeVisible();
     await dialog.getByLabel("Amount (₹)").fill("5,000");
-    await dialog.getByLabel("Narration").fill("  Gold loan  ");
-    await dialog.getByRole("button", { name: "Add capital" }).click();
+    await dialog.getByLabel("Note").fill("  Gold loan  ");
+    await dialog.getByRole("button", { name: "Add money" }).click();
 
     await expect(dialog).toBeHidden();
     expect(sent).toEqual({ amount: "5000", note: "Gold loan" });
@@ -211,12 +207,12 @@ test.describe("capital on Books (US-032)", () => {
     });
 
     await page.goto("/books/money");
-    await section(page).getByRole("button", { name: "Add capital" }).click();
-    const dialog = page.getByRole("dialog", { name: "Add capital" });
-    await dialog.getByRole("button", { name: "Add capital" }).click();
+    await section(page).getByRole("button", { name: "Add money" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add money" });
+    await dialog.getByRole("button", { name: "Add money" }).click();
 
     await expect(dialog.getByText("Amount (₹) is required.")).toBeVisible();
-    await expect(dialog.getByText("Narration is required.")).toBeVisible();
+    await expect(dialog.getByText("Note is required.")).toBeVisible();
     expect(posts).toBe(0);
   });
 
@@ -226,9 +222,7 @@ test.describe("capital on Books (US-032)", () => {
     await page.setViewportSize(COMPUTER);
     await signedInAs(page, "SUPER_ADMIN", answers("-1700.00"));
     await page.goto("/books/money?action=capital");
-    await expect(
-      page.getByRole("dialog", { name: "Add capital" }),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Add money" })).toBeVisible();
   });
 
   for (const [name, viewport] of [
@@ -242,7 +236,7 @@ test.describe("capital on Books (US-032)", () => {
       await page.goto("/books/money");
 
       await expect(
-        section(page).getByText("Cash-in-hand", { exact: true }),
+        section(page).getByText("Cash in hand", { exact: true }),
       ).toBeVisible();
       const overflows = await page.evaluate(
         () =>

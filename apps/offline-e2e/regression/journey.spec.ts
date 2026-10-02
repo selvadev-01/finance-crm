@@ -120,16 +120,16 @@ test.describe.serial("regression: a business day in Chennai", () => {
     // give it is not there; the owner adds what the day needs.
     await page.goto("/settings/expense-categories");
     await page
-      .getByRole("button", { name: "Add expense head" })
+      .getByRole("button", { name: "Add expense type" })
       .first()
       .click();
-    const add = page.getByRole("dialog", { name: "Add an expense head" });
+    const add = page.getByRole("dialog", { name: "Add an expense type" });
     await add.getByLabel("Name").fill(data.fieldExpense.category);
-    await add.getByRole("button", { name: "Add expense head" }).click();
+    await add.getByRole("button", { name: "Add expense type" }).click();
     await expect(add).toBeHidden();
     await expect(
       page
-        .getByRole("list", { name: "Expense heads" })
+        .getByRole("list", { name: "Expense types" })
         .getByText(data.fieldExpense.category),
     ).toBeVisible();
 
@@ -138,7 +138,7 @@ test.describe.serial("regression: a business day in Chennai", () => {
     await addCapital(page, data.capital);
     await expect(
       page
-        .getByRole("region", { name: "Capital A/c" })
+        .getByRole("region", { name: "Money added by owner" })
         .getByText(data.capital.note),
     ).toBeVisible();
   });
@@ -391,7 +391,7 @@ test.describe.serial("regression: a business day in Chennai", () => {
     await page.goto("/route#expense");
     await expect(page.getByTestId("expense")).toBeVisible();
     await page
-      .getByRole("radiogroup", { name: "Expense head" })
+      .getByRole("radiogroup", { name: "Expense type" })
       .getByRole("radio", { name: data.fieldExpense.category })
       .click();
     await page
@@ -401,7 +401,7 @@ test.describe.serial("regression: a business day in Chennai", () => {
     const preview = page.getByRole("note", { name: "Handover after approval" });
     await expect(preview.getByText("₹390.00")).toBeVisible();
     await expect(preview.getByText("₹340.00")).toBeVisible();
-    await page.getByLabel("Narration").fill(data.fieldExpense.note);
+    await page.getByLabel("Note").fill(data.fieldExpense.note);
     await page.getByRole("button", { name: "Send for approval" }).click();
     await expect(
       page.getByText("₹50.00 for fuel & travel sent for approval."),

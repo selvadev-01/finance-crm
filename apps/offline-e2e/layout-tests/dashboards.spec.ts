@@ -229,8 +229,169 @@ const trend = {
   ),
 };
 
+/**
+ * S-07's ledger figures (2026-10-02): the balance sheet on the date and at
+ * the month's opening, the month's profit and loss, Books' overview and the
+ * overdue summary. The two sides of each sheet are equal, as the API's are.
+ */
+const sheetOn = (asOf: string, retainedProfit: string, total: string) => ({
+  asOf,
+  generatedAt: AT,
+  assets: {
+    officeCash: "120250.00",
+    banks: [{ id: "bank-1", name: "SBI Mylapore", balance: "564000.00" }],
+    cashWithStaff: [{ id: "staff-1", name: "Ravi K", balance: "151700.00" }],
+    loansReceivable: subtract(total, "323650.00"),
+    unearnedProfit: "512300.00",
+    total,
+  },
+  equity: {
+    capital: "4500000.00",
+    drawings: "60000.00",
+    retainedProfit,
+    total,
+  },
+  balanced: true,
+});
+
+/** `a − b` for two-place decimal strings, in paise, for the fixtures only. */
+function subtract(a: string, b: string): string {
+  const paise = (value: string) => BigInt(value.replace(".", ""));
+  const result = paise(a) - paise(b);
+  return `${result / 100n}.${String(result % 100n).padStart(2, "0")}`;
+}
+
+const balanceSheet = sheetOn(DATE, "655950.00", "5095950.00");
+const openingSheet = sheetOn("2026-08-31", "536180.00", "4976180.00");
+
+const profitAndLoss = {
+  from: "2026-09-01",
+  to: DATE,
+  generatedAt: AT,
+  income: {
+    earnedProfit: "138420.00",
+    otherIncome: "0.00",
+    total: "138420.00",
+  },
+  expenses: {
+    categories: [
+      { categoryId: "cat-1", name: "Salaries", amount: "12000.00" },
+      { categoryId: "cat-2", name: "Fuel", amount: "3150.00" },
+      { categoryId: "cat-3", name: "Rent", amount: "2500.00" },
+      { categoryId: "cat-4", name: "Stationery", amount: "1000.00" },
+    ],
+    writeOffLoss: "0.00",
+    total: "18650.00",
+  },
+  netProfit: "119770.00",
+};
+
+const booksOverview = {
+  asOf: DATE,
+  officeCash: "120250.00",
+  banks: [
+    {
+      bankAccountId: "bank-1",
+      name: "SBI Mylapore",
+      last4: "4821",
+      balance: "564000.00",
+    },
+  ],
+  month: {
+    from: "2026-09-01",
+    expenses: "18650.00",
+    otherIncome: "0.00",
+    drawings: "0.00",
+    capital: "0.00",
+    pendingFieldExpenses: 3,
+  },
+};
+
+const overdueReport = {
+  data: [],
+  nextCursor: null,
+  hasMore: false,
+  asOf: DATE,
+  generatedAt: AT,
+  summary: {
+    accounts: 70,
+    lines: 9,
+    outstanding: "450000.00",
+    arrears: "61200.00",
+    longestOverdue: null,
+  },
+};
+
+/**
+ * S-19's per-Junior cash (2026-10-02): the discrepancy report's rows for the
+ * line and day (BR-17). Selvi's ₹9,600 is acknowledged and tallies; Suresh
+ * has counted out ₹5,000 of ₹5,220, waiting for the Senior — ₹220 short.
+ */
+const cashRow = (
+  collectedByUserId: string,
+  collectedByName: string,
+  collected: string,
+  cash: {
+    handedOver: string;
+    acknowledged: string;
+    awaiting: string;
+    difference: string;
+    state: string;
+  },
+) => ({
+  businessDate: DATE,
+  lineId: "line-1",
+  lineCode: "LIN-00001",
+  lineName: "Mylapore East",
+  sectorId: "sec-1",
+  sectorName: "Mylapore",
+  collectedByUserId,
+  collectedByName,
+  collected,
+  cash: { ...cash, expenses: "0.00", handovers: [] },
+  dayCloseStatus: "OPEN",
+});
+
+const discrepancy = {
+  data: [
+    cashRow("user-junior", "Selvi M", "9600.00", {
+      handedOver: "9600.00",
+      acknowledged: "9600.00",
+      awaiting: "0.00",
+      difference: "0.00",
+      state: "TALLIED",
+    }),
+    cashRow("user-junior-2", "Suresh P", "5220.00", {
+      handedOver: "5000.00",
+      acknowledged: "0.00",
+      awaiting: "5000.00",
+      difference: "-220.00",
+      state: "AWAITING",
+    }),
+  ],
+  nextCursor: null,
+  hasMore: false,
+  from: DATE,
+  to: DATE,
+  generatedAt: AT,
+  summary: {
+    rows: 2,
+    lines: 1,
+    days: 1,
+    collected: "14820.00",
+    cash: null,
+  },
+};
+
 const answers: ApiAnswers = {
   "/api/dashboards/overview": { json: overview },
+  "/api/reports/discrepancy": { json: discrepancy },
+  "/api/books/balance-sheet": (url) => ({
+    json: url.searchParams.get("date") === DATE ? balanceSheet : openingSheet,
+  }),
+  "/api/books/profit-and-loss": { json: profitAndLoss },
+  "/api/books/overview": { json: booksOverview },
+  "/api/reports/overdue": { json: overdueReport },
   "/api/dashboards/operations": { json: operations },
   "/api/dashboards/line": { json: line },
   "/api/dashboards/trend": { json: trend },
@@ -238,11 +399,15 @@ const answers: ApiAnswers = {
   "/api/sectors": { json: { data: [], nextCursor: null, hasMore: false } },
 };
 
-/** Each role's landing, and a figure that only its dashboard shows. */
-const DASHBOARDS: [ConsoleRole, string, RegExp][] = [
-  ["SUPER_ADMIN", "S-07 business overview", /Triplicane/],
-  ["ADMIN", "S-20 operational dashboard", /Luz Corner/],
-  ["SENIOR", "S-19 line dashboard", /Parvathi Sundaram/],
+/**
+ * Each role's landing, and a figure only its dashboard shows — on a
+ * computer, and on the phone home (2026-10-02), which shows only what its
+ * Stitch screen does.
+ */
+const DASHBOARDS: [ConsoleRole, string, RegExp, RegExp][] = [
+  ["SUPER_ADMIN", "S-07 business overview", /Triplicane/, /Total funds/],
+  ["ADMIN", "S-20 operational dashboard", /Luz Corner/, /Luz Corner/],
+  ["SENIOR", "S-19 line dashboard", /Parvathi Sundaram/, /Suresh P/],
 ];
 
 const WIDTHS = [
@@ -259,7 +424,7 @@ const overflows = (page: Page) =>
   );
 
 test.describe("the dashboards at every width (ADR-0015)", () => {
-  for (const [role, screen, figure] of DASHBOARDS) {
+  for (const [role, screen, figure, phoneFigure] of DASHBOARDS) {
     for (const [name, viewport] of WIDTHS) {
       test(`${screen} fits a ${name}`, async ({ page }) => {
         await withSavedLayout(page, name === "phone" ? "mobile" : "desktop");
@@ -268,12 +433,220 @@ test.describe("the dashboards at every width (ADR-0015)", () => {
         await page.goto(`/dashboard?date=${DATE}`);
 
         await expect(
-          page.getByText(figure).filter({ visible: true }).first(),
+          page
+            .getByText(name === "phone" ? phoneFigure : figure)
+            .filter({ visible: true })
+            .first(),
         ).toBeVisible();
         expect(await overflows(page), `${screen} at ${name}`).toBe(false);
       });
     }
   }
+});
+
+test.describe("S-07 reads the ledger (2026-10-02)", () => {
+  test("the owner sees total funds, where the money is and the month's profit", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "desktop");
+    await signedInAs(page, "SUPER_ADMIN", answers);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/dashboard?date=${DATE}`);
+
+    const hero = page.getByRole("region", { name: "Your money" });
+    // Capital ₹45 L − drawings ₹0.60 L + kept profit ₹6.56 L.
+    await expect(hero.getByText("₹50.96 L").first()).toBeVisible();
+    // Against ₹49.76 L at the month's opening: up 2.4%.
+    await expect(hero.getByText(/2\.4% this month/)).toBeVisible();
+    await expect(hero.getByText("₹1.20 L").first()).toBeVisible();
+
+    const donut = page.getByRole("list", { name: "Where your money is" });
+    // Principal still lent: ₹47,72,300 owed less ₹5,12,300 not yet earned.
+    await expect(donut.getByText("₹42.60 L")).toBeVisible();
+    await expect(page.getByText("Books balance")).toBeVisible();
+
+    await expect(
+      // The hero carries it too, for a screen reader; this is the P&L box.
+      page.getByText("₹1,19,770.00").last(),
+    ).toBeVisible();
+    await expect(page.getByText("₹4,50,000.00")).toBeVisible();
+    await expect(
+      page
+        .getByRole("list", { name: "Needs your attention" })
+        .getByText("Field expenses to approve"),
+    ).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
+  test("a balance sheet that fails leaves the day's collections standing", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "desktop");
+    await signedInAs(page, "SUPER_ADMIN", {
+      ...answers,
+      "/api/books/balance-sheet": { status: 500, json: { code: "INTERNAL" } },
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/dashboard?date=${DATE}`);
+
+    await expect(page.getByText("₹1,76,320.00").first()).toBeVisible();
+    await expect(
+      page
+        .getByText(/Triplicane/)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByRole("region", { name: "Your money" })).toHaveCount(
+      0,
+    );
+  });
+});
+
+test.describe("S-20 and S-19 redesigned (2026-10-02)", () => {
+  test("the Admin sees the day in the hero, what needs someone, and the books", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "desktop");
+    await signedInAs(page, "ADMIN", answers);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/dashboard?date=${DATE}`);
+
+    const hero = page.getByRole("region", { name: "The day" });
+    await expect(hero.getByText(/collected$/)).toBeVisible();
+    await expect(
+      page.getByRole("navigation", { name: "Quick actions" }),
+    ).toBeVisible();
+    await expect(page.getByText("Books today")).toBeVisible();
+    await expect(
+      page
+        .getByRole("list", { name: "Needs attention" })
+        .getByText("Field expenses to approve"),
+    ).toBeVisible();
+    await expect(page.getByText(/Luz Corner/).first()).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
+  test("the Senior sees each Junior's cash, signed, and what waits before closing", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "desktop");
+    await signedInAs(page, "SENIOR", answers);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/dashboard?date=${DATE}`);
+
+    const juniors = page.getByRole("table", { name: "My Juniors" });
+    // Suresh counted out ₹5,000 of ₹5,220: short, and waiting for the Senior.
+    await expect(
+      juniors.getByRole("link", {
+        name: "Acknowledge ₹5,000.00 from Suresh P",
+      }),
+    ).toBeVisible();
+    await expect(juniors.getByText(/₹220\.00/)).toBeVisible();
+    await expect(
+      page
+        .getByRole("list", { name: "Waiting on you" })
+        .getByText("Handovers to acknowledge"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Close the day/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Parvathi Sundaram/).first()).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
+  test("the Senior's figures stand when the Juniors' cash can't be read", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "desktop");
+    await signedInAs(page, "SENIOR", {
+      ...answers,
+      "/api/reports/discrepancy": { status: 500, json: { code: "INTERNAL" } },
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/dashboard?date=${DATE}`);
+
+    await expect(
+      page.getByText(/Juniors’ cash couldn’t be read/),
+    ).toBeVisible();
+    await expect(page.getByText("Selvi M").first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Acknowledge/ })).toHaveCount(
+      0,
+    );
+  });
+});
+
+test.describe("the phone home for each console role (2026-10-02)", () => {
+  async function onPhone(page: Page, role: ConsoleRole) {
+    await withSavedLayout(page, "mobile");
+    await signedInAs(page, role, answers);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/dashboard?date=${DATE}`);
+  }
+  const menu = (page: Page) =>
+    page.locator("section[aria-labelledby='home-menu']");
+
+  test("the owner's home has the books and the settings in its menu", async ({
+    page,
+  }) => {
+    await onPhone(page, "SUPER_ADMIN");
+    await expect(
+      page
+        .getByRole("region", { name: "Your money" })
+        .getByText("₹50.96 L")
+        .first(),
+    ).toBeVisible();
+    await expect(
+      menu(page).getByRole("link", { name: "Balance sheet" }),
+    ).toBeVisible();
+    await expect(
+      menu(page).getByRole("link", { name: "Settings" }),
+    ).toBeVisible();
+    // Books' 3 field expenses waiting ride on the Expenses tile.
+    await expect(
+      menu(page).getByRole("link", { name: "Expenses, 3 waiting" }),
+    ).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
+  test("an Admin's home lists the lines as cards and offers a new customer", async ({
+    page,
+  }) => {
+    await onPhone(page, "ADMIN");
+    await expect(page.getByRole("region", { name: "The day" })).toBeVisible();
+    await expect(menu(page).getByRole("link", { name: "Books" })).toBeVisible();
+    await expect(
+      menu(page).getByRole("link", { name: "Settings" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("list", { name: "Lines today" }).getByText("Luz Corner"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "New customer" }),
+    ).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
+  test("a Senior's home keeps to their line and holds Close the day above the tabs", async ({
+    page,
+  }) => {
+    await onPhone(page, "SENIOR");
+    for (const hidden of ["Books", "Sectors", "Audit log"]) {
+      await expect(menu(page).getByRole("link", { name: hidden })).toHaveCount(
+        0,
+      );
+    }
+    await expect(
+      menu(page).getByRole("link", { name: "Handovers, 1 waiting" }),
+    ).toHaveAttribute("href", `/lines/line-1/day-closes/${DATE}`);
+    await expect(
+      page
+        .getByRole("list", { name: "Waiting on you" })
+        .getByRole("link", { name: "Acknowledge ₹5,000.00 from Suresh P" }),
+    ).toBeVisible();
+    const close = page.getByRole("link", { name: "Close the day" });
+    await expect(close).toBeInViewport();
+    expect(await overflows(page)).toBe(false);
+  });
 });
 
 test.describe("the sidebar rail (ADR-0015)", () => {

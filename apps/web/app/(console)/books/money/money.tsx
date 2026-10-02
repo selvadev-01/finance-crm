@@ -49,6 +49,7 @@ import {
   canManageOrganisation,
   seesSettings,
 } from "../../../../lib/roles";
+import { BOOKS_SIMPLE } from "../../../../lib/books-mode";
 import { CapitalSection } from "../capital-section";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
@@ -67,13 +68,13 @@ const LISTS = {
   },
   income: {
     route: booksMoneyContract.listOtherIncome,
-    label: "Receipts",
+    label: "Other income",
     noun: ["entries", "entry"],
     empty: "No other receipts yet.",
   },
   drawing: {
     route: booksMoneyContract.listDrawings,
-    label: "Drawings",
+    label: "Owner took out",
     noun: ["drawings", "drawing"],
     empty: "No drawings yet.",
   },
@@ -103,7 +104,9 @@ export function MoneyMovements({
   const [dialog, setDialog] = useState<Kind | null>(
     startAction === "drawing" && !owner ? null : (startAction ?? null),
   );
-  const [shown, setShown] = useState<Kind>(startAction ?? "transfer");
+  const [shown, setShown] = useState<Kind>(
+    startAction ?? (BOOKS_SIMPLE ? "income" : "transfer"),
+  );
   // Bumped after a save, so the list shown reads itself again.
   const [saved, setSaved] = useState(0);
   const overview = useApiQuery(
@@ -137,47 +140,59 @@ export function MoneyMovements({
   return (
     <>
       <PageHeader
-        title="Contra, receipts & drawings"
-        description="Money moving between the office and the banks, money earned beside collections, and money the owner takes out."
+        title={
+          BOOKS_SIMPLE ? "Owner money & income" : "Contra, receipts & drawings"
+        }
+        description={
+          BOOKS_SIMPLE
+            ? "Money the owner adds or takes out, and income that is not a collection."
+            : "Money moving between the office and the banks, money earned beside collections, and money the owner takes out."
+        }
       />
 
       <ul
         aria-label="Actions"
-        className="grid grid-cols-1 gap-3 md:grid-cols-3"
+        className={cn(
+          "grid grid-cols-1 gap-3",
+          BOOKS_SIMPLE ? "md:grid-cols-2" : "md:grid-cols-3",
+        )}
       >
-        <ActionCard
-          icon={ArrowsLeftRight}
-          title="Contra entry"
-          text="Cash deposit, cash withdrawal, or bank to bank."
-          action={
-            <Button
-              tone="primary"
-              onClick={() => setDialog("transfer")}
-              disabled={bankList.length === 0}
-            >
-              Contra entry
-            </Button>
-          }
-          note={
-            bankList.length === 0
-              ? "Add a bank account in Settings first."
-              : undefined
-          }
-        />
+        {/* Simple Books (lib/books-mode.ts): no bank, so no contra. */}
+        {BOOKS_SIMPLE ? null : (
+          <ActionCard
+            icon={ArrowsLeftRight}
+            title="Contra entry"
+            text="Cash deposit, cash withdrawal, or bank to bank."
+            action={
+              <Button
+                tone="primary"
+                onClick={() => setDialog("transfer")}
+                disabled={bankList.length === 0}
+              >
+                Contra entry
+              </Button>
+            }
+            note={
+              bankList.length === 0
+                ? "Add a bank account in Settings first."
+                : undefined
+            }
+          />
+        )}
         <ActionCard
           icon={Coins}
-          title="Other receipts"
-          text="Receipts other than collections — processing fee, bank interest."
+          title="Other income"
+          text="Money earned that is not a collection — a processing fee."
           action={
             <Button tone="secondary" onClick={() => setDialog("income")}>
-              Record receipt
+              Record income
             </Button>
           }
         />
         <ActionCard
           icon={HandCoins}
-          title="Drawings"
-          text="Withdrawn by the owner. Not an expense; does not reduce profit."
+          title="Owner took money"
+          text="Money the owner takes out for home. Not an expense."
           action={
             owner ? (
               <Button tone="secondary" onClick={() => setDialog("drawing")}>
@@ -190,25 +205,27 @@ export function MoneyMovements({
         />
       </ul>
 
-      <StatGrid columns={3} aria-label="This month">
-        <Stat
-          label="Contra"
-          hint={
-            transfersThisMonth.status === "ready"
-              ? `${transfersThisMonth.data.total} ${transfersThisMonth.data.total === 1 ? "transfer" : "transfers"} this month`
-              : "This month"
-          }
-        >
-          {transfersThisMonth.status === "ready"
-            ? formatCurrency(transfersThisMonth.data.amountTotal)
-            : "—"}
-        </Stat>
-        <Stat label="Other receipts" hint="This month">
+      <StatGrid columns={BOOKS_SIMPLE ? 2 : 3} aria-label="This month">
+        {BOOKS_SIMPLE ? null : (
+          <Stat
+            label="Contra"
+            hint={
+              transfersThisMonth.status === "ready"
+                ? `${transfersThisMonth.data.total} ${transfersThisMonth.data.total === 1 ? "transfer" : "transfers"} this month`
+                : "This month"
+            }
+          >
+            {transfersThisMonth.status === "ready"
+              ? formatCurrency(transfersThisMonth.data.amountTotal)
+              : "—"}
+          </Stat>
+        )}
+        <Stat label="Other income" hint="This month">
           {overview.status === "ready"
             ? formatCurrency(overview.data.month.otherIncome)
             : "—"}
         </Stat>
-        <Stat label="Drawings" hint="This month">
+        <Stat label="Owner took out" hint="This month">
           {overview.status === "ready"
             ? formatCurrency(overview.data.month.drawings)
             : "—"}
@@ -223,34 +240,36 @@ export function MoneyMovements({
         onChanged={() => overview.reload()}
       />
 
-      <Section title="Transactions">
+      <Section title="Entries">
         <div
           role="tablist"
           aria-label="Transaction type"
           className="flex w-fit gap-1 rounded-control bg-surface-sunken p-1"
         >
-          {(Object.keys(LISTS) as Kind[]).map((kind) => (
-            <button
-              key={kind}
-              type="button"
-              role="tab"
-              aria-selected={shown === kind}
-              onClick={() => setShown(kind)}
-              className={cn(
-                "rounded-control px-3 py-1.5 text-label transition-colors",
-                shown === kind
-                  ? "bg-surface-raised text-ink shadow-raised"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              {LISTS[kind].label}
-            </button>
-          ))}
+          {(Object.keys(LISTS) as Kind[])
+            .filter((kind) => !BOOKS_SIMPLE || kind !== "transfer")
+            .map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                role="tab"
+                aria-selected={shown === kind}
+                onClick={() => setShown(kind)}
+                className={cn(
+                  "rounded-control px-3 py-1.5 text-label transition-colors",
+                  shown === kind
+                    ? "bg-surface-raised text-ink shadow-raised"
+                    : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {LISTS[kind].label}
+              </button>
+            ))}
         </div>
         <MovementList key={`${shown}-${saved}`} kind={shown} />
       </Section>
 
-      {dialog === "transfer" ? (
+      {!BOOKS_SIMPLE && dialog === "transfer" ? (
         <TransferDialog
           banks={bankList}
           officeCash={officeCash}
@@ -535,7 +554,7 @@ function TransferDialog({
         </FormField>
         <FormField
           name="note"
-          label="Narration"
+          label="Note"
           hint="“Deposit of Monday’s collections”."
           valueAs="trimmed"
         >
@@ -589,13 +608,13 @@ function OneSidedDialog({
     <DialogForm
       form={form}
       onClose={onClose}
-      title={income ? "Other receipt" : "Drawings"}
+      title={income ? "Other income" : "Owner took money"}
       description={
         income
           ? `Money earned that is not a collection. It adds to the profit. ${NEVER_EDITED}`
           : `Withdrawn by the owner. ${NEVER_EDITED}`
       }
-      submitLabel={income ? "Record receipt" : "Record drawing"}
+      submitLabel={income ? "Record income" : "Record drawing"}
       pendingLabel="Recording…"
       onSubmit={async (body) => {
         const result = await apiWrite(route, { body });
@@ -622,11 +641,14 @@ function OneSidedDialog({
         />
       </FormField>
       <div className="flex flex-col gap-1.5">
-        <PlaceField
-          name="bankAccountId"
-          label={income ? "Received into" : "Taken from"}
-          banks={banks}
-        />
+        {/* Simple Books: always cash in hand. */}
+        {BOOKS_SIMPLE ? null : (
+          <PlaceField
+            name="bankAccountId"
+            label={income ? "Received into" : "Taken from"}
+            banks={banks}
+          />
+        )}
         <NowAfter now={now} after={after} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -640,7 +662,7 @@ function OneSidedDialog({
         </FormField>
         <FormField
           name="note"
-          label="Narration"
+          label="Note"
           hint={
             income
               ? "“Processing fee, Kumar”, “Savings interest for March”."
@@ -654,8 +676,8 @@ function OneSidedDialog({
       <p className="flex items-start gap-2 text-caption text-ink-muted">
         <Info aria-hidden size={16} className="mt-px shrink-0" />
         {income
-          ? "Other receipts add to the profit, beside what collections earn."
-          : "A drawing is not an expense: it lowers what the owner has in the business, not the profit."}
+          ? "Other income adds to the profit, beside what collections earn."
+          : "Not an expense: it lowers the owner's money in the business, not the profit."}
       </p>
     </DialogForm>
   );

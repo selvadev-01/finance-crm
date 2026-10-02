@@ -31,7 +31,7 @@ const SINGLETON: Record<
   Exclude<JournalType, 'BANK' | 'EXPENSE'>,
   { type: Parameters<LedgerService['organizationAccount']>[1]; name: string }
 > = {
-  CASH_AT_OFFICE: { type: 'CASH_AT_OFFICE', name: 'Cash-in-hand' },
+  CASH_AT_OFFICE: { type: 'CASH_AT_OFFICE', name: 'Cash in hand' },
   OTHER_INCOME: { type: 'OTHER_INCOME', name: 'Other income' },
   CAPITAL: { type: 'CAPITAL', name: 'Capital' },
   OWNER_DRAWINGS: { type: 'OWNER_DRAWINGS', name: 'Owner drawings' },

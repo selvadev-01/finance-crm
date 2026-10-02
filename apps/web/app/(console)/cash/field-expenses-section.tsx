@@ -331,7 +331,7 @@ function RequestFieldExpenseDialog({
         onDone();
       }}
     >
-      <FormField name="categoryId" label="Expense head">
+      <FormField name="categoryId" label="Expense type">
         <Select>
           <option value="" disabled>
             Choose a category
@@ -346,7 +346,7 @@ function RequestFieldExpenseDialog({
       <FormField name="amount" label="Amount (₹)">
         <Input inputMode="decimal" autoComplete="off" />
       </FormField>
-      <FormField name="note" label="Narration" valueAs="trimmed">
+      <FormField name="note" label="Note" valueAs="trimmed">
         <Textarea maxLength={500} rows={2} />
       </FormField>
     </DialogForm>

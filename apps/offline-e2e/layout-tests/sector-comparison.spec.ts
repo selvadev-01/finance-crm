@@ -169,6 +169,33 @@ test.describe("the sector comparison (US-081)", () => {
     ).toHaveCount(0);
   });
 
+  test("on a phone each sector is a card: the day's money, its lines, a bar and its tally (S-07b)", async ({
+    page,
+  }) => {
+    await withSavedLayout(page, "mobile");
+    await signedInAs(page, "SUPER_ADMIN", answers());
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(PATH);
+
+    const cards = page.getByRole("list", { name: "Sectors compared" });
+    const mylapore = cards
+      .getByRole("listitem")
+      .filter({ hasText: "Mylapore" });
+    await expect(mylapore.getByText("₹4,320.00")).toHaveClass(/text-warning/);
+    await expect(mylapore.getByText(/% collected/)).toBeVisible();
+    await expect(
+      cards
+        .getByRole("listitem")
+        .filter({ hasText: "Triplicane" })
+        .getByText("Tallied", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(
+      shown(page, "2 active sectors · 12 lines · 1048 customers"),
+    ).toBeVisible();
+    expect(await overflows(page)).toBe(false);
+  });
+
   test("a Senior is refused, and the comparison is never asked for", async ({
     page,
   }) => {

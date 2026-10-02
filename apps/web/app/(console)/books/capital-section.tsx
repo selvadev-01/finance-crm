@@ -42,7 +42,7 @@ export function CapitalSection({
   onChanged,
 }: {
   canAdd: boolean;
-  /** Opened from the disburse dialog's "Add capital" (`?action=capital`). */
+  /** Opened from the disburse dialog's "Add money" (`?action=capital`). */
   startAdding?: boolean;
   onChanged?: () => void;
 }) {
@@ -51,12 +51,12 @@ export function CapitalSection({
 
   return (
     <Section
-      title="Capital A/c"
-      description="Money put into the business. Loans are paid out of it, through cash-in-hand."
+      title="Money added by owner"
+      description="Money the owner puts into the business. Loans are given out of it."
       actions={
         canAdd ? (
           <Button tone="primary" onClick={() => setAdding(true)}>
-            Add capital
+            Add money
           </Button>
         ) : null
       }
@@ -71,7 +71,7 @@ export function CapitalSection({
         <>
           <StatGrid columns={2}>
             <Stat
-              label="Cash-in-hand"
+              label="Cash in hand"
               tone={
                 isNegativeMoney(capital.data.officeCash)
                   ? "critical"
@@ -85,18 +85,18 @@ export function CapitalSection({
             >
               {balance(capital.data.officeCash)}
             </Stat>
-            <Stat label="Capital introduced">
+            <Stat label="Total added">
               {formatCurrency(capital.data.totalCapital)}
             </Stat>
           </StatGrid>
           {capital.rows.length === 0 ? (
             <NothingYet
-              title="No capital recorded yet"
-              description="Add the money put into the business. A loan can be disbursed only from it."
+              title="No money added yet"
+              description="Add the money you put into the business. Loans are given only from it."
               action={
                 canAdd ? (
                   <Button tone="primary" onClick={() => setAdding(true)}>
-                    Add capital
+                    Add money
                   </Button>
                 ) : undefined
               }
@@ -170,9 +170,9 @@ function AddCapitalDialog({
     <DialogForm
       form={form}
       onClose={onClose}
-      title="Add capital"
-      description="Cash-in-hand rises by this amount. An entry cannot be changed afterwards — a mistake is put right with another entry."
-      submitLabel="Add capital"
+      title="Add money"
+      description="Cash in hand goes up by this amount. An entry cannot be changed later — a mistake is put right with another entry."
+      submitLabel="Add money"
       pendingLabel="Adding…"
       onSubmit={async (body) => {
         const result = await apiWrite(capitalContract.addCapital, { body });
@@ -182,7 +182,7 @@ function AddCapitalDialog({
           });
         }
         toast({
-          title: `${formatCurrency(result.body.amount)} added to capital`,
+          title: `${formatCurrency(result.body.amount)} added`,
           description: formatBusinessDate(result.body.businessDate),
         });
         onAdded();
@@ -201,8 +201,8 @@ function AddCapitalDialog({
       </FormField>
       <FormField
         name="note"
-        label="Narration"
-        hint="The ledger records only the amount, so say where it came from — “owner’s savings”, “gold loan”."
+        label="Note"
+        hint="Where it came from — “owner’s savings”, “gold loan”."
         valueAs="trimmed"
       >
         <Textarea maxLength={500} rows={2} />

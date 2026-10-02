@@ -2,23 +2,28 @@
 
 import {
   ArrowClockwise,
+  ArrowRight,
+  ArrowsClockwise,
   CalendarBlank,
   CaretRight,
   CheckCircle,
   CloudArrowDown,
+  CloudSlash,
+  ListChecks,
   MagnifyingGlass,
+  Path,
+  Play,
+  PlusCircle,
+  Receipt,
   Sun,
+  User,
+  UsersThree,
   Wallet,
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import type { RouteView } from "@repo/contracts";
-import {
-  Button,
-  cn,
-  formatBusinessDate,
-  formatCurrency,
-  Meter,
-} from "@repo/ui";
+import { dayOfWeek, parseCalendarDate } from "@repo/domain";
+import { Button, cn, formatBusinessDate, formatCurrency } from "@repo/ui";
 import { use, useDeferredValue, useState } from "react";
 
 import { sumMoney } from "../../lib/money";
@@ -48,6 +53,7 @@ type Filter = "all" | "left" | "done";
  * customer drops to the "Done" group rather than vanishing from the list.
  */
 export function RouteScreen({
+  name,
   local,
   businessDate,
   connected,
@@ -55,6 +61,8 @@ export function RouteScreen({
   refreshing,
   onRefresh,
 }: {
+  /** The Junior, for the greeting (Stitch J-01). */
+  name: string;
   local: LocalRoute | null;
   businessDate: string;
   connected: boolean;
@@ -67,8 +75,16 @@ export function RouteScreen({
 
   return (
     <FieldPage
-      title="Today’s route"
-      subtitle={formatBusinessDate(businessDate)}
+      title="My route"
+      subtitle={
+        local?.route.line ? (
+          <span className="font-mono">
+            {local.route.line.code} · {local.route.line.name}
+          </span>
+        ) : (
+          formatBusinessDate(businessDate)
+        )
+      }
       actions={
         <>
           {/* With no signal a refresh can only fail; the room goes to the title. */}
@@ -127,7 +143,12 @@ export function RouteScreen({
             : "Nobody on your line has a payment due today."}
         </DayMessage>
       ) : (
-        <WorkingDay local={local} unsynced={unsynced} />
+        <WorkingDay
+          name={name}
+          businessDate={businessDate}
+          local={local}
+          unsynced={unsynced}
+        />
       )}
       {local ? (
         <p
@@ -144,9 +165,13 @@ export function RouteScreen({
 }
 
 function WorkingDay({
+  name,
+  businessDate,
   local,
   unsynced,
 }: {
+  name: string;
+  businessDate: string;
   local: LocalRoute;
   unsynced: number;
 }) {
@@ -188,39 +213,134 @@ function WorkingDay({
     0,
     Math.max(0, lazy.count - shownLeft.length),
   );
-  const line = local.route.line ?? null;
+  // What today's route asks for, every account due: the "of ₹… due" line.
+  const due = sumMoney(
+    customers.flatMap((customer) =>
+      customer.accounts.map((account) => account.expectedAmount),
+    ),
+  );
+  // The next door: the first customer still to visit, in the Senior's order.
+  const next = left[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-3" data-testid="route">
-      <div className={cn(cardClass, "flex flex-col gap-3 p-4")} data-numeric>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-2xs font-semibold tracking-[0.08em] text-accent uppercase">
-            Today’s progress
-          </p>
-          {line ? (
-            <p className="truncate text-xs text-ink-muted">
-              <span className="font-mono">{line.code}</span> · {line.name}
-            </p>
-          ) : null}
+    <div className="flex flex-col gap-3.5" data-testid="route">
+      <section className="flex flex-col">
+        <span className="text-xs font-medium tracking-wide text-ink-muted">
+          {WEEKDAY[dayOfWeek(parseCalendarDate(businessDate))]},{" "}
+          {formatBusinessDate(businessDate, "day-month")}
+        </span>
+        <h2 className="text-2xl leading-snug font-semibold tracking-tight text-ink">
+          {greeting(new Date())}, {name.split(" ")[0]}
+        </h2>
+      </section>
+
+      <section
+        aria-label="Today’s progress"
+        className="relative flex flex-col gap-4 overflow-hidden rounded-overlay bg-accent-hover p-4 text-accent-ink shadow-raised"
+        data-numeric
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-10 -right-10 size-36 rounded-pill bg-accent-ink/5"
+        />
+        <div className="relative flex items-center justify-between gap-3">
+          <VisitRing done={done.length} total={customers.length} />
+          <div className="flex min-w-0 flex-col items-end text-right">
+            <span className="text-3xl leading-none font-bold tracking-tight">
+              {rupees(collected)}
+            </span>
+            <span className="mt-1 text-xs font-medium opacity-90">
+              collected today
+            </span>
+            <span className="text-xs font-medium opacity-80">
+              of {rupees(due)} due
+            </span>
+          </div>
         </div>
-        <p className="text-2xl font-semibold tracking-tight text-ink">
+        <p className="sr-only">
           {done.length} of {customers.length} visited
         </p>
-        <Meter
-          value={Math.floor((done.length * 1000) / customers.length)}
-          label="Customers visited"
-          valueText={`${done.length} of ${customers.length}`}
-          className="h-2.5"
-        />
-        <dl className="grid grid-cols-3 divide-x divide-border border-t border-border pt-3">
-          <Figure label="Collected" value={formatCurrency(collected)} />
-          <Figure label="To visit" value={String(left.length)} />
-          <Figure
-            label="Not sent"
-            value={String(unsynced)}
-            tone={unsynced > 0 ? "warning" : "plain"}
-          />
+        <dl className="relative grid grid-cols-2 divide-x divide-accent-ink/20 border-t border-accent-ink/20 pt-3 text-center">
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-xs opacity-80">Left to visit</dt>
+            <dd className="text-lg font-bold">
+              {left.length} {left.length === 1 ? "stop" : "stops"}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-xs opacity-80">Not sent</dt>
+            <dd className="text-lg font-bold">{unsynced}</dd>
+          </div>
         </dl>
+      </section>
+
+      {next ? (
+        <a
+          href={`#collect/${next.customerId}`}
+          onClick={(event) => {
+            event.preventDefault();
+            openView(`#collect/${next.customerId}`);
+          }}
+          className="flex h-14 items-center justify-between gap-3 rounded-pill bg-accent px-5 text-base font-semibold text-accent-ink shadow-raised transition-transform active:scale-[0.98] active:bg-accent-hover"
+          data-numeric
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Play aria-hidden size={18} weight="fill" className="shrink-0" />
+            <span className="truncate">
+              Next: <strong className="font-bold">{next.name}</strong> ·{" "}
+              {rupees(
+                sumMoney(
+                  next.accounts.map((account) => account.expectedAmount),
+                ),
+              )}
+            </span>
+          </span>
+          <ArrowRight aria-hidden size={22} weight="regular" />
+        </a>
+      ) : null}
+
+      <FieldMenu
+        unsynced={unsynced}
+        nextCustomerId={next?.customerId ?? null}
+      />
+
+      {unsynced > 0 ? (
+        <a
+          href="#sync"
+          onClick={(event) => {
+            event.preventDefault();
+            openView("#sync");
+          }}
+          className={cn(
+            cardClass,
+            "flex items-start gap-3 border-warning-border bg-warning-subtle p-4 text-base text-ink",
+          )}
+        >
+          <CloudSlash
+            aria-hidden
+            size={22}
+            weight="regular"
+            className="mt-0.5 shrink-0 text-warning"
+          />
+          <span>
+            {unsynced} {unsynced === 1 ? "collection is" : "collections are"}{" "}
+            safe on this phone. They send by themselves when you are online.
+          </span>
+        </a>
+      ) : null}
+
+      <div
+        id="todays-route"
+        className="flex scroll-mt-20 items-center justify-between px-1 pt-1"
+      >
+        <h2 className="text-lg font-semibold text-ink">Today’s route</h2>
+        <button
+          type="button"
+          onClick={() => setFilter("all")}
+          className="text-sm font-semibold text-accent"
+        >
+          See all ({customers.length})
+        </button>
       </div>
 
       <label className="relative flex items-center">
@@ -344,42 +464,220 @@ function WorkingDay({
   );
 }
 
-function Figure({
-  label,
-  value,
-  tone = "plain",
-}: {
-  label: string;
-  value: string;
-  tone?: "plain" | "warning";
-}) {
+/**
+ * Customers visited as a ring on the teal card (Stitch J-01). The circle's
+ * `pathLength` is 1000, so the share is the stroke's length as it stands.
+ */
+function VisitRing({ done, total }: { done: number; total: number }) {
+  const share = total === 0 ? 0 : Math.floor((done * 1000) / total);
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 px-2 first:pl-0">
-      <dt
-        className={cn(
-          "flex items-center gap-1 text-xs",
-          tone === "warning" ? "font-medium text-warning" : "text-ink-muted",
-        )}
+    <span
+      role="meter"
+      aria-label="Customers visited"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={done}
+      aria-valuetext={`${done} of ${total}`}
+      className="relative grid size-24 shrink-0 place-items-center"
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 44 44"
+        className="absolute inset-0 -rotate-90"
       >
-        {tone === "warning" ? (
-          <span
-            aria-hidden
-            className="size-1.5 rounded-pill bg-warning-bright"
-          />
-        ) : null}
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "truncate text-lg font-semibold",
-          tone === "warning" ? "text-warning" : "text-ink",
-        )}
-      >
-        {value}
-      </dd>
-    </div>
+        <circle
+          cx="22"
+          cy="22"
+          r="19"
+          fill="none"
+          strokeWidth="4"
+          className="stroke-accent-ink/20"
+        />
+        <circle
+          cx="22"
+          cy="22"
+          r="19"
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap={share === 0 ? "butt" : "round"}
+          pathLength={1000}
+          strokeDasharray={`${share} 1000`}
+          className="stroke-accent-ink"
+        />
+      </svg>
+      <span className="flex flex-col items-center leading-tight">
+        <span className="text-xl font-semibold">
+          {done}/{total}
+        </span>
+        <span className="text-2xs font-medium tracking-wide uppercase opacity-80">
+          visited
+        </span>
+      </span>
+    </span>
   );
 }
+
+type FieldTile = {
+  key: string;
+  label: string;
+  icon: typeof Wallet;
+  hash: string;
+  open: () => void;
+};
+
+const scrollToRoute = () =>
+  document
+    .getElementById("todays-route")
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+/**
+ * The Junior's menu (Stitch J-01): eight large tiles, four to a row, for the
+ * places a day takes them. Each is a view of this one page, so every tile
+ * opens offline as the route does; handing over and expenses still need
+ * signal, and say so on their own screens. "Collect" opens the next
+ * customer, and "Route" brings today's list into view.
+ *
+ * The design's "My cash" tile is "Collections" here: the Cash screen is
+ * already "Hand over", and two tiles to one screen would be a dead end.
+ */
+function FieldMenu({
+  unsynced,
+  nextCustomerId,
+}: {
+  unsynced: number;
+  nextCustomerId: string | null;
+}) {
+  const nextHash = nextCustomerId
+    ? (`#collect/${nextCustomerId}` as const)
+    : null;
+  const tiles: FieldTile[] = [
+    {
+      key: "route",
+      label: "Route",
+      icon: Path,
+      hash: "#todays-route",
+      open: scrollToRoute,
+    },
+    {
+      key: "collect",
+      label: "Collect",
+      icon: PlusCircle,
+      hash: nextHash ?? "#todays-route",
+      open: () => (nextHash ? openView(nextHash) : scrollToRoute()),
+    },
+    {
+      key: "handover",
+      label: "Hand over",
+      icon: Wallet,
+      hash: "#handover",
+      open: () => switchTab("handover"),
+    },
+    {
+      key: "expense",
+      label: "Expense",
+      icon: Receipt,
+      hash: "#expense",
+      open: () => openView("#expense"),
+    },
+    {
+      key: "sync",
+      label: "Sync",
+      icon: ArrowsClockwise,
+      hash: "#sync",
+      open: () => openView("#sync"),
+    },
+    {
+      key: "collections",
+      label: "Collections",
+      icon: ListChecks,
+      hash: "#collections",
+      open: () => switchTab("collections"),
+    },
+    {
+      key: "customers",
+      label: "Customers",
+      icon: UsersThree,
+      hash: "#customers",
+      open: () => switchTab("customers"),
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: User,
+      hash: "#profile",
+      open: () => switchTab("profile"),
+    },
+  ];
+  return (
+    <nav aria-labelledby="field-menu" className="flex flex-col gap-2">
+      <span
+        id="field-menu"
+        className="px-1 text-xs font-bold tracking-wider text-ink-muted uppercase"
+      >
+        Menu
+      </span>
+      <ul className="grid grid-cols-4 gap-x-2.5 gap-y-3">
+        {tiles.map((tile) => {
+          const count = tile.key === "sync" && unsynced > 0 ? unsynced : null;
+          return (
+            <li key={tile.key}>
+              <a
+                href={tile.hash}
+                onClick={(event) => {
+                  event.preventDefault();
+                  tile.open();
+                }}
+                aria-label={
+                  count ? `${tile.label}, ${count} not sent` : tile.label
+                }
+                className="group flex flex-col items-center text-center transition-transform active:scale-95"
+              >
+                <span className="relative grid size-14 place-items-center rounded-overlay bg-accent-subtle text-accent shadow-raised">
+                  <tile.icon aria-hidden size={26} weight="regular" />
+                  {count ? (
+                    <span
+                      aria-hidden
+                      className="absolute -top-1 -right-1 grid size-5 place-items-center rounded-pill border-2 border-surface-raised bg-warning text-2xs font-bold text-surface-raised"
+                      data-numeric
+                    >
+                      {count}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1.5 text-xs leading-tight font-medium text-ink">
+                  {tile.label}
+                </span>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/** "Good morning", by the phone's own clock. */
+function greeting(now: Date): string {
+  const hour = now.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/** "₹5,220": `formatCurrency`'s own string, ".00" dropped only when there are no paise. */
+function rupees(amount: string): string {
+  return formatCurrency(amount).replace(/\.00$/, "");
+}
+
+const WEEKDAY = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
 
 function DayMessage({
   testId,

@@ -90,12 +90,12 @@ export function ExpenseCategories() {
   return (
     <>
       <PageHeader
-        title="Expense heads"
+        title="Expense types"
         description="What the business spends on. Every expense is filed under one, so the profit and loss can total them."
         actions={
           owner ? (
             <Button tone="primary" onClick={() => setDialog({ kind: "add" })}>
-              Add expense head
+              Add expense type
             </Button>
           ) : null
         }
@@ -113,14 +113,14 @@ export function ExpenseCategories() {
         categories.data.data.length === 0 ? (
           <EmptyFrame>
             <NothingYet
-              title="No expense heads"
+              title="No expense types"
               description="Add the first thing the business spends on."
             />
           </EmptyFrame>
         ) : (
           <ul
             className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
-            aria-label="Expense heads"
+            aria-label="Expense types"
           >
             {categories.data.data.map((category) => {
               const spent = spentThisMonth.get(category.id);
@@ -214,8 +214,8 @@ function AddCategoryDialog({
     <DialogForm
       form={form}
       onClose={onClose}
-      title="Add an expense head"
-      submitLabel="Add expense head"
+      title="Add an expense type"
+      submitLabel="Add expense type"
       pendingLabel="Adding…"
       onSubmit={async (body) => {
         const result = await apiWrite(booksContract.createExpenseCategory, {

@@ -434,6 +434,7 @@ export function FieldRoute() {
           />
         ) : (
           <RouteScreen
+            name={me.name}
             local={local}
             businessDate={businessDate}
             connected={connected}

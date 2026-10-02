@@ -96,7 +96,7 @@ describe('statement exports (ADR-0018)', () => {
       account: {
         ledgerAccountId: 'la1',
         accountType: 'CASH_AT_OFFICE',
-        name: 'Cash-in-hand',
+        name: 'Cash in hand',
         normalBalance: 'DEBIT',
       },
       from: '2026-01-05',

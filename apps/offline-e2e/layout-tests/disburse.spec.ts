@@ -91,13 +91,13 @@ test.describe("disbursing from cash-in-hand (US-032)", () => {
     });
     await expect(dialog.getByText("−₹3,500.00")).toBeVisible();
     await expect(
-      dialog.getByText("Not enough cash-in-hand", { exact: false }),
+      dialog.getByText("Not enough cash in hand", { exact: false }),
     ).toBeVisible();
     await expect(
       dialog.getByRole("button", { name: "Disburse ACC-2026-00412" }),
     ).toBeDisabled();
     await expect(
-      dialog.getByRole("link", { name: "Add capital" }),
+      dialog.getByRole("link", { name: "Add money" }),
     ).toHaveAttribute("href", "/books/money?action=capital");
   });
 

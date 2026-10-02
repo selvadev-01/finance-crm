@@ -1,6 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { BOOKS_SIMPLE } from "../../web/lib/books-mode";
 import { type ApiAnswers, signedInAs, withSavedLayout } from "./fake-api";
+
+/** Why a test of a screen hidden in simple Books skips (lib/books-mode.ts). */
+const HIDDEN = "Hidden in simple Books; kept for when BOOKS_SIMPLE is off";
 
 /**
  * Books slice 1 (ADR-0018): the expense categories and bank accounts settings
@@ -68,13 +72,13 @@ test.describe("expense categories (ADR-0018)", () => {
     });
     await page.goto("/settings/expense-categories");
 
-    const list = page.getByRole("list", { name: "Expense heads" });
+    const list = page.getByRole("list", { name: "Expense types" });
     await expect(list.getByText("Fuel & travel")).toBeVisible();
 
-    await page.getByRole("button", { name: "Add expense head" }).click();
-    const add = page.getByRole("dialog", { name: "Add an expense head" });
+    await page.getByRole("button", { name: "Add expense type" }).click();
+    const add = page.getByRole("dialog", { name: "Add an expense type" });
     await add.getByLabel("Name").fill("Electricity");
-    await add.getByRole("button", { name: "Add expense head" }).click();
+    await add.getByRole("button", { name: "Add expense type" }).click();
     await expect(add).toBeHidden();
     expect(sent.at(-1)).toEqual({
       method: "POST",
@@ -109,13 +113,14 @@ test.describe("expense categories (ADR-0018)", () => {
 
     await expect(page.getByText("Fuel & travel")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Add expense head" }),
+      page.getByRole("button", { name: "Add expense type" }),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Retire" })).toHaveCount(0);
   });
 });
 
 test.describe("bank accounts (ADR-0018)", () => {
+  test.skip(BOOKS_SIMPLE, HIDDEN);
   test("shows each bank's balance, and will not retire one that holds money", async ({
     page,
   }) => {
@@ -167,7 +172,7 @@ test.describe("bank accounts (ADR-0018)", () => {
     await signedInAs(page, "SENIOR", answers);
     await page.goto("/settings/holidays");
 
-    await expect(page.getByRole("link", { name: "Expense heads" })).toHaveCount(
+    await expect(page.getByRole("link", { name: "Expense types" })).toHaveCount(
       0,
     );
     await expect(page.getByRole("link", { name: "Bank accounts" })).toHaveCount(

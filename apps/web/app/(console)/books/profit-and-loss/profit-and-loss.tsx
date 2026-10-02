@@ -172,7 +172,7 @@ export function ProfitAndLossView({
               <header className="border-b border-border px-5 py-4">
                 <h2 className="text-heading text-ink">Income</h2>
                 <p className="text-caption text-ink-muted">
-                  Earned profit and other receipts
+                  Profit on collections and other income
                 </p>
               </header>
               <dl className="flex flex-col divide-y divide-border">
@@ -182,7 +182,7 @@ export function ProfitAndLossView({
                   amount={pnl.data.income.earnedProfit}
                 />
                 <IncomeLine
-                  label="Other receipts"
+                  label="Other income"
                   caption="Processing fees, bank interest"
                   amount={pnl.data.income.otherIncome}
                 />
@@ -196,7 +196,7 @@ export function ProfitAndLossView({
             >
               <header className="border-b border-border px-5 py-4">
                 <h2 className="text-heading text-ink">Expenses</h2>
-                <p className="text-caption text-ink-muted">By expense head</p>
+                <p className="text-caption text-ink-muted">By type</p>
               </header>
               <div className="px-5 py-4">
                 {pnl.data.expenses.categories.length === 0 &&
@@ -207,7 +207,7 @@ export function ProfitAndLossView({
                   </p>
                 ) : (
                   <BarRows
-                    label="Expenses by head"
+                    label="Expenses by type"
                     rows={[
                       ...pnl.data.expenses.categories.map((category) => ({
                         key: category.categoryId,

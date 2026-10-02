@@ -327,11 +327,11 @@ function DisburseDialog({
     >
       {held !== null && after !== null ? (
         <dl
-          aria-label="Cash-in-hand"
+          aria-label="Cash in hand"
           className="grid grid-cols-2 gap-3 rounded-control bg-surface-sunken px-4 py-3"
         >
           <div className="flex flex-col gap-0.5">
-            <dt className="text-caption text-ink-muted">Cash-in-hand now</dt>
+            <dt className="text-caption text-ink-muted">Cash in hand now</dt>
             <dd className="text-heading text-ink" data-numeric>
               {signedAmount(held)}
             </dd>
@@ -357,12 +357,12 @@ function DisburseDialog({
               href="/books/money?action=capital"
               className={buttonClass("secondary", undefined, "sm")}
             >
-              Add capital
+              Add money
             </Link>
           }
         >
-          Not enough cash-in-hand to pay out {formatCurrency(invested!)}. Add
-          capital first.
+          Not enough cash in hand to give {formatCurrency(invested!)}. Add money
+          first.
         </FormMessage>
       ) : null}
       {redated ? (

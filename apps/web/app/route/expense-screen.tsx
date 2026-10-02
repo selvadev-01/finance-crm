@@ -115,7 +115,7 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
         const field = issue.path[0] as keyof Errors;
         found[field] ??=
           field === "categoryId"
-            ? "Choose an expense head."
+            ? "Choose an expense type."
             : field === "amount"
               ? "Enter the amount in rupees, like 50 or 49.50."
               : "Say what it was for.";
@@ -259,7 +259,7 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
                 </div>
               </div>
               <Field
-                label="Narration"
+                label="Note"
                 hint="“Petrol for the round”."
                 {...(errors.note ? { error: errors.note } : {})}
               >
@@ -310,7 +310,7 @@ function CategoryTiles({
   return (
     <div className="flex flex-col gap-2">
       <span id="expense-what-for" className="text-sm font-medium text-ink">
-        Expense head
+        Expense type
       </span>
       <div
         role="radiogroup"

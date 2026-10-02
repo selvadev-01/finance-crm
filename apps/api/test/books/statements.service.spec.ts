@@ -164,7 +164,7 @@ describe('statements (ADR-0018)', () => {
         evening,
       );
       expect(monday).toMatchObject({
-        account: { name: 'Cash-in-hand', normalBalance: 'DEBIT' },
+        account: { name: 'Cash in hand', normalBalance: 'DEBIT' },
         opening: '0.00',
         totals: { debits: '10200.00', credits: '9000.00' },
         closing: '1200.00',

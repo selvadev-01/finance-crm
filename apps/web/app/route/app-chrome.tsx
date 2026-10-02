@@ -2,7 +2,9 @@
 
 import {
   ArrowLeft,
+  ArrowsClockwise,
   Bell,
+  House,
   CheckCircle,
   CloudCheck,
   CloudSlash,
@@ -176,11 +178,37 @@ const TAB_ICON: Record<
   profile: UserCircle,
 };
 
+type BarItem = {
+  key: string;
+  label: string;
+  icon: (typeof TAB_ICON)[Tab];
+  href: string;
+  current: boolean;
+  go: () => void;
+  /** The amber count of what is still on the phone. */
+  count?: number;
+};
+
+/** Today's list on the route view, brought into view once it is drawn. */
+function showRouteList() {
+  switchTab("route");
+  requestAnimationFrame(() =>
+    document
+      .getElementById("todays-route")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+  );
+}
+
 /**
- * The five tabs, as links — a tab is a place, not an action. The active one
- * sits in a teal-wash pill (Material 3). Collections carries the amber count
- * of what is still on the phone. Five is Material's most; at 360px each is
- * 72px wide, so the labels are the small size.
+ * The bottom navigation of Stitch "J-01 Rasi Junior Home" (2026-10-02):
+ * Home, Route, Cash, Sync, Profile, as links — a tab is a place, not an
+ * action. The current one sits in a teal-wash pill (Material 3); Sync
+ * carries the amber count of what is still on the phone.
+ *
+ * Home and Route are the one route view — Home its top, Route today's list
+ * — and Sync opens the sync screen over it. Customers and Collections are
+ * still tabs of the view model (`hash-view.ts`), reached from the home's
+ * menu tiles; on them no item is current.
  */
 export function BottomNav({
   active,
@@ -189,48 +217,94 @@ export function BottomNav({
   active: Tab;
   unsynced: number;
 }) {
+  const items: BarItem[] = [
+    {
+      key: "home",
+      label: "Home",
+      icon: House,
+      href: "/route",
+      current: active === "route",
+      go: () => {
+        switchTab("route");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      },
+    },
+    {
+      key: "route",
+      label: "Route",
+      icon: Path,
+      href: "/route#todays-route",
+      current: false,
+      go: showRouteList,
+    },
+    {
+      key: "cash",
+      label: "Cash",
+      icon: Wallet,
+      href: `/route${TAB_HASH.handover}`,
+      current: active === "handover",
+      go: () => switchTab("handover"),
+    },
+    {
+      key: "sync",
+      label: "Sync",
+      icon: ArrowsClockwise,
+      href: "/route#sync",
+      current: false,
+      go: () => openView("#sync"),
+      count: unsynced,
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: UserCircle,
+      href: `/route${TAB_HASH.profile}`,
+      current: active === "profile",
+      go: () => switchTab("profile"),
+    },
+  ];
   return (
     <nav
       aria-label="Field app"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface-raised pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto grid max-w-md grid-cols-5">
-        {(Object.keys(TAB_LABEL) as Tab[]).map((tab) => {
-          const Icon = TAB_ICON[tab];
-          const current = tab === active;
+        {items.map((item) => {
+          const Icon = item.icon;
           return (
-            <li key={tab}>
+            <li key={item.key}>
               <a
-                href={`/route${TAB_HASH[tab]}`}
+                href={item.href}
                 onClick={(event) => {
                   event.preventDefault();
-                  switchTab(tab);
+                  item.go();
                 }}
-                aria-current={current ? "page" : undefined}
-                className="flex min-h-20 flex-col items-center justify-center gap-1 text-2xs font-medium text-ink-muted aria-[current=page]:font-semibold aria-[current=page]:text-ink"
+                aria-current={item.current ? "page" : undefined}
+                className="flex min-h-20 flex-col items-center justify-center gap-1 text-xs font-medium text-ink-muted aria-[current=page]:font-semibold aria-[current=page]:text-accent"
               >
                 <span
                   className={cn(
-                    "relative flex h-8 w-14 items-center justify-center rounded-pill transition-colors",
-                    current && "bg-accent-subtle text-accent",
+                    "relative flex h-8 w-16 items-center justify-center rounded-pill transition-colors",
+                    item.current && "bg-accent-subtle text-accent",
                   )}
                 >
                   <Icon
                     aria-hidden
                     size={24}
-                    weight={current ? "fill" : "regular"}
+                    weight={item.current ? "fill" : "regular"}
                   />
-                  {tab === "collections" && unsynced > 0 ? (
+                  {item.count ? (
                     <span
                       aria-hidden
                       data-numeric
-                      className="absolute -top-0.5 right-1.5 min-w-4 rounded-pill bg-warning-bright px-1 text-center text-2xs leading-4 font-semibold text-ink"
-                    >
-                      {unsynced > 99 ? "99+" : unsynced}
-                    </span>
+                      className="absolute -top-0.5 right-2.5 size-2.5 rounded-pill border-2 border-surface-raised bg-warning-bright"
+                    />
                   ) : null}
                 </span>
-                {TAB_LABEL[tab]}
+                {item.label}
+                {item.count ? (
+                  <span className="sr-only">, {item.count} not sent</span>
+                ) : null}
               </a>
             </li>
           );

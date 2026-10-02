@@ -42,7 +42,7 @@ const fixed = (value: Decimal) => value.toFixed(2);
 
 /** Names an account the way the statements print it. */
 const NAMES: Partial<Record<AccountType, string>> = {
-  CASH_AT_OFFICE: 'Cash-in-hand',
+  CASH_AT_OFFICE: 'Cash in hand',
   CAPITAL: 'Capital',
   UNEARNED_PROFIT: 'Unearned profit',
   EARNED_PROFIT: 'Earned profit',
@@ -277,7 +277,7 @@ export class StatementsService {
       {
         id: office?.id ?? null,
         accountType: 'CASH_AT_OFFICE',
-        name: 'Cash-in-hand',
+        name: 'Cash in hand',
       },
       from,
       to,

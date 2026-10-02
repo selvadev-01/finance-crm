@@ -367,10 +367,22 @@ async function noSidewaysScroll(page: Page, where: string): Promise<void> {
   expect(overflows, `${where} scrolls sideways at 360px`).toBe(false);
 }
 
-const tab = (page: Page, name: string) =>
+const tab = (page: Page, name: string | RegExp) =>
   page
     .getByRole("navigation", { name: "Field app" })
     .getByRole("link", { name });
+
+/**
+ * Customers and Collections are reached from Home's menu tiles since the
+ * bottom bar became J-01's Home, Route, Cash, Sync, Profile (2026-10-02).
+ */
+async function openFromMenu(page: Page, name: "Customers" | "Collections") {
+  await tab(page, "Home").click();
+  await page
+    .getByRole("navigation", { name: "Menu" })
+    .getByRole("link", { name })
+    .click();
+}
 
 test.describe("the Junior's field app at 360px", () => {
   test("J-01: the route is a native home screen — progress, the line, customers to visit, five tabs", async ({
@@ -389,13 +401,46 @@ test.describe("the Junior's field app at 360px", () => {
     await expect(page.getByTestId("customer-CUS-00587")).toContainText(
       "2 accounts",
     );
-    for (const name of ["Route", "Customers", "Collections", "Cash", "Profile"])
+    for (const name of ["Home", "Route", "Cash", /^Sync/, "Profile"])
       await expect(tab(page, name)).toBeVisible();
-    await expect(tab(page, "Route")).toHaveAttribute("aria-current", "page");
+    await expect(tab(page, "Home")).toHaveAttribute("aria-current", "page");
     await expect(
       page.getByRole("button", { name: /Online, 0 not sent/ }),
     ).toContainText("All sent");
     await noSidewaysScroll(page, "the route");
+  });
+
+  test("J-01 home (2026-10-02): the next door is one tap, and what is still on the phone is said plainly", async ({
+    page,
+  }) => {
+    await openFieldApp(page);
+
+    const progress = page.getByRole("region", { name: "Today’s progress" });
+    await expect(progress.getByText("0/3")).toBeVisible();
+    const menu = page.getByRole("navigation", { name: "Menu" });
+    for (const name of ["Hand over", "Expense", "Sync", "Collections"])
+      await expect(menu.getByRole("link", { name })).toBeVisible();
+
+    // The first customer still to visit, in the Senior's order.
+    await page
+      .getByRole("link", { name: /^Next: Lakshmi Ammal · ₹500$/ })
+      .click();
+    const form = page.getByTestId("collect-ACC-2026-0091");
+    await form.getByRole("button", { name: /^Confirm/ }).click();
+
+    await expect(page.getByTestId("route")).toBeVisible();
+    await expect(progress.getByText("1/3")).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: "Sync, 1 not sent" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("1 collection is safe on this phone."),
+    ).toBeVisible();
+    // The next door has moved on to the next customer.
+    await expect(
+      page.getByRole("link", { name: /^Next: Lakshmi Ammal/ }),
+    ).toHaveCount(0);
+    await noSidewaysScroll(page, "the route home");
   });
 
   test("search and the To visit / Done filter narrow the list", async ({
@@ -506,7 +551,7 @@ test.describe("the Junior's field app at 360px", () => {
       .click();
     await expect(page.getByTestId("route")).toBeVisible();
 
-    await tab(page, "Collections").click();
+    await openFromMenu(page, "Collections");
     const recorded = page.getByTestId("collection-ACC-2026-0091");
     await expect(recorded).toContainText("Lakshmi Ammal");
     await expect(recorded).toContainText("As expected");
@@ -577,7 +622,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Collections").click();
+    await openFromMenu(page, "Collections");
     await page.getByRole("button", { name: "Show earlier days" }).click();
 
     const earlier = page.getByTestId("earlier-collections");
@@ -601,7 +646,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
 
     await expect(page.getByText("₹13,000.00")).toBeVisible();
     await expect(page.getByTestId("portfolio-CUS-00412")).toContainText(
@@ -627,7 +672,7 @@ test.describe("the Junior's field app at 360px", () => {
     page,
   }) => {
     await openFieldApp(page);
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
     await page.getByTestId("portfolio-CUS-00587").click();
 
     const summary = page.getByTestId("portfolio-summary");
@@ -680,7 +725,7 @@ test.describe("the Junior's field app at 360px", () => {
         },
       },
     });
-    await tab(page, "Customers").click();
+    await openFromMenu(page, "Customers");
 
     const cards = page.locator('[data-testid^="portfolio-CUS-"]');
     await expect(cards).toHaveCount(20);
@@ -814,7 +859,7 @@ test.describe("J-11 field expense (ADR-0018) at 360px", () => {
     await expect(mine.getByText("Tea is not a business expense")).toBeVisible();
 
     await page
-      .getByRole("radiogroup", { name: "Expense head" })
+      .getByRole("radiogroup", { name: "Expense type" })
       .getByRole("radio", { name: "Fuel & travel" })
       .click();
     await page.getByRole("button", { name: "₹50" }).click();
@@ -823,7 +868,7 @@ test.describe("J-11 field expense (ADR-0018) at 360px", () => {
     const preview = page.getByRole("note", { name: "Handover after approval" });
     await expect(preview.getByText("₹8,450.00")).toBeVisible();
     await expect(preview.getByText("₹8,400.00")).toBeVisible();
-    await page.getByLabel("Narration").fill("Petrol for the round");
+    await page.getByLabel("Note").fill("Petrol for the round");
     await page.getByRole("button", { name: "Send for approval" }).click();
     await expect(
       page.getByText("₹50.00 for fuel & travel sent for approval."),
@@ -846,7 +891,7 @@ test.describe("J-11 field expense (ADR-0018) at 360px", () => {
     await page.goto("/route#expense");
     await page.getByRole("radio", { name: "Fuel & travel" }).click();
     await page.getByLabel("Amount (₹)").fill("fifty");
-    await page.getByLabel("Narration").fill("Petrol");
+    await page.getByLabel("Note").fill("Petrol");
     await page.getByRole("button", { name: "Send for approval" }).click();
     await expect(
       page.getByText("Enter the amount in rupees, like 50 or 49.50."),

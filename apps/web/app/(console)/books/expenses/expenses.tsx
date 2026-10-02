@@ -46,6 +46,7 @@ import { Pager } from "../../../../components/pager";
 import { LoadFailed } from "../../../../components/query-state";
 import { STATUS, StatusBadge } from "../../../../components/status-badge";
 import { apiWrite } from "../../../../lib/api-write";
+import { BOOKS_SIMPLE } from "../../../../lib/books-mode";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import { perMille, subtractMoney, sumMoney } from "../../../../lib/money";
 import { canManageOrganisation } from "../../../../lib/roles";
@@ -78,11 +79,14 @@ type PaidFrom = Expense["paidFrom"];
 const STATUSES = Object.keys(STATUS.decision) as ExpenseStatus[];
 
 export const PAID_FROM_LABEL: Record<PaidFrom, string> = {
-  OFFICE_CASH: "Office cash",
+  OFFICE_CASH: "Cash in hand",
   BANK: "Bank",
-  CASH_IN_HAND: "Staff cash in hand",
+  CASH_IN_HAND: "Collection staff",
 };
-const PAID_FROM = Object.keys(PAID_FROM_LABEL) as PaidFrom[];
+// Simple Books (lib/books-mode.ts): no bank anywhere.
+const PAID_FROM = (Object.keys(PAID_FROM_LABEL) as PaidFrom[]).filter(
+  (each) => !BOOKS_SIMPLE || each !== "BANK",
+);
 
 /**
  * Books · expenses (ADR-0018, US-101; Stitch B-02). What the month cost and
@@ -180,7 +184,7 @@ export function Expenses({
       />
 
       <StatGrid columns={3} aria-label="This month">
-        <Stat label="Expenses this month" hint="Approved, all heads">
+        <Stat label="Expenses this month" hint="Approved, all types">
           {spent ? formatCurrency(spent.total) : "—"}
         </Stat>
         <Stat
@@ -193,7 +197,7 @@ export function Expenses({
             : "None"}
         </Stat>
         <Stat
-          label="Top expense head"
+          label="Biggest expense type"
           hint={
             biggest && spent
               ? `${Math.round((perMille(biggest.amount, spent.total) ?? 0) / 10)}% of this month`
@@ -253,11 +257,11 @@ export function Expenses({
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <section
-          aria-label="Expenses by head"
+          aria-label="Expenses by type"
           className="flex flex-col gap-4 rounded-surface border border-border bg-surface-raised p-5"
         >
           <div className="flex flex-col">
-            <h2 className="text-heading text-ink">Expenses by head</h2>
+            <h2 className="text-heading text-ink">Expenses by type</h2>
             <span className="text-caption text-ink-muted">
               {formatBusinessDate(monthFrom)} – {formatBusinessDate(today)}
             </span>
@@ -275,7 +279,7 @@ export function Expenses({
               </p>
             ) : (
               <BarRows
-                label="Expenses by head"
+                label="Expenses by type"
                 rows={spent.categories.map((category) => ({
                   key: category.categoryId,
                   label: category.name,
@@ -307,7 +311,7 @@ export function Expenses({
                 : "any status",
             ].join(", ")}
           >
-            <FilterField label="Expense head" width="md">
+            <FilterField label="Expense type" width="md">
               <Select
                 value={categoryId ?? ""}
                 onChange={(event) =>
@@ -435,7 +439,7 @@ export function Expenses({
                     description={
                       canRecord
                         ? "Record what the business pays to run — rent, salary, fuel — so the profit it shows is the profit it made."
-                        : "Add an expense head in Settings first."
+                        : "Add an expense type in Settings first."
                     }
                     action={canRecord ? record : undefined}
                   />
@@ -511,7 +515,11 @@ function RecordExpenseDialog({
       form={form}
       onClose={onClose}
       title="Record expense"
-      description="Paid from office cash or a bank; posted on save."
+      description={
+        BOOKS_SIMPLE
+          ? "Paid from cash in hand."
+          : "Paid from office cash or a bank; posted on save."
+      }
       submitLabel={typed ? `Record ${formatCurrency(typed)}` : "Record expense"}
       pendingLabel="Recording…"
       onSubmit={async (body) => {
@@ -537,10 +545,10 @@ function RecordExpenseDialog({
         onRecorded();
       }}
     >
-      <FormControlField name="categoryId" label="Expense head">
+      <FormControlField name="categoryId" label="Expense type">
         {({ field, control }) => (
           <TileChoice
-            label="Expense head"
+            label="Expense type"
             value={field.value}
             onChange={field.onChange}
             invalid={control["aria-invalid"]}
@@ -561,35 +569,38 @@ function RecordExpenseDialog({
           data-numeric
         />
       </FormField>
-      <FormControlField name="paidFrom" label="Paid from">
-        {({ field }) => (
-          <TileChoice
-            label="Paid from"
-            columns={2}
-            value={field.value}
-            onChange={field.onChange}
-            options={[
-              {
-                value: "OFFICE_CASH",
-                label: OFFICE_CASH,
-                icon: Wallet,
-                caption:
-                  officeCash === null
-                    ? undefined
-                    : `Balance ${signedAmount(officeCash)}`,
-              },
-              {
-                value: "BANK",
-                label: banks.length === 0 ? "A bank (none yet)" : "A bank",
-                icon: Bank,
-                caption: banks.length === 0 ? undefined : "Choose which",
-                disabled: banks.length === 0,
-              },
-            ]}
-          />
-        )}
-      </FormControlField>
-      {paidFrom === "BANK" ? (
+      {/* Simple Books: always cash in hand, so nothing to choose. */}
+      {BOOKS_SIMPLE ? null : (
+        <FormControlField name="paidFrom" label="Paid from">
+          {({ field }) => (
+            <TileChoice
+              label="Paid from"
+              columns={2}
+              value={field.value}
+              onChange={field.onChange}
+              options={[
+                {
+                  value: "OFFICE_CASH",
+                  label: OFFICE_CASH,
+                  icon: Wallet,
+                  caption:
+                    officeCash === null
+                      ? undefined
+                      : `Balance ${signedAmount(officeCash)}`,
+                },
+                {
+                  value: "BANK",
+                  label: banks.length === 0 ? "A bank (none yet)" : "A bank",
+                  icon: Bank,
+                  caption: banks.length === 0 ? undefined : "Choose which",
+                  disabled: banks.length === 0,
+                },
+              ]}
+            />
+          )}
+        </FormControlField>
+      )}
+      {!BOOKS_SIMPLE && paidFrom === "BANK" ? (
         <FormField name="bankAccountId" label="Bank">
           <Select>
             <option value="">Choose the bank</option>
@@ -612,7 +623,7 @@ function RecordExpenseDialog({
         </FormField>
         <FormField
           name="note"
-          label="Narration"
+          label="Note"
           hint="“September rent — Market Road office”."
           valueAs="trimmed"
         >

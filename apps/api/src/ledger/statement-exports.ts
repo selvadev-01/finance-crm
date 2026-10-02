@@ -25,7 +25,7 @@ const ACCOUNT_LABEL: Record<
   TrialBalance['rows'][number]['accountType'],
   string
 > = {
-  CASH_AT_OFFICE: 'Cash-in-hand',
+  CASH_AT_OFFICE: 'Cash in hand',
   BANK: 'Bank',
   CASH_IN_HAND: 'Cash in hand',
   LOAN_RECEIVABLE: 'Loans receivable',
@@ -147,7 +147,7 @@ export function balanceSheetDocument(sheet: BalanceSheet): ExportDocument {
           { header: 'Amount', kind: 'money' },
         ],
         rows: [
-          ['Cash-in-hand', assets.officeCash],
+          ['Cash in hand', assets.officeCash],
           ...assets.banks.map(
             (bank) => [bank.name, bank.balance] as [string, string],
           ),

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   absMoney,
   addMoney,
+  changePerMille,
   compareMoney,
+  formatCompactCurrency,
   formatPerMille,
   fromPaise,
   isNegativeMoney,
@@ -71,6 +73,28 @@ describe("arithmetic", () => {
     // Nothing expected: no share, not 0% and not 100%.
     expect(perMille("0.00", "0.00")).toBeNull();
     expect(perMille("50.00", "0.00")).toBeNull();
+  });
+
+  it("measures a month's change against where it started", () => {
+    expect(changePerMille("5295950.00", "5186000.00")).toBe(21);
+    expect(changePerMille("90.00", "100.00")).toBe(-100);
+    // Rounded toward zero, so a fall never reads larger than it was.
+    expect(changePerMille("99.99", "100.00")).toBe(0);
+    // From nothing, or from below nothing, there is no share.
+    expect(changePerMille("50.00", "0.00")).toBeNull();
+    expect(changePerMille("50.00", "-10.00")).toBeNull();
+  });
+
+  it("says a headline figure in lakhs and crores, rounded half up", () => {
+    expect(formatCompactCurrency("5295950.00")).toBe("₹52.96 L");
+    expect(formatCompactCurrency("4260000.00")).toBe("₹42.60 L");
+    expect(formatCompactCurrency("100000.00")).toBe("₹1.00 L");
+    expect(formatCompactCurrency("99999.99")).toBe("₹99,999.99");
+    expect(formatCompactCurrency("12500000.00")).toBe("₹1.25 Cr");
+    expect(formatCompactCurrency("805.5")).toBe("₹805.50");
+    expect(formatCompactCurrency("-120250.00")).toBe("−₹1.20 L");
+    // ₹1.505 L sits exactly halfway between two places: it rounds up.
+    expect(formatCompactCurrency("150500.00")).toBe("₹1.51 L");
   });
 
   it("compares amounts", () => {

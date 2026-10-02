@@ -83,7 +83,7 @@ describe('books money (ADR-0018)', () => {
         category: { name: 'Rent' },
         amount: '3000.00',
         status: 'APPROVED',
-        from: { bankAccountId: null, name: 'Cash-in-hand' },
+        from: { bankAccountId: null, name: 'Cash in hand' },
         spender: null,
       });
       await w.money.recordBankTransfer(
@@ -186,8 +186,8 @@ describe('books money (ADR-0018)', () => {
       expect(
         transfers.data.map((t) => [t.note, t.from?.name, t.to?.name]),
       ).toEqual([
-        ['Withdrawal', 'SBI Mylapore', 'Cash-in-hand'],
-        ['Deposit', 'Cash-in-hand', 'SBI Mylapore'],
+        ['Withdrawal', 'SBI Mylapore', 'Cash in hand'],
+        ['Deposit', 'Cash in hand', 'SBI Mylapore'],
       ]);
       expect(transfers.amountTotal).toBe('900.00');
 

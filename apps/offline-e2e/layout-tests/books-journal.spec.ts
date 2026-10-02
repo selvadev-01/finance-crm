@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+import { BOOKS_SIMPLE } from "../../web/lib/books-mode";
 import { type ApiAnswers, signedInAs, withSavedLayout } from "./fake-api";
+
+/** Why a test of a screen hidden in simple Books skips (lib/books-mode.ts). */
+const HIDDEN = "Hidden in simple Books; kept for when BOOKS_SIMPLE is off";
 
 /**
  * Books slice 5 (ADR-0018): the manual journal on `/books/journal`, in a real
@@ -62,6 +66,7 @@ const answers: ApiAnswers = {
 };
 
 test.describe("the manual journal (ADR-0018)", () => {
+  test.skip(BOOKS_SIMPLE, HIDDEN);
   test("an Admin reads each entry's lines but is not offered to post one", async ({
     page,
   }) => {
