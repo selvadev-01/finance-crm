@@ -48,7 +48,7 @@ export function AccountStatementView({
   if (!allowed) {
     return (
       <EmptyFrame>
-        <NotPermitted description="The books are for Super Admins and Admins." />
+        <NotPermitted description="The ledger is for Super Admins and Admins." />
       </EmptyFrame>
     );
   }
@@ -59,10 +59,7 @@ export function AccountStatementView({
         trail={
           <PageTrail
             steps={[
-              {
-                label: "Trial balance",
-                href: `/reports/trial-balance?date=${to}`,
-              },
+              { label: "Ledger", href: "/books" },
               { label: "Statement" },
             ]}
           />

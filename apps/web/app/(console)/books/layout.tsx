@@ -37,7 +37,7 @@ export default function BooksLayout({ children }: { children: ReactNode }) {
     <>
       {canManageOrganisation(me.role) ? (
         <TabLinks
-          label="Books"
+          label="Ledger"
           tabs={BOOKS_TABS}
           current={currentHref(
             pathname,

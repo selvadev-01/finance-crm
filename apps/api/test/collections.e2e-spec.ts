@@ -108,6 +108,7 @@ describe('collections (M07, e2e)', () => {
           termDays: 10,
           outstandingAmount: '1000',
           status,
+          approvedAt: new Date(),
           disbursementDate: new Date('2026-01-03'),
           firstCollectionDate: new Date('2026-01-05'),
           targetCompletionDate: toUtcMidnight(today),

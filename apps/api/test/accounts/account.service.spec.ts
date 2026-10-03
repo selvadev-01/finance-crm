@@ -360,7 +360,10 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('Scenario: started 1 July, paid 4,700 of 10,000 — ACTIVE with outstanding 5,300, and the ledger balances', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, fund, service, terms } =
+          await world(tx);
+        // 8,500 given less 4,700 already back: the net it takes from the office.
+        await fund('3800');
         const account = await service.create(
           context,
           terms({ disbursementDate: JULY_1, collectedToDate: '4700' }),
@@ -390,8 +393,9 @@ describe('AccountService (US-030, US-031, US-032)', () => {
             ['COLLECTION', '2026-08-14'],
           ],
           balances: {
+            CAPITAL: '3800.00',
             LOAN_RECEIVABLE: '5300.00',
-            CASH_AT_OFFICE: '-3800.00',
+            CASH_AT_OFFICE: '0.00',
             UNEARNED_PROFIT: '795.00',
             EARNED_PROFIT: '705.00',
           },
@@ -401,7 +405,9 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('Scenario: collected is entered, never inferred — 4,580 paid is outstanding 5,420, with slot 46 partial', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, fund, service, terms } =
+          await world(tx);
+        await fund('3920');
         const account = await service.create(
           context,
           terms({ disbursementDate: JULY_1, collectedToDate: '4580' }),
@@ -422,7 +428,9 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('nothing paid yet: ACTIVE, the disbursement posted and no catch-up', async () => {
       await withRollback(prisma, async (tx) => {
-        const { organizationId, context, service, terms } = await world(tx);
+        const { organizationId, context, fund, service, terms } =
+          await world(tx);
+        await fund();
         const account = await service.create(
           context,
           terms({ disbursementDate: JULY_1, collectedToDate: '0' }),
@@ -460,7 +468,8 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
     it('a past date needs collected to date; a present or future date refuses one; a mid-term account is not disbursed again', async () => {
       await withRollback(prisma, async (tx) => {
-        const { context, service, terms } = await world(tx);
+        const { context, fund, service, terms } = await world(tx);
+        await fund('3800');
         await expect(
           service.create(context, terms({ disbursementDate: JULY_1 }), ENTERED),
         ).rejects.toMatchObject({ code: 'COLLECTED_TO_DATE_REQUIRED' });
@@ -482,6 +491,54 @@ describe('AccountService (US-030, US-031, US-032)', () => {
         ).rejects.toMatchObject({
           code: 'ACCOUNT_NOT_PENDING',
         });
+      });
+    });
+
+    it('worked example: 8,500 given and 300 back before Rasi needs 8,200 in cash-in-hand — 8,199 is refused with nothing saved, and 8,200 leaves the office at exactly 0', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organizationId, customer, context, fund, service, terms } =
+          await world(tx);
+        const midTerm = terms({
+          disbursementDate: JULY_1,
+          collectedToDate: '300',
+        });
+        await fund('8199');
+
+        await expect(
+          service.create(context, midTerm, ENTERED),
+        ).rejects.toMatchObject({
+          code: 'INSUFFICIENT_CASH_IN_HAND',
+          status: 422,
+        });
+        expect(
+          await tx.accountLoan.count({ where: { customerId: customer.id } }),
+        ).toBe(0);
+
+        // One more rupee in, and the same account is entered.
+        await fund('1');
+        const account = await service.create(context, midTerm, ENTERED);
+        expect(account.status).toBe('ACTIVE');
+        const { balances } = await ledgerOf(tx, organizationId, account.id);
+        expect(balances).toMatchObject({
+          CAPITAL: '8200.00',
+          CASH_AT_OFFICE: '0.00',
+          LOAN_RECEIVABLE: '9700.00',
+        });
+      });
+    });
+
+    it('takes nothing from cash-in-hand once more than the invested amount is back — 9,000 of 10,000 collected needs no capital', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { organizationId, context, service, terms } = await world(tx);
+        const account = await service.create(
+          context,
+          terms({ disbursementDate: JULY_1, collectedToDate: '9000' }),
+          ENTERED,
+        );
+        expect(account.outstandingAmount).toBe('1000.00');
+        const { balances } = await ledgerOf(tx, organizationId, account.id);
+        // −8,500 out, +9,000 back.
+        expect(balances.CASH_AT_OFFICE).toBe('500.00');
       });
     });
   });
@@ -823,6 +880,147 @@ describe('AccountService (US-030, US-031, US-032)', () => {
 
         await expect(
           service.create(context, terms({ disburse: true }), SATURDAY),
+        ).rejects.toMatchObject({ code: 'PERMISSION_DENIED', status: 403 });
+      });
+    });
+  });
+
+  describe('a Senior’s account waits for approval (decided 2026-10-03)', () => {
+    /** The line's Senior, as the request context resolver would give them. */
+    const seniorOf = async (
+      tx: PrismaClient,
+      w: Awaited<ReturnType<typeof world>>,
+    ): Promise<RequestContext> => {
+      const senior = await createStaff(tx, w.organizationId, 'SENIOR');
+      return {
+        ...w.context,
+        userId: senior.userId,
+        staffProfileId: senior.id,
+        role: 'SENIOR',
+        currentLineIds: [w.line.id],
+      };
+    };
+
+    it('a Senior’s account is PENDING and not approved, audited as waiting; an Admin’s is approved as it is created', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const senior = await seniorOf(tx, w);
+        // The world's own Admin is stored as a Senior; this one is an Admin
+        // in the database, so it is one of the notice's recipients.
+        const officeAdmin = await createStaff(tx, w.organizationId, 'ADMIN');
+
+        const theirs = await w.service.create(senior, w.terms(), SATURDAY);
+        const admins = await w.service.create(w.context, w.terms(), SATURDAY);
+
+        // Every Admin hears of the Senior's account, and of no Admin's own.
+        const told = await tx.notification.findMany({
+          where: { userId: officeAdmin.userId },
+          select: { eventType: true },
+        });
+        expect(told.map((n) => n.eventType)).toEqual([
+          'ACCOUNT_APPROVAL_REQUESTED',
+        ]);
+
+        expect(theirs).toMatchObject({ status: 'PENDING', approvedAt: null });
+        expect(admins.status).toBe('PENDING');
+        expect(admins.approvedAt).not.toBeNull();
+        expect(
+          await tx.auditLog.findFirst({ where: { entityId: theirs.id } }),
+        ).toMatchObject({
+          action: 'CREATE',
+          actorUserId: senior.userId,
+          after: expect.objectContaining({ awaitingApproval: true }),
+        });
+      });
+    });
+
+    it('an Admin approves it once, audited; the Super Admin may then disburse it', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const senior = await seniorOf(tx, w);
+        const account = await w.service.create(senior, w.terms(), SATURDAY);
+
+        const approved = await w.service.approve(w.context, account.id);
+        expect(approved.approvedAt).not.toBeNull();
+        // The Senior who opened it hears it was approved.
+        expect(
+          await tx.notification.findMany({
+            where: { userId: senior.userId, eventType: 'ACCOUNT_APPROVED' },
+            select: { body: true },
+          }),
+        ).toEqual([{ body: expect.stringContaining('approved Lakshmi') }]);
+        expect(
+          await tx.auditLog.findFirst({
+            where: { entityId: account.id, action: 'APPROVE' },
+          }),
+        ).toMatchObject({
+          entityTable: 'account_loan',
+          actorUserId: w.context.userId,
+        });
+        await expect(
+          w.service.approve(w.context, account.id),
+        ).rejects.toMatchObject({
+          code: 'ACCOUNT_ALREADY_APPROVED',
+          status: 409,
+        });
+
+        await w.fund();
+        const disbursed = await w.service.disburse(
+          w.owner,
+          account.id,
+          SATURDAY,
+        );
+        expect(disbursed.status).toBe('ACTIVE');
+        expect(disbursed.approvedAt).toBe(approved.approvedAt);
+        await expect(
+          w.service.approve(w.context, account.id),
+        ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_PENDING', status: 422 });
+      });
+    });
+
+    it('the Super Admin disbursing one still waiting approves it in the same step', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const senior = await seniorOf(tx, w);
+        const account = await w.service.create(senior, w.terms(), SATURDAY);
+        await w.fund();
+
+        const disbursed = await w.service.disburse(
+          w.owner,
+          account.id,
+          SATURDAY,
+        );
+
+        expect(disbursed.status).toBe('ACTIVE');
+        expect(disbursed.approvedAt).not.toBeNull();
+        expect(
+          await tx.accountLoan.findUniqueOrThrow({ where: { id: account.id } }),
+        ).toMatchObject({ approvedByUserId: w.owner.userId });
+      });
+    });
+
+    it('a Senior cannot enter a mid-term account, nor open one for a customer off their lines, nor disburse', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const senior = await seniorOf(tx, w);
+        const today = parseCalendarDate('2026-01-10');
+
+        await expect(
+          w.service.create(senior, w.terms({ collectedToDate: '0' }), today),
+        ).rejects.toMatchObject({ code: 'MID_TERM_NEEDS_ADMIN', status: 403 });
+        await expect(
+          w.service.create(
+            { ...senior, currentLineIds: [] },
+            w.terms(),
+            SATURDAY,
+          ),
+        ).rejects.toMatchObject({ code: 'CUSTOMER_NOT_FOUND', status: 404 });
+        // Both refusals above come before any write.
+        expect(
+          await tx.accountLoan.count({ where: { customerId: w.customer.id } }),
+        ).toBe(0);
+        await expect(
+          w.service.create(senior, w.terms({ disburse: true }), SATURDAY),
         ).rejects.toMatchObject({ code: 'PERMISSION_DENIED', status: 403 });
       });
     });

@@ -195,6 +195,13 @@ export const accountSchema = z.object({
   collectedAmount: moneyStringSchema,
   outstandingAmount: moneyStringSchema,
   isOverdue: z.boolean(),
+  /**
+   * A Senior's account waits for an Admin or the Super Admin to approve it
+   * before it can be disbursed (decided 2026-10-03). An Admin's is approved
+   * as it is created. `null` while it waits; a non-pending account is never
+   * waiting.
+   */
+  approvedAt: z.string().nullable(),
 });
 
 const accountParams = z.object({ accountId: idSchema });
@@ -252,9 +259,24 @@ export const accountContract = {
   disburseAccount: route({
     method: "POST",
     path: "/api/accounts/:accountId/disbursement",
-    summary: "Disburse a PENDING account and post it to the ledger (US-032)",
+    summary:
+      "Disburse a PENDING account and post it to the ledger; one still waiting for approval is approved by it (US-032)",
     pathParams: accountParams,
     responses: { 200: accountSchema, ...errors, 422: errorSchema },
+  }),
+
+  approveAccount: route({
+    method: "POST",
+    path: "/api/accounts/:accountId/approval",
+    summary:
+      "Approve a Senior's pending account so the Super Admin can disburse it (Admin+)",
+    pathParams: accountParams,
+    responses: {
+      200: accountSchema,
+      ...errors,
+      409: errorSchema,
+      422: errorSchema,
+    },
   }),
 
   closeAccount: route({
@@ -293,6 +315,11 @@ export const accountContract = {
       customerId: idSchema.optional(),
       lineId: idSchema.optional(),
       status: accountStatusSchema.optional(),
+      /** `true`: only pending accounts still waiting for approval. */
+      awaitingApproval: z
+        .enum(["true", "false"])
+        .optional()
+        .transform((value) => value === "true"),
     }),
     responses: { 200: pageSchema(accountSchema), ...errors },
   }),

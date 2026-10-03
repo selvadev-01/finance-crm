@@ -214,10 +214,15 @@ export function ActivityBadge({ isActive }: { isActive: boolean }) {
 export function AccountStatusBadge({
   account,
 }: {
-  account: Pick<Account, "status" | "isOverdue">;
+  account: Pick<Account, "status" | "isOverdue"> &
+    Partial<Pick<Account, "approvedAt">>;
 }) {
   if (account.status === "ACTIVE" && account.isOverdue) {
     return <Badge tone="warning">Active · overdue</Badge>;
+  }
+  // A Senior's account before an Admin approves it (decided 2026-10-03).
+  if (account.status === "PENDING" && account.approvedAt === null) {
+    return <Badge tone="warning">Waiting for approval</Badge>;
   }
   return <StatusBadge kind="account" value={account.status} />;
 }

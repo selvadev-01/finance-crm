@@ -34,7 +34,8 @@ import { usePagedQuery } from "../../../lib/use-paged-query";
  * on 2026-10-02). Admins read it (it is ledger money, `ledger.view`); only
  * the Super Admin records it (`capital.add`) — the API refuses anyone else
  * regardless. Each entry funds cash-in-hand, and a loan is paid out only from
- * cash-in-hand: `INSUFFICIENT_CASH_IN_HAND` otherwise (decided 2026-10-02).
+ * cash-in-hand: `INSUFFICIENT_CASH_IN_HAND` otherwise (decided 2026-10-02) —
+ * a mid-term account too, net of what came back before (2026-10-03).
  */
 export function CapitalSection({
   canAdd,

@@ -447,6 +447,7 @@ describe('accounts (M05, US-030, e2e)', () => {
           termDays: 100,
           outstandingAmount: '10000',
           status: 'ACTIVE',
+          approvedAt: new Date(),
           // BR-03: the first collection comes after disbursement.
           disbursementDate: toUtcMidnight(addCalendarDays(today, -1)),
           firstCollectionDate: toUtcMidnight(today),

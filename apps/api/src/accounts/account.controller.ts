@@ -61,6 +61,16 @@ export class AccountController {
     return this.accounts.disburse(context, params.accountId);
   }
 
+  /** A Senior's pending account, approved for disbursement (decided 2026-10-03). */
+  @RequirePermission('account.approve')
+  @ContractRoute(api.approveAccount)
+  approveAccount(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params }: In<'approveAccount'>,
+  ): Out<'approveAccount'> {
+    return this.accounts.approve(context, params.accountId);
+  }
+
   /** US-035 — Super Admin only; a write-off destroys receivable value (M05). */
   @RequirePermission('account.close')
   @ContractRoute(api.closeAccount)

@@ -329,6 +329,69 @@ export class EventNotices {
   }
 
   /**
+   * A Senior opened an account that waits for approval (decided 2026-10-03):
+   * every Admin and the Super Admin hear, since any of them may approve it.
+   */
+  async accountAwaitingApproval(event: {
+    actorUserId: string;
+    organizationId: string;
+    accountLoanId: string;
+    accountCode: string;
+    customerName: string;
+    lineName: string;
+    accountAmount: string;
+  }): Promise<void> {
+    const tx = this.database.client;
+    const admins = await this.recipients.admins(tx, event.organizationId);
+    const openedBy = await this.recipients.nameOf(tx, event.actorUserId);
+    await this.notifications.raise({
+      recipients: admins,
+      actorUserId: event.actorUserId,
+      template: 'ACCOUNT_APPROVAL_REQUESTED',
+      values: {
+        lineName: event.lineName,
+        customerName: event.customerName,
+        accountCode: event.accountCode,
+        openedBy,
+        amount: rupees(event.accountAmount),
+      },
+      link: {
+        entityType: 'account_loan',
+        entityId: event.accountLoanId,
+        url: `/accounts/${event.accountLoanId}`,
+      },
+    });
+  }
+
+  /** The Senior who opened an account hears it was approved (decided 2026-10-03). */
+  async accountApproved(event: {
+    actorUserId: string;
+    openedByUserId: string | null;
+    accountLoanId: string;
+    accountCode: string;
+    customerName: string;
+  }): Promise<void> {
+    if (!event.openedByUserId) return;
+    const tx = this.database.client;
+    const approvedBy = await this.recipients.nameOf(tx, event.actorUserId);
+    await this.notifications.raise({
+      recipients: [event.openedByUserId],
+      actorUserId: event.actorUserId,
+      template: 'ACCOUNT_APPROVED',
+      values: {
+        customerName: event.customerName,
+        accountCode: event.accountCode,
+        approvedBy,
+      },
+      link: {
+        entityType: 'account_loan',
+        entityId: event.accountLoanId,
+        url: `/accounts/${event.accountLoanId}`,
+      },
+    });
+  }
+
+  /**
    * M03: the person assigned, and the line's Senior today. Being assigned
    * here takes them off no other line (decided 2026-10-03), so no other
    * line's Senior has anything to hear.

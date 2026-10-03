@@ -130,6 +130,19 @@ export function canCreateCustomer(role: Role): boolean {
 }
 
 /**
+ * `account.create`: Admins, and a Senior for customers on their own lines,
+ * whose account then waits for `account.approve` (decided 2026-10-03).
+ */
+export function canCreateAccount(role: Role): boolean {
+  return canOnboard(role) || role === "SENIOR";
+}
+
+/** `account.approve`: an Admin or the Super Admin approves a Senior's account. */
+export function canApproveAccount(role: Role): boolean {
+  return canOnboard(role);
+}
+
+/**
  * `money.businessTotals`: the business-wide dashboards — the overview (US-080)
  * and the operational dashboard (US-082). Which one lands is the role's
  * choice in `dashboard-screen.tsx`.

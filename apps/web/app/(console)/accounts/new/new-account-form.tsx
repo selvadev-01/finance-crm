@@ -4,6 +4,7 @@ import {
   accountContract,
   type AccountPreview,
   accountTermsSchema,
+  booksMoneyContract,
   customerContract,
 } from "@repo/contracts";
 import {
@@ -51,10 +52,20 @@ import { apiWrite } from "../../../../lib/api-write";
 import { CADENCE, cadenceOf } from "../../../../lib/cadence";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
-import { isZeroMoney, subtractMoney } from "../../../../lib/money";
-import { canDisburse, canManageOrganisation } from "../../../../lib/roles";
+import {
+  isNegativeMoney,
+  isZeroMoney,
+  subtractMoney,
+} from "../../../../lib/money";
+import {
+  canApproveAccount,
+  canCreateAccount,
+  canDisburse,
+  canManageOrganisation,
+} from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
+import { signedAmount } from "../../books/visuals";
 
 type Slot = AccountPreview["slots"][number];
 type Terms = (typeof accountTermsSchema)["_zod"]["output"];
@@ -102,16 +113,20 @@ function withRupees(message: string): string {
 export function NewAccountForm({ customerId }: { customerId: string }) {
   const me = useSignedIn();
   const router = useRouter();
+  // A Senior opens accounts too, for customers on their own lines; theirs
+  // wait for an Admin to approve (decided 2026-10-03).
+  const mayCreate = canCreateAccount(me.role);
   const manages = canManageOrganisation(me.role);
+  const needsApproval = !canApproveAccount(me.role);
   const today = toBusinessDate(new Date());
 
   const customer = useApiQuery(
     customerContract.getCustomer,
-    manages && customerId ? { params: { customerId } } : null,
+    mayCreate && customerId ? { params: { customerId } } : null,
   );
   const existing = useApiQuery(
     accountContract.listAccounts,
-    manages && customerId
+    mayCreate && customerId
       ? { query: { customerId, status: "ACTIVE", limit: LIST_LIMIT } }
       : null,
   );
@@ -167,6 +182,12 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
   // the account as pending and the owner disburses it from its page.
   const ownerMayDisburse = canDisburse(me.role);
   const disbursesToday = disbursementDate === today && ownerMayDisburse;
+  // A mid-term account is paid out of cash-in-hand too, net of what came back
+  // before Rasi (decided 2026-10-03), so the form shows what is there.
+  const books = useApiQuery(
+    booksMoneyContract.getBooksOverview,
+    manages && midTerm ? { query: {} } : null,
+  );
 
   const [preview, setPreview] = useState<{
     key: string;
@@ -175,7 +196,7 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
   const [showAllSlots, setShowAllSlots] = useState(false);
 
   useEffect(() => {
-    if (!previewKey || !customerId || !manages) return;
+    if (!previewKey || !customerId || !mayCreate) return;
     let cancelled = false;
     // Debounced: a preview per settled value, not per keystroke.
     const timer = setTimeout(() => {
@@ -204,9 +225,9 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [previewKey, customerId, manages]);
+  }, [previewKey, customerId, mayCreate]);
 
-  if (!manages) {
+  if (!mayCreate) {
     return (
       <EmptyFrame>
         <NotPermitted />
@@ -233,6 +254,17 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
       : null;
 
   const current = preview && preview.key === previewKey ? preview.result : null;
+  // Given less collected; nothing once more than was given is back.
+  const midTermTakes =
+    midTerm &&
+    current !== null &&
+    typeof current !== "string" &&
+    current.kind === "MID_TERM" &&
+    MONEY_TEXT.test(investedText)
+      ? ((net) => (isNegativeMoney(net) ? "0.00" : net))(
+          subtractMoney(investedText, current.collectedAmount),
+        )
+      : null;
   const activeCount =
     existing.status === "ready" ? existing.data.data.length : 0;
   const cancel = (
@@ -361,7 +393,12 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
               >
                 <Input type="date" />
               </FormField>
-              {midTerm ? (
+              {midTerm && needsApproval ? (
+                <FormMessage tone="warning">
+                  An account that began before today is entered by an Admin.
+                  Choose today or a later date.
+                </FormMessage>
+              ) : midTerm ? (
                 <FormMessage tone="warning">
                   <div className="flex flex-col gap-3">
                     <p className="font-medium">
@@ -383,11 +420,22 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
                   </div>
                 </FormMessage>
               ) : null}
+              {midTermTakes !== null && books.status === "ready" ? (
+                <MidTermCash
+                  held={books.data.officeCash}
+                  takes={midTermTakes}
+                  ownerMayAdd={ownerMayDisburse}
+                />
+              ) : null}
 
               <FormActions className="sm:flex-row-reverse sm:justify-start">
-                {midTerm ? (
+                {midTerm && needsApproval ? null : midTerm ? (
                   <SubmitButton value="create" pendingLabel="Saving…">
                     Save mid-term account
+                  </SubmitButton>
+                ) : needsApproval ? (
+                  <SubmitButton value="create" pendingLabel="Sending…">
+                    Send for approval
                   </SubmitButton>
                 ) : (
                   <>
@@ -417,9 +465,11 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
               </FormActions>
               {!midTerm && !disbursesToday ? (
                 <p className="text-caption text-ink-muted">
-                  {ownerMayDisburse
-                    ? "A future-dated account is saved as pending and disbursed on its day."
-                    : "Saved as pending. The Super Admin disburses it from the account page, out of cash-in-hand."}
+                  {needsApproval
+                    ? "Saved as pending and sent to an Admin to approve. Once approved, the Super Admin disburses it."
+                    : ownerMayDisburse
+                      ? "A future-dated account is saved as pending and disbursed on its day."
+                      : "Saved as pending. The Super Admin disburses it from the account page, out of cash-in-hand."}
                 </p>
               ) : null}
             </Form>
@@ -455,6 +505,75 @@ export function NewAccountForm({ customerId }: { customerId: string }) {
           )}
         </Section>
       </div>
+    </>
+  );
+}
+
+/**
+ * What a mid-term account takes out of cash-in-hand, and what is left. The
+ * API refuses it when short; this says so first, and tells the Super Admin
+ * where to add money — an Admin cannot, so they are sent to the owner.
+ */
+function MidTermCash({
+  held,
+  takes,
+  ownerMayAdd,
+}: {
+  held: string;
+  takes: string;
+  ownerMayAdd: boolean;
+}) {
+  const after = subtractMoney(held, takes);
+  const short = !isZeroMoney(takes) && isNegativeMoney(after);
+
+  return (
+    <>
+      <dl
+        aria-label="Cash in hand"
+        className="grid grid-cols-2 gap-3 rounded-control bg-surface-sunken px-4 py-3"
+      >
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-caption text-ink-muted">Cash in hand now</dt>
+          <dd className="text-heading text-ink" data-numeric>
+            {signedAmount(held)}
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-caption text-ink-muted">After this account</dt>
+          <dd
+            className={
+              short ? "text-heading text-critical" : "text-heading text-ink"
+            }
+            data-numeric
+          >
+            {signedAmount(after)}
+          </dd>
+        </div>
+        <p className="col-span-2 text-caption text-ink-muted">
+          {isZeroMoney(takes)
+            ? "More than the amount given is already back, so this takes nothing from cash in hand."
+            : `Takes ${formatCurrency(takes)}: the amount given, less what was collected before.`}
+        </p>
+      </dl>
+      {short ? (
+        <FormMessage
+          tone="critical"
+          action={
+            ownerMayAdd ? (
+              <Link
+                href="/books/money?action=capital"
+                className={buttonClass("secondary", undefined, "sm")}
+              >
+                Add money
+              </Link>
+            ) : undefined
+          }
+        >
+          {ownerMayAdd
+            ? "Not enough cash in hand for this account. Add money first."
+            : "Not enough cash in hand for this account. Ask the owner to add money first."}
+        </FormMessage>
+      ) : null}
     </>
   );
 }

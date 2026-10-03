@@ -224,6 +224,7 @@ export function ExpenseDecision({
         Reject
       </Button>
       <Button
+        aria-busy={pending || undefined}
         tone="primary"
         size="sm"
         onClick={() => void approve()}

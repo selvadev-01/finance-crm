@@ -43,6 +43,18 @@ const configSchema = z
         (value) => new URL(value).origin === value.replace(/\/$/, ''),
         'must be an origin — scheme, host and port only, with no path',
       ),
+    /**
+     * How long a transaction may stay open before Prisma abandons it (M16).
+     * 5 s suits a database beside the API; one across a network — a hosted
+     * database in another region — needs more, because every statement pays
+     * a round trip. Calls that ask for their own limit keep it.
+     */
+    DB_TRANSACTION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(120_000)
+      .default(5_000),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     /** Identifies the deployed build in `/health/info`. Optional in development. */
     BUILD_ID: z.string().min(1).optional(),

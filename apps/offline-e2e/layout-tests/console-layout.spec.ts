@@ -94,7 +94,7 @@ const EXPECTED: Record<
   { tabs: string[]; inMore: string[]; notInMore: string[] }
 > = {
   SUPER_ADMIN: {
-    tabs: ["Home", "Collections", "Customers", "Books", "More"],
+    tabs: ["Home", "Collections", "Customers", "Ledger", "More"],
     inMore: ["Sectors", "Team", "Settings"],
     notInMore: SETTINGS_PARTS,
   },

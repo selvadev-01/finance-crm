@@ -271,7 +271,7 @@ test.describe("statements (ADR-0018)", () => {
     await signedInAs(page, "SENIOR", answers);
     await page.goto("/books/profit-and-loss");
     await expect(
-      page.getByText("The books are for Super Admins and Admins."),
+      page.getByText("The ledger is for Super Admins and Admins."),
     ).toBeVisible();
   });
 

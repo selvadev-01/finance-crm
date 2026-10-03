@@ -154,6 +154,7 @@ export function ExpenseScreen({
       footer={
         offline || !categories ? undefined : (
           <Button
+            aria-busy={saving || undefined}
             type="submit"
             form={FORM_ID}
             tone="primary"

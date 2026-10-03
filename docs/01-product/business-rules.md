@@ -302,7 +302,7 @@ Each handover records the amount, a denomination breakdown, the sender, the rece
 
 `Discrepancy = cash declared − collections recorded` for that Junior, that date.
 
-**Field expenses** ([ADR-0018](../02-architecture/adr/0018-books-expenses-banks-and-journals.md), from 2026-10-01): cash a collector spent on the round — petrol, say — with someone else's approval is spent, not missing. So the cash owed is `collections recorded − approved field expenses`, and the discrepancy becomes `cash declared + approved field expenses − collections recorded`. Worked example: ₹1,000 collected, ₹50 petrol approved, ₹950 handed over ⇒ discrepancy ₹0. A rejected or still-pending expense counts for nothing; the cash is still owed.
+**Field expenses** ([ADR-0018](../02-architecture/adr/0018-books-expenses-banks-and-journals.md), from 2026-10-01): cash a collector spent on the round — petrol, say — with someone else's approval is spent, not missing. So the cash owed is `collections recorded − approved field expenses`, and the discrepancy becomes `cash declared + approved field expenses − collections recorded`. Worked example: ₹1,000 collected, ₹50 petrol approved, ₹950 handed over ⇒ discrepancy ₹0. A rejected or still-pending expense counts for nothing; the cash is still owed. An expense is approved only out of cash the spender is holding (decided 2026-10-03). A Junior holding ₹40 cannot have ₹50 approved, because their cash in hand would go below zero for money they never had.
 
 Because each hop is counted, a discrepancy is attributable to a specific handover rather than to a whole day or a whole line.
 

@@ -415,6 +415,7 @@ function CloseDialog({
           </Button>
         ) : (
           <Button
+            aria-busy={pending || undefined}
             tone="primary"
             onClick={() => void close(false)}
             disabled={pending}

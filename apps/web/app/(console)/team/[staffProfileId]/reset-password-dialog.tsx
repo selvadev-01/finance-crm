@@ -100,7 +100,12 @@ export function ResetPasswordDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="danger" onClick={reset} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="danger"
+          onClick={reset}
+          disabled={pending}
+        >
           {pending ? "Resetting…" : "Reset and sign out"}
         </Button>
       </DialogActions>

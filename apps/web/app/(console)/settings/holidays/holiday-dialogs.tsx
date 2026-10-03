@@ -149,7 +149,12 @@ export function RemoveHolidayDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="danger" onClick={() => void confirm()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="danger"
+          onClick={() => void confirm()}
+          disabled={pending}
+        >
           {pending ? "Removing…" : "Remove holiday"}
         </Button>
       </DialogActions>

@@ -259,6 +259,7 @@ const EXPECTED_ACCESS: Record<string, Permission | 'public'> = {
   'POST /api/lines/:lineId/senior-assignment': 'assignment.assignSenior',
   'POST /api/lines/:lineId/junior-assignment': 'assignment.moveJunior',
   'POST /api/line-assignments/:assignmentId/end': 'assignment.end',
+  'POST /api/accounts/:accountId/approval': 'account.approve',
   'GET /api/staffing': 'staff.list',
   'GET /api/lines/:lineId/assignments': 'assignment.viewHistory',
   'GET /api/lines/:lineId/visiting-order': 'line.setVisitingOrder',

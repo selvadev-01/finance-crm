@@ -463,7 +463,7 @@ test.describe("S-07 reads the ledger (2026-10-02)", () => {
     const donut = page.getByRole("list", { name: "Fund deployment" });
     // Principal still lent: ₹47,72,300 owed less ₹5,12,300 not yet earned.
     await expect(donut.getByText("₹42.60 L")).toBeVisible();
-    await expect(page.getByText("Books balance")).toBeVisible();
+    await expect(page.getByText("Ledger balances")).toBeVisible();
 
     await expect(
       // The hero carries it too, for a screen reader; this is the P&L box.
@@ -516,7 +516,7 @@ test.describe("S-20 and S-19 redesigned (2026-10-02)", () => {
     await expect(
       page.getByRole("navigation", { name: "Quick actions" }),
     ).toBeVisible();
-    await expect(page.getByText("Books today")).toBeVisible();
+    await expect(page.getByText("Ledger today")).toBeVisible();
     await expect(
       page
         .getByRole("list", { name: "Needs attention" })
@@ -613,7 +613,7 @@ test.describe("the phone home for each console role (2026-10-02)", () => {
   }) => {
     await onPhone(page, "ADMIN");
     await expect(page.getByRole("region", { name: "The day" })).toBeVisible();
-    await expect(menu(page).getByRole("link", { name: "Books" })).toBeVisible();
+    await expect(menu(page).getByRole("link", { name: "Ledger" })).toBeVisible();
     await expect(
       menu(page).getByRole("link", { name: "Settings" }),
     ).toHaveCount(0);
@@ -630,7 +630,7 @@ test.describe("the phone home for each console role (2026-10-02)", () => {
     page,
   }) => {
     await onPhone(page, "SENIOR");
-    for (const hidden of ["Books", "Sectors", "Audit log"]) {
+    for (const hidden of ["Ledger", "Sectors", "Audit log"]) {
       await expect(menu(page).getByRole("link", { name: hidden })).toHaveCount(
         0,
       );

@@ -139,7 +139,12 @@ export function ResetSettingDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="danger" onClick={() => void confirm()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="danger"
+          onClick={() => void confirm()}
+          disabled={pending}
+        >
           {pending ? "Resetting…" : "Reset to default"}
         </Button>
       </DialogActions>

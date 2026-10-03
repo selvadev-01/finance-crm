@@ -29,7 +29,11 @@ export const PERMISSIONS = {
 
   // Accounts (M05)
   'account.view': ALL,
-  'account.create': ADMINS,
+  // A Senior opens accounts for customers on their own lines; theirs wait
+  // for `account.approve` before the Super Admin disburses (decided
+  // 2026-10-03).
+  'account.create': ADMINS_AND_SENIOR,
+  'account.approve': ADMINS,
   'account.disburse': SUPER_ADMIN,
   'account.updateTerms': ADMINS,
   'account.close': SUPER_ADMIN,

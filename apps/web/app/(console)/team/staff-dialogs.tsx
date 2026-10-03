@@ -365,6 +365,7 @@ export function DeleteStaffDialog({
         </Button>
         {blocked ? null : (
           <Button
+            aria-busy={pending || undefined}
             tone="danger"
             onClick={() => void confirm()}
             disabled={pending}

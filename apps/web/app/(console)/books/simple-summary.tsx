@@ -21,7 +21,6 @@ import {
   ListSkeleton,
   NotPermitted,
   PageHeader,
-  Section,
   Stat,
   StatGrid,
 } from "@repo/ui";
@@ -32,6 +31,7 @@ import { isNegativeMoney, sumMoney } from "../../../lib/money";
 import { canAddCapital, canManageOrganisation } from "../../../lib/roles";
 import { useApiQuery } from "../../../lib/use-api-query";
 import { useSignedIn } from "../../../lib/use-me";
+import { MoneyAccounts } from "./money-accounts";
 import { signedAmount } from "./visuals";
 
 /** Every entry in everyday words (simple Books, lib/books-mode.ts). */
@@ -83,7 +83,7 @@ export function SimpleSummary() {
   if (!allowed) {
     return (
       <EmptyFrame>
-        <NotPermitted description="The books are for Super Admins and Admins." />
+        <NotPermitted description="The ledger is for Super Admins and Admins." />
       </EmptyFrame>
     );
   }
@@ -204,44 +204,51 @@ export function SimpleSummary() {
         </>
       ) : null}
 
-      <Section title="Latest entries">
-        {recent.status === "loading" ? (
-          <ListSkeleton columns={3} rows={4} />
-        ) : null}
-        {recent.status === "error" ? (
-          <LoadFailed message={recent.message} onRetry={recent.reload} />
-        ) : null}
-        {recent.status === "ready" ? (
-          recent.data.data.length === 0 ? (
-            <p className="text-body text-ink-muted">Nothing yet this month.</p>
-          ) : (
-            <ul
-              aria-label="Latest entries"
-              className="flex flex-col divide-y divide-border rounded-surface border border-border bg-surface-raised"
-            >
-              {recent.data.data.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
+      <MoneyAccounts
+        date={today}
+        latest={
+          <>
+            {recent.status === "loading" ? (
+              <ListSkeleton columns={3} rows={4} />
+            ) : null}
+            {recent.status === "error" ? (
+              <LoadFailed message={recent.message} onRetry={recent.reload} />
+            ) : null}
+            {recent.status === "ready" ? (
+              recent.data.data.length === 0 ? (
+                <p className="text-body text-ink-muted">
+                  Nothing yet this month.
+                </p>
+              ) : (
+                <ul
+                  aria-label="Latest entries"
+                  className="flex flex-col divide-y divide-border rounded-surface border border-border bg-surface-raised"
                 >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-medium text-ink">
-                      {KIND[entry.transactionType]}
-                    </span>
-                    <span className="truncate text-caption text-ink-muted">
-                      {formatBusinessDate(entry.businessDate)} ·{" "}
-                      {entry.description}
-                    </span>
-                  </span>
-                  <span className="text-ink" data-numeric>
-                    {signedAmount(entry.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : null}
-      </Section>
+                  {recent.data.data.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <span className="flex min-w-0 flex-col">
+                        <span className="font-medium text-ink">
+                          {KIND[entry.transactionType]}
+                        </span>
+                        <span className="truncate text-caption text-ink-muted">
+                          {formatBusinessDate(entry.businessDate)} ·{" "}
+                          {entry.description}
+                        </span>
+                      </span>
+                      <span className="text-ink" data-numeric>
+                        {signedAmount(entry.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : null}
+          </>
+        }
+      />
     </>
   );
 }

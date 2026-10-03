@@ -61,7 +61,7 @@ export const NAV: NavGroup[] = [
       // ADR-0018: the business's own money — Admins and above.
       {
         href: "/books",
-        label: "Books",
+        label: "Ledger",
         icon: BookOpenText,
         shownTo: canManageOrganisation,
       },

@@ -57,19 +57,22 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Soft delete     |      ✓      |   —   |    —     |      —       |
 | View references |      ✓      |   ✓   | own line | own assigned |
 
-> **A Senior creates customers on their own lines (decided 2026-10-03).** Choosing any other line is refused as `404 LINE_NOT_FOUND`, the same as a line that does not exist. Updating a customer, moving them to another line and opening their account stay with the Admins.
+> **A Senior creates customers on their own lines (decided 2026-10-03).** Choosing any other line is refused as `404 LINE_NOT_FOUND`, the same as a line that does not exist. Updating a customer and moving them to another line stay with the Admins. A Senior may open the customer's account, which waits for approval (below).
 
 ### Accounts (M05)
 
 | Action                           | Super Admin | Admin |  Senior  |    Junior    |
 | -------------------------------- | :---------: | :---: | :------: | :----------: |
 | List / view                      |      ✓      |   ✓   | own line | own assigned |
-| Create                           |      ✓      |   ✓   |    —     |      —       |
+| Create                           |      ✓      |   ✓   | own line |      —       |
+| Approve a Senior’s account       |      ✓      |   ✓   |    —     |      —       |
 | Disburse                         |      ✓      |   —   |    —     |      —       |
 | Update terms (pre-disbursement)  |      ✓      |   ✓   |    —     |      —       |
 | Mark `DEFAULTED` / `WRITTEN_OFF` |      ✓      |   —   |    —     |      —       |
 | View schedule                    |      ✓      |   ✓   | own line | own assigned |
 
+> **A Senior opens accounts for customers on their own lines, and they wait for approval (decided 2026-10-03).** A Senior's account is created `PENDING` and not yet approved; an Admin or the Super Admin approves it (`POST /api/accounts/:accountId/approval`), and only then may the Super Admin disburse it — or the Super Admin disburses it directly, which approves it in the same step. An Admin's or the Super Admin's account is approved as it is created. A Senior cannot enter a mid-term account (`403 MID_TERM_NEEDS_ADMIN`): it is created already active, with nothing to wait in. The database refuses any account past `PENDING` that was never approved.
+>
 > Amounts are immutable after disbursement (BR-01) — no role may change them. Writing off is Super Admin only: it destroys receivable value and must not be a routine operational action.
 >
 > **Disbursing is Super Admin only (decided 2026-10-02):** it pays the owner's money out, so an Admin creates the customer and the account as `PENDING` and the Super Admin releases it — from the account page or by "Save and disburse", which the API refuses an Admin with `403 PERMISSION_DENIED`. A day-one disbursement is refused with `422 INSUFFICIENT_CASH_IN_HAND` when office cash holds less than the invested amount; the owner adds capital first. A mid-term account (US-030a) is history being entered, so an Admin still creates one and it is not checked against office cash.

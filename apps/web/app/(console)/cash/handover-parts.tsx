@@ -229,7 +229,12 @@ function AcknowledgeHandover({ handover, onClose, onDone }: ActProps) {
         <Button tone="ghost" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="primary" onClick={() => void submit()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="primary"
+          onClick={() => void submit()}
+          disabled={pending}
+        >
           {pending ? "Saving…" : "I have the cash"}
         </Button>
       </DialogActions>

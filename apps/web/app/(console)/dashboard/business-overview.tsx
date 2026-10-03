@@ -49,6 +49,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AccountsAwaitingApproval } from "../../../components/accounts-awaiting-approval";
 import { ExportMenu } from "../../../components/export-menu";
 import { LoadFailed } from "../../../components/query-state";
 import { StatusBadge } from "../../../components/status-badge";
@@ -353,6 +354,7 @@ export function BusinessOverview({
   return (
     <>
       {header(view)}
+      <AccountsAwaitingApproval />
       {view.day.kind !== "WORKING" ? (
         <FormMessage tone="info">
           {view.day.kind === "SUNDAY"
@@ -838,7 +840,7 @@ function MoneyDonut({ sheet }: { sheet: SheetQuery }) {
             sheet.data.balanced ? (
               <span className="inline-flex items-center gap-1 rounded-control bg-positive-subtle px-2 py-0.5 text-2xs font-semibold text-positive">
                 <CheckCircle aria-hidden size={12} weight="bold" />
-                Books balance
+                Ledger balances
               </span>
             ) : (
               <Link
@@ -846,7 +848,7 @@ function MoneyDonut({ sheet }: { sheet: SheetQuery }) {
                 className="inline-flex items-center gap-1 rounded-control bg-critical-subtle px-2 py-0.5 text-2xs font-semibold text-critical"
               >
                 <WarningCircle aria-hidden size={12} weight="bold" />
-                Books don’t balance
+                Ledger doesn’t balance
               </Link>
             )
           ) : null
@@ -861,7 +863,7 @@ function MoneyDonut({ sheet }: { sheet: SheetQuery }) {
         ) : null}
         {sheet.status === "not-found" || sheet.status === "not-permitted" ? (
           <p className="text-body text-ink-muted">
-            The books aren’t available to you here.
+            The ledger isn’t available to you here.
           </p>
         ) : null}
         {sheet.status === "ready" ? <DonutBody sheet={sheet.data} /> : null}
@@ -1020,7 +1022,7 @@ function MonthCard({ pnl, date }: { pnl: PnlQuery; date: string }) {
         ) : null}
         {pnl.status === "not-found" || pnl.status === "not-permitted" ? (
           <p className="text-body text-ink-muted">
-            The books aren’t available to you here.
+            The ledger isn’t available to you here.
           </p>
         ) : null}
         {pnl.status === "ready" ? <MonthBody pnl={pnl.data} /> : null}

@@ -96,7 +96,7 @@ export function BooksOverview() {
   if (!allowed) {
     return (
       <EmptyFrame>
-        <NotPermitted description="The books are for Super Admins and Admins." />
+        <NotPermitted description="The ledger is for Super Admins and Admins." />
       </EmptyFrame>
     );
   }
@@ -104,7 +104,7 @@ export function BooksOverview() {
   return (
     <>
       <PageHeader
-        title="Books"
+        title="Ledger"
         description={`Your business's own money, as of ${formatBusinessDate(today)}.`}
         actions={
           <Link href="/reports/trial-balance" className={arrowLinkClass}>

@@ -171,7 +171,7 @@ export function Journal() {
   if (!allowed) {
     return (
       <EmptyFrame>
-        <NotPermitted description="The books are for Super Admins and Admins." />
+        <NotPermitted description="The ledger is for Super Admins and Admins." />
       </EmptyFrame>
     );
   }
@@ -616,7 +616,12 @@ function PostJournalDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="primary" onClick={() => void submit()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="primary"
+          onClick={() => void submit()}
+          disabled={pending}
+        >
           {pending ? "Posting…" : "Post entry"}
         </Button>
       </DialogActions>

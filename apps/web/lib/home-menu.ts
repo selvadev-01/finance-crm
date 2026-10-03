@@ -128,7 +128,7 @@ const TILES: MenuTile[] = [
   },
   {
     key: "books",
-    label: "Books",
+    label: "Ledger",
     icon: BookOpenText,
     href: () => "/books",
     shownTo: books,
