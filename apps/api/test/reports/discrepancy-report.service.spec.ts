@@ -515,7 +515,7 @@ describe('DiscrepancyReportService (M12, BR-17)', () => {
       }
 
       const unassigned = await w.discrepancies.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         { ...range, show: 'all' },
         MONDAY_EVENING,
       );

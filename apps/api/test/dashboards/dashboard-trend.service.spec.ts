@@ -177,7 +177,7 @@ describe('DashboardTrendService', () => {
       ).rejects.toMatchObject({ code: 'LINE_NOT_FOUND' });
 
       const unassigned = await w.trend.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         { date: TUESDAY, days: 2 },
         TUESDAY_MORNING,
       );

@@ -272,11 +272,16 @@ export function ChangeRoleDialog({
           ))}
         </Select>
       </FormField>
-      {chosen !== staff.role && staff.currentAssignment ? (
+      {chosen !== staff.role && staff.currentAssignments.length > 0 ? (
         <FormMessage tone="warning">
-          They are the {ROLE_LABEL[staff.currentAssignment.assignmentRole]} on{" "}
-          {staff.currentAssignment.lineName}. Assign someone else to that line
-          first unless the new role can keep that assignment.
+          They are the {ROLE_LABEL[staff.currentAssignments[0]!.assignmentRole]}{" "}
+          on{" "}
+          {staff.currentAssignments
+            .map((assignment) => assignment.lineName)
+            .join(", ")}
+          . Take them off{" "}
+          {staff.currentAssignments.length === 1 ? "that line" : "those lines"}{" "}
+          first unless the new role can keep them.
         </FormMessage>
       ) : null}
     </DialogForm>

@@ -19,7 +19,9 @@ const SUPER_ADMIN: readonly StaffRole[] = ['SUPER_ADMIN'];
 export const PERMISSIONS = {
   // Customers (M04)
   'customer.view': ALL,
-  'customer.create': ADMINS,
+  // A Senior onboards customers onto their own lines (decided 2026-10-03);
+  // `lineScope` refuses any other line as missing.
+  'customer.create': ADMINS_AND_SENIOR,
   'customer.update': ADMINS,
   'customer.changeLine': ADMINS,
   'customer.delete': SUPER_ADMIN,
@@ -69,6 +71,9 @@ export const PERMISSIONS = {
   'line.manage': ADMINS,
   'assignment.assignSenior': ADMINS,
   'assignment.moveJunior': ADMINS,
+  // Staff may work several lines (decided 2026-10-03), so leaving one is its
+  // own act rather than a side effect of being assigned elsewhere.
+  'assignment.end': ADMINS,
   'assignment.viewHistory': ADMINS_AND_SENIOR,
   'line.setVisitingOrder': ADMINS_AND_SENIOR,
 

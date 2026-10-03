@@ -95,7 +95,7 @@ describe('OperationsDashboardService (US-082)', () => {
       staffProfileId: staffB.id,
       organizationId,
       role: 'JUNIOR',
-      currentLineId: w.otherLine.id,
+      currentLineIds: [w.otherLine.id],
     };
     const idleLine = await tx.line.create({
       data: {

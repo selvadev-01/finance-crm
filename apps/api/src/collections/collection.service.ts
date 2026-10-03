@@ -243,7 +243,7 @@ export class CollectionService {
     // BR-15: the line this money is attributed to is the one the customer was
     // on when it was collected, not the one they are on now. They differ only
     // for a collection synced after a transfer (US-023); on the transfer day
-    // both periods cover the date, so the caller's own line wins.
+    // both periods cover the date, so one of the caller's own lines wins.
     const periods = await tx.customerLinePeriod.findMany({
       where: {
         customerId: account.customerId,
@@ -254,7 +254,7 @@ export class CollectionService {
       orderBy: { effectiveFrom: 'desc' },
     });
     const collectedLineId =
-      periods.find((period) => period.lineId === context.currentLineId)
+      periods.find((period) => context.currentLineIds.includes(period.lineId))
         ?.lineId ??
       periods[0]?.lineId ??
       account.customer.lineId;

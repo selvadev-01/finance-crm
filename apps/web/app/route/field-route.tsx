@@ -57,6 +57,7 @@ import { ProfileScreen } from "./profile-screen";
 import { RouteScreen } from "./route-screen";
 import { SyncScreen } from "./sync-screen";
 import { HandoverScreen } from "./handover-screen";
+import { PushPrompt } from "../../lib/notifications/push-prompt";
 import { NotificationsScreen } from "./notifications-screen";
 import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 
@@ -368,6 +369,8 @@ export function FieldRoute() {
 
   return (
     <FieldChrome value={chrome}>
+      {/* Asks a phone that has never decided whether to receive pushes. */}
+      <PushPrompt app="field" />
       <div className="flex min-h-dvh flex-col bg-surface">
         {view.name === "collect" ? (
           <CollectScreen
@@ -379,7 +382,10 @@ export function FieldRoute() {
         ) : view.name === "correct" ? (
           <CorrectScreen connected={connected} />
         ) : view.name === "expense" ? (
-          <ExpenseScreen connected={connected} />
+          <ExpenseScreen
+            connected={connected}
+            lines={local?.route.lines ?? []}
+          />
         ) : view.name === "notifications" ? (
           <NotificationsScreen connected={connected} />
         ) : view.name === "sync" ? (
@@ -398,7 +404,11 @@ export function FieldRoute() {
           />
         ) : view.name === "customers" ? (
           <CustomersScreen
-            lineId={local?.route.lineId ?? me.currentLineId}
+            lines={
+              local && local.route.lines.length > 0
+                ? local.route.lines
+                : me.currentLineIds.map((lineId) => ({ lineId, code: null }))
+            }
             connected={connected}
           />
         ) : view.name === "customer" ? (

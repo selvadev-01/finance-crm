@@ -20,11 +20,12 @@ export interface RequestContext {
   readonly organizationId: string;
   readonly role: StaffRole;
   /**
-   * The line of the staff member's current assignment (`effectiveTo IS NULL`),
-   * or `null` when they have none. Always `null`-checked by scope predicates:
-   * a Senior or Junior with no current line sees nothing.
+   * The lines of every assignment in effect on today's business date, in no
+   * particular order — a Senior or Junior may work several (decided
+   * 2026-10-03). Empty when they have none, and scope predicates treat empty
+   * as "sees nothing", never as "sees everything".
    */
-  readonly currentLineId: string | null;
+  readonly currentLineIds: readonly string[];
 }
 
 /** Where a request came from, for the audit trail (M13). */

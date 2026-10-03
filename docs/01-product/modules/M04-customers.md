@@ -75,7 +75,7 @@ Role-scoped: a Junior sees only assigned customers, and no invested amount or pr
 
 | Operation                | Actor                                              |
 | ------------------------ | -------------------------------------------------- |
-| Create                   | Admin+                                             |
+| Create                   | Admin+, Senior (own assigned lines only)           |
 | Update                   | Admin+                                             |
 | Transfer to another line | Admin+                                             |
 | Soft delete              | Super Admin                                        |

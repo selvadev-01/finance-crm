@@ -30,6 +30,7 @@ import { currentHref } from "../../lib/nav";
 import { NotificationPanel } from "../../lib/notifications/notification-panel";
 import { useUnreadCount } from "../../lib/notifications/use-unread-count";
 import { ROLE_LABEL } from "../../lib/roles";
+import { TourButton } from "../../lib/tour/tour-button";
 import { LANDING, SignedInContext, useMe } from "../../lib/use-me";
 import { LayoutChooser, LayoutDialog } from "./layout-chooser";
 import { PhoneConsole } from "./phone-console";
@@ -239,6 +240,7 @@ function ComputerConsole({
             tone="ghost"
             size="sm"
             className="md:hidden"
+            data-tour="menu"
             aria-label="Open navigation"
             aria-haspopup="dialog"
             aria-expanded={drawerOpen}
@@ -254,6 +256,7 @@ function ComputerConsole({
           <GlobalSearch role={me.role} />
 
           <div className="ml-auto flex items-center gap-2.5">
+            <TourButton look="topbar" />
             {/*
              * The bell opens the centre itself, rather than a page (S-21):
              * a notification is read on the way to its subject, and a page in
@@ -266,7 +269,7 @@ function ComputerConsole({
                 icon={<Bell aria-hidden />}
                 count={unread ?? undefined}
               >
-                <Popover.Trigger />
+                <Popover.Trigger data-tour="bell" />
               </AppShell.TopbarAction>
               <Popover.Content
                 align="end"
@@ -282,6 +285,7 @@ function ComputerConsole({
               <Menu.Trigger asChild>
                 <button
                   type="button"
+                  data-tour="account"
                   aria-label={`${me.name}, ${ROLE_LABEL[me.role]} — account menu`}
                   className="flex items-center gap-2.5 rounded-pill p-0.5 pr-2 text-left transition-colors hover:bg-ink/5"
                 >

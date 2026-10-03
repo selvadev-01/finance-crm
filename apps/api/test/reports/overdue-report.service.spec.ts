@@ -535,7 +535,7 @@ describe('OverdueReportService (US-087)', () => {
       ).rejects.toMatchObject({ code: 'SECTOR_NOT_FOUND', status: 404 });
 
       const unassigned = await w.overdue.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         page,
         NOW,
       );

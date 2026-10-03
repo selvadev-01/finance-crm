@@ -122,6 +122,14 @@ export function canOnboard(role: Role): boolean {
 }
 
 /**
+ * `customer.create`: Admins on any line, and a Senior on their own assigned
+ * lines only (decided 2026-10-03) — the API lists and accepts no other.
+ */
+export function canCreateCustomer(role: Role): boolean {
+  return canOnboard(role) || role === "SENIOR";
+}
+
+/**
  * `money.businessTotals`: the business-wide dashboards — the overview (US-080)
  * and the operational dashboard (US-082). Which one lands is the role's
  * choice in `dashboard-screen.tsx`.

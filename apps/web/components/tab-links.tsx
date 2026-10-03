@@ -31,7 +31,7 @@ export function TabLinks({
   current: string | undefined;
 }) {
   return (
-    <nav aria-label={label} className={tabListClass}>
+    <nav aria-label={label} data-tour="section-tabs" className={tabListClass}>
       {tabs.map((tab) => (
         <Link
           key={tab.href}

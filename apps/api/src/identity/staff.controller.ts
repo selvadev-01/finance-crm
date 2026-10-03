@@ -60,7 +60,7 @@ export class StaffController {
       name: user.name,
       email: user.email,
       role: context.role,
-      currentLineId: context.currentLineId,
+      currentLineIds: [...context.currentLineIds],
       organization: { ...organization, defaultTermDays },
     };
   }

@@ -25,7 +25,7 @@ import { ListFallback } from "../../../components/list-state";
 import { Pager } from "../../../components/pager";
 import { StatusBadge } from "../../../components/status-badge";
 import { formatMobile } from "../../../lib/format";
-import { canManageOrganisation } from "../../../lib/roles";
+import { canCreateCustomer, canManageOrganisation } from "../../../lib/roles";
 import { useListState } from "../../../lib/use-list-state";
 import { useSignedIn } from "../../../lib/use-me";
 import { usePagedQuery } from "../../../lib/use-paged-query";
@@ -51,8 +51,11 @@ export function CustomerList({
     CUSTOMER_FILTERS,
     initial,
   );
-  // Only Admins filter by line; a Senior or Junior already sees just their own.
-  const lineId = manages ? filters.line : "";
+  // Admins filter by line, and so does a Senior on several (decided
+  // 2026-10-03) — among their own lines only, which is all the API lists.
+  const filtersLine =
+    manages || (me.role === "SENIOR" && me.currentLineIds.length > 1);
+  const lineId = filtersLine ? filters.line : "";
   const [searchText, setSearchText] = useState(filters.q);
 
   // The URL (and the query) follow the box once typing settles.
@@ -74,7 +77,7 @@ export function CustomerList({
     { url: true },
   );
 
-  const newCustomer = manages ? (
+  const newCustomer = canCreateCustomer(me.role) ? (
     <Link href="/customers/new" className={buttonClass("primary")}>
       New customer
     </Link>
@@ -87,7 +90,9 @@ export function CustomerList({
         description={
           manages
             ? "Everyone who holds or has held an account."
-            : "Customers on your line."
+            : me.currentLineIds.length > 1
+              ? "Customers on your lines."
+              : "Customers on your line."
         }
         actions={newCustomer}
       />
@@ -95,7 +100,7 @@ export function CustomerList({
       <FilterBar
         summary={[
           filters.q ? `“${filters.q}”` : null,
-          manages ? (filters.line ? "One line" : "All lines") : null,
+          filtersLine ? (filters.line ? "One line" : "All lines") : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -110,7 +115,7 @@ export function CustomerList({
             maxLength={80}
           />
         </FilterField>
-        {manages ? (
+        {filtersLine ? (
           <LineFilter
             value={filters.line}
             onChange={(value) => setFilter("line", value)}
@@ -201,7 +206,12 @@ export function CustomerList({
             ) : (
               <NothingYet
                 title="No customers on your line"
-                description="Customers appear here once an Admin onboards them onto your line."
+                description={
+                  newCustomer
+                    ? "Add the first customer to a line you are assigned to."
+                    : "Customers appear here once they are onboarded onto your line."
+                }
+                action={newCustomer ?? undefined}
               />
             )
           }

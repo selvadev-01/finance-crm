@@ -170,7 +170,7 @@ export class OrganizationSignUpService {
         staffProfileId: staff.id,
         organizationId: organization.id,
         role: 'SUPER_ADMIN',
-        currentLineId: null,
+        currentLineIds: [],
       };
       await this.audit.record(owner, {
         action: 'CREATE',

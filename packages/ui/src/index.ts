@@ -87,3 +87,10 @@ export { NoMatches, NothingYet, NotPermitted } from "./empty-state";
 export { formatBusinessDate, formatCount, formatCurrency } from "./format";
 export { toast, Toaster, type ToastInput } from "./toast";
 export { Tooltip, type TooltipProps } from "./tooltip";
+export {
+  findTourTarget,
+  Tour,
+  type TourLabels,
+  type TourProps,
+  type TourStep,
+} from "./tour";

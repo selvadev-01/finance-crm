@@ -190,7 +190,7 @@ export async function readRoute(
   const cached = await db.get("route", businessDate);
   if (!cached) return null;
   const entries = await listOutbox(db);
-  const route: RouteView = structuredClone(cached.server);
+  const route = upgradeRoute(structuredClone(cached.server));
   const rowState: Record<string, RowState> = {};
   for (const customer of route.customers) {
     for (const account of customer.accounts) {
@@ -235,6 +235,35 @@ export async function readRoute(
     stale: now.getTime() - cached.fetchedAt > ROUTE_TTL_MS,
     optimistic: applied > 0,
     rowState,
+  };
+}
+
+/** The route as the API sent it before staff could work several lines. */
+interface SingleLineRoute extends Omit<RouteView, "lines" | "customers"> {
+  lineId: string | null;
+  line: { code: string; name: string } | null;
+  customers: Omit<RouteView["customers"][number], "lineId">[];
+}
+
+/**
+ * A route cached by an earlier app version carries one `lineId` and `line`
+ * (until 2026-10-03). It is still a valid route for up to 72 hours of no
+ * signal, so it is read in today's shape rather than discarded: the one line
+ * becomes `lines`, and every customer is on it.
+ */
+export function upgradeRoute(cached: RouteView | SingleLineRoute): RouteView {
+  if ("lines" in cached) return cached;
+  const { lineId, line, customers, ...rest } = cached;
+  return {
+    ...rest,
+    lines:
+      lineId && line
+        ? [{ lineId, code: line.code, name: line.name, holiday: null }]
+        : [],
+    customers: customers.map((customer) => ({
+      ...customer,
+      lineId: lineId ?? "",
+    })),
   };
 }
 

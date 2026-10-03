@@ -16,7 +16,7 @@ import { Database } from '../platform/database/database.js';
 
 /**
  * US-040 — the Junior's route for a business date: every active account on
- * their line (M02 scope) with a slot due that day, grouped by customer, with
+ * their lines (M02 scope) with a slot due that day, grouped by customer, with
  * what to ask for and what is left. **No invested amount or profit** — the
  * payload has nowhere to put them.
  *
@@ -46,22 +46,40 @@ export class RouteService {
   ): Promise<RouteView> {
     const day = toUtcMidnight(today);
 
+    // A Junior may work several lines (decided 2026-10-03), possibly in
+    // different sectors, so a sector's holiday rests only that sector's lines.
+    const lineRows = await tx.line.findMany({
+      where: { id: { in: [...context.currentLineIds] } },
+      select: { id: true, sectorId: true, code: true, name: true },
+      orderBy: { code: 'asc' },
+    });
+    const holidays = lineRows.length
+      ? await tx.holiday.findMany({
+          where: {
+            organizationId: context.organizationId,
+            date: day,
+            OR: [
+              { sectorId: null },
+              { sectorId: { in: lineRows.map((line) => line.sectorId) } },
+            ],
+          },
+          select: { name: true, sectorId: true },
+        })
+      : [];
+    const holidayOf = (sectorId: string) =>
+      holidays.find((h) => h.sectorId === null || h.sectorId === sectorId)
+        ?.name ?? null;
+    const lines = lineRows.map((line) => ({
+      lineId: line.id,
+      code: line.code,
+      name: line.name,
+      holiday: holidayOf(line.sectorId),
+    }));
+    const working = lines.filter((line) => line.holiday === null);
+
     let dayKind: RouteView['day'] = { kind: 'WORKING' };
-    let line: { sectorId: string; code: string; name: string } | null = null;
-    if (context.currentLineId) {
-      line = await tx.line.findUnique({
-        where: { id: context.currentLineId },
-        select: { sectorId: true, code: true, name: true },
-      });
-      const holiday = await tx.holiday.findFirst({
-        where: {
-          organizationId: context.organizationId,
-          date: day,
-          OR: [{ sectorId: null }, { sectorId: line?.sectorId ?? '' }],
-        },
-        select: { name: true },
-      });
-      if (holiday) dayKind = { kind: 'HOLIDAY', name: holiday.name };
+    if (lines.length > 0 && working.length === 0) {
+      dayKind = { kind: 'HOLIDAY', name: lines[0]!.holiday! };
     }
     if (dayOfWeek(today) === 0) dayKind = { kind: 'SUNDAY' };
 
@@ -71,6 +89,9 @@ export class RouteService {
             where: inScope(accountScope(context), {
               status: 'ACTIVE',
               schedules: { some: { dueDate: day } },
+              customer: {
+                lineId: { in: working.map((line) => line.lineId) },
+              },
             }),
             select: {
               id: true,
@@ -83,6 +104,7 @@ export class RouteService {
               customer: {
                 select: {
                   id: true,
+                  lineId: true,
                   customerCode: true,
                   name: true,
                   address: true,
@@ -99,9 +121,11 @@ export class RouteService {
                 orderBy: { createdAt: 'desc' },
               },
             },
-            // The line's visiting order, set by its Senior or an Admin; the
-            // customers not yet placed follow, in code order (US-040).
+            // Line by line, each in its visiting order, set by its Senior or
+            // an Admin; the customers not yet placed follow, in code order
+            // (US-040).
             orderBy: [
+              { customer: { line: { code: 'asc' } } },
               { customer: { routePosition: { sort: 'asc', nulls: 'last' } } },
               { customer: { customerCode: 'asc' } },
               { accountCode: 'asc' },
@@ -113,6 +137,7 @@ export class RouteService {
     for (const account of accounts) {
       const entry = customers.get(account.customer.id) ?? {
         customerId: account.customer.id,
+        lineId: account.customer.lineId,
         customerCode: account.customer.customerCode,
         name: account.customer.name,
         address: account.customer.address,
@@ -151,8 +176,7 @@ export class RouteService {
     return {
       businessDate: today,
       day: dayKind,
-      lineId: context.currentLineId,
-      line: line ? { code: line.code, name: line.name } : null,
+      lines,
       customers: [...customers.values()],
     };
   }

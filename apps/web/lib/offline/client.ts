@@ -23,8 +23,9 @@ import {
   storeRoute,
 } from "./outbox";
 
-export const SW_URL = "/serwist/sw.js";
-export const SW_SCOPE = "/route";
+import { SW_SCOPE, SW_URL } from "./worker";
+
+export { SW_SCOPE, SW_URL };
 const PERIODIC_DRAIN_MS = 60_000;
 const KEEP_SYNCED_MS = 24 * 60 * 60 * 1000;
 

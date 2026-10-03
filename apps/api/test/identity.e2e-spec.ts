@@ -133,7 +133,7 @@ describe('admin password reset (US-003, e2e)', () => {
       name: 'Test Staff',
       email: junior.email,
       role: 'JUNIOR',
-      currentLineId: null,
+      currentLineIds: [],
       organization: {
         name: expect.any(String),
         slug: expect.any(String),

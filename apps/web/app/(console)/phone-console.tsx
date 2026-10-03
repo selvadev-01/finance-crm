@@ -19,6 +19,7 @@ import { type ReactNode, useState } from "react";
 import { GlobalSearch } from "../../components/global-search";
 import { mobileNav } from "../../lib/console-nav";
 import { useCanInstall } from "../../lib/install-prompt";
+import { TourButton } from "../../lib/tour/tour-button";
 import { currentHref } from "../../lib/nav";
 import { NotificationPanel } from "../../lib/notifications/notification-panel";
 import { ROLE_LABEL } from "../../lib/roles";
@@ -118,6 +119,7 @@ export function PhoneConsole({
             </span>
           </>
         )}
+        <TourButton look="appbar" />
         <GlobalSearch role={me.role} trigger="icon" />
         {/*
          * The bell opens the centre itself (S-21). On a phone that is a sheet
@@ -131,6 +133,7 @@ export function PhoneConsole({
         >
           <button
             type="button"
+            data-tour="bell"
             aria-haspopup="dialog"
             aria-expanded={bellOpen}
             onClick={() => setBellOpen(true)}

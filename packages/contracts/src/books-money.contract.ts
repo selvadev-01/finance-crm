@@ -197,6 +197,12 @@ export const booksMoneyContract = {
       categoryId: idSchema,
       amount: positiveMoneySchema,
       note: noteSchema,
+      /**
+       * The line the cash was spent on — one of yours today. Required when
+       * you work more than one line (decided 2026-10-03); with only one it
+       * may be left out.
+       */
+      lineId: idSchema.optional(),
     }),
     responses: { 201: expenseSchema, ...errors, 422: errorSchema },
   }),

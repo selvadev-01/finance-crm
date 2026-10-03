@@ -48,11 +48,12 @@ const DAY_MS = 86_400_000;
  * `cash/line-day-figures.ts` like the Admin dashboard does — so this screen,
  * the day close and S-20 cannot show different totals for a line's day.
  *
- * **Which line.** Without `lineId`, the caller's current line — the assignment
- * in effect on today's business date (`RequestContext.currentLineId`). A
- * Senior with none gets `NO_LINE`, not an error. With `lineId`, the line must
- * be in the caller's scope, so a Senior asking for another line gets the same
- * `404` as a line that does not exist (M02).
+ * **Which line.** Without `lineId`, the first of the caller's current lines
+ * in code order — the assignments in effect on today's business date
+ * (`RequestContext.currentLineIds`); a Senior on several picks the others by
+ * `lineId`. A Senior with none gets `NO_LINE`, not an error. With `lineId`,
+ * the line must be in the caller's scope, so a Senior asking for another
+ * line gets the same `404` as a line that does not exist (M02).
  *
  * Decided for US-083 where the spec names a figure without defining it:
  *
@@ -95,8 +96,8 @@ export class LineDashboardService {
       );
     }
     const generatedAt = now.toISOString();
-    const lineId = query.lineId ?? context.currentLineId;
-    if (lineId === null) {
+    const lineId = query.lineId ?? context.currentLineIds[0];
+    if (lineId === undefined) {
       return { state: 'NO_LINE', businessDate: date, generatedAt };
     }
     const tx = this.database.client;

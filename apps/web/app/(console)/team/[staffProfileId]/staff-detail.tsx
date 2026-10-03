@@ -22,7 +22,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { identityColumn, valueColumn } from "../../../../components/columns";
+import {
+  displayColumn,
+  identityColumn,
+  valueColumn,
+} from "../../../../components/columns";
 import { PageTrail } from "../../../../components/page-trail";
 import { RecordFallback } from "../../../../components/query-state";
 import { StatusBadge } from "../../../../components/status-badge";
@@ -40,7 +44,10 @@ import {
 } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
-import { AssignDialog } from "../../_organisation/assign-dialog";
+import {
+  AssignDialog,
+  EndAssignmentDialog,
+} from "../../_organisation/assign-dialog";
 import {
   ChangeRoleDialog,
   ChangeStatusDialog,
@@ -71,6 +78,8 @@ export function StaffDetailView({
   const manages = canManageOrganisation(me.role);
   const router = useRouter();
   const [open, setOpen] = useState<Open>(null);
+  // The open assignment being ended, from its row's "Take off line".
+  const [endingId, setEndingId] = useState<string | null>(null);
 
   const person = useApiQuery(staffContract.getStaff, {
     params: { staffProfileId },
@@ -89,7 +98,10 @@ export function StaffDetailView({
   const lineNames = new Map(allLines.map((line) => [line.id, line.name]));
   const role = record.role;
   const assignable = manages && worksLines(role) && record.status === "ACTIVE";
-  const current = record.currentAssignment;
+  const current = record.currentAssignments;
+  const ending = record.assignments.find(
+    (entry) => entry.assignmentId === endingId,
+  );
   const assignButton = (
     <Button
       tone="primary"
@@ -164,11 +176,19 @@ export function StaffDetailView({
       />
 
       <DescriptionList layout="columns">
-        <Description term="Line today">
-          {current ? (
-            <Link href={`/lines/${current.lineId}`} className={recordLinkClass}>
-              {current.lineName}
-            </Link>
+        <Description term={current.length > 1 ? "Lines today" : "Line today"}>
+          {current.length > 0 ? (
+            <span className="flex flex-wrap gap-x-3 gap-y-1">
+              {current.map((assignment) => (
+                <Link
+                  key={assignment.assignmentId}
+                  href={`/lines/${assignment.lineId}`}
+                  className={recordLinkClass}
+                >
+                  {assignment.lineName}
+                </Link>
+              ))}
+            </span>
           ) : worksLines(role) ? (
             <Badge tone="warning">No line today</Badge>
           ) : null}
@@ -190,7 +210,7 @@ export function StaffDetailView({
         <Section
           title="Assignment history"
           description={
-            manages ? undefined : "Only assignments on your line are shown."
+            manages ? undefined : "Only assignments on your lines are shown."
           }
         >
           {record.assignments.length === 0 ? (
@@ -250,6 +270,26 @@ export function StaffDetailView({
                       <Badge tone="info">Open</Badge>
                     ),
                 }),
+                // Staff may work several lines (decided 2026-10-03), so
+                // leaving one is its own act, on its own row.
+                ...(manages
+                  ? [
+                      displayColumn<AssignmentRow>({
+                        id: "end",
+                        header: "",
+                        align: "end",
+                        cell: (entry) =>
+                          entry.effectiveTo === null ? (
+                            <Button
+                              size="sm"
+                              onClick={() => setEndingId(entry.assignmentId)}
+                            >
+                              Take off line
+                            </Button>
+                          ) : null,
+                      }),
+                    ]
+                  : []),
               ]}
             />
           )}
@@ -267,6 +307,17 @@ export function StaffDetailView({
           onClose={() => setOpen(null)}
           onAssigned={() => {
             setOpen(null);
+            person.reload();
+          }}
+        />
+      ) : null}
+      {ending ? (
+        <EndAssignmentDialog
+          assignment={ending}
+          staffName={record.name}
+          onClose={() => setEndingId(null)}
+          onEnded={() => {
+            setEndingId(null);
             person.reload();
           }}
         />

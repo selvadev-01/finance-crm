@@ -44,7 +44,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
       staffProfileId: admin.id,
       organizationId,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const customer = await tx.customer.create({
       data: {
@@ -840,7 +840,7 @@ describe('AccountService (US-030, US-031, US-032)', () => {
           userId: junior.userId,
           staffProfileId: junior.id,
           role: 'JUNIOR',
-          currentLineId: line.id,
+          currentLineIds: [line.id],
         };
         const seen = await service.get(juniorContext, account.id);
         expect(seen).toMatchObject({

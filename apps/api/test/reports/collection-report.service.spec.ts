@@ -472,7 +472,7 @@ describe('CollectionReportService (US-086)', () => {
       ).rejects.toMatchObject({ code: 'STAFF_NOT_FOUND', status: 404 });
 
       const unassigned = await w.collectionReport.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         range,
         MONDAY_EVENING,
       );

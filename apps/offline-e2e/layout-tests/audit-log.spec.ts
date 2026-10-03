@@ -58,7 +58,7 @@ function answers(data: unknown[]): ApiAnswers {
         role: "ADMIN",
         status: "ACTIVE",
         joinedAt: "2026-01-05",
-        currentAssignment: null,
+        currentAssignments: [],
       },
     ]),
   };

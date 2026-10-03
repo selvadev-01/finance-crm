@@ -17,7 +17,11 @@ import {
   toUtcMidnight,
 } from '@repo/domain';
 
-import { assignmentInEffectOn, foundInScope } from '../access/scope.js';
+import {
+  assignmentInEffectOn,
+  foundInScope,
+  isOwnLine,
+} from '../access/scope.js';
 import { AuditWriter } from '../audit/audit.writer.js';
 import { LedgerService } from '../ledger/ledger.service.js';
 import { EventNotices } from '../notifications/event-notices.js';
@@ -128,9 +132,14 @@ export class HandoverService {
           pending,
         });
       }
-    } else if (context.role === 'SENIOR' && context.currentLineId) {
+    } else if (context.role === 'SENIOR' && context.currentLineIds.length) {
+      // One item per line and day: a Senior on several lines hands each
+      // line's cash over separately, as each has its own day close.
       const days = await tx.dayClose.findMany({
-        where: { lineId: context.currentLineId, businessDate: { gte: since } },
+        where: {
+          lineId: { in: [...context.currentLineIds] },
+          businessDate: { gte: since },
+        },
         select: {
           id: true,
           lineId: true,
@@ -256,9 +265,9 @@ export class HandoverService {
             await this.fieldExpenses(tx, context, input.lineId, businessDate),
           );
         } else {
-          // A Senior hands over only their own line's cash.
+          // A Senior hands over only their own lines' cash.
           foundInScope(
-            context.currentLineId === input.lineId ? input.lineId : null,
+            isOwnLine(context, input.lineId) ? input.lineId : null,
             'line',
           );
           const receivers = await this.officeReceivers(tx, context);
@@ -540,7 +549,7 @@ export class HandoverService {
   }
 
   /**
-   * A handover the caller may see: an Admin's organisation, a Senior's line,
+   * A handover the caller may see: an Admin's organisation, a Senior's lines,
    * or one they sent or receive. Anything else is `404` (M02).
    */
   private async inScope(tx: Tx, context: RequestContext, handoverId: string) {
@@ -551,8 +560,8 @@ export class HandoverService {
           OR: [
             { fromUserId: context.userId },
             { toUserId: context.userId },
-            ...(context.role === 'SENIOR' && context.currentLineId
-              ? [{ dayClose: { lineId: context.currentLineId } }]
+            ...(context.role === 'SENIOR' && context.currentLineIds.length
+              ? [{ dayClose: { lineId: { in: [...context.currentLineIds] } } }]
               : []),
           ],
         };

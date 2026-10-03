@@ -37,7 +37,7 @@ import { apiWrite } from "../../../../lib/api-write";
 import { applyWriteFailure } from "../../../../lib/form-errors";
 import { formatMobile } from "../../../../lib/format";
 import { LIST_LIMIT } from "../../../../lib/list-limit";
-import { canManageOrganisation } from "../../../../lib/roles";
+import { canCreateCustomer } from "../../../../lib/roles";
 import { useApiQuery } from "../../../../lib/use-api-query";
 import { useSignedIn } from "../../../../lib/use-me";
 
@@ -91,10 +91,12 @@ type Intent = "view" | "another";
 export function NewCustomerForm() {
   const me = useSignedIn();
   const router = useRouter();
-  const manages = canManageOrganisation(me.role);
+  // A Senior creates customers too, on their assigned lines only: the line
+  // list is scoped by the API, so it holds exactly those (decided 2026-10-03).
+  const mayCreate = canCreateCustomer(me.role);
   const lines = useApiQuery(
     org.listLines,
-    manages ? { query: { limit: LIST_LIMIT } } : null,
+    mayCreate ? { query: { limit: LIST_LIMIT } } : null,
   );
   const [duplicate, setDuplicate] = useState<Duplicate | null>(null);
   const [saved, setSaved] = useState<CustomerDetail | null>(null);
@@ -136,7 +138,7 @@ export function NewCustomerForm() {
     setCopied(({ [rowKey]: _dropped, ...rest }) => rest);
   }
 
-  if (!manages) {
+  if (!mayCreate) {
     return (
       <EmptyFrame>
         <NotPermitted />
@@ -296,8 +298,12 @@ export function NewCustomerForm() {
               label="Line"
               hint={
                 lines.status === "ready" && activeLines.length === 0
-                  ? "There are no active lines. Create one first."
-                  : "Kept for the next customer."
+                  ? me.role === "SENIOR"
+                    ? "You are not assigned to a line today, so there is nowhere to add a customer."
+                    : "There are no active lines. Create one first."
+                  : me.role === "SENIOR"
+                    ? "Only the lines you are assigned to. Kept for the next customer."
+                    : "Kept for the next customer."
               }
             >
               {({ field, control }) => (

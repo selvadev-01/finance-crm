@@ -89,7 +89,7 @@ export async function businessWorld(tx: PrismaClient) {
       staffProfileId: staff.id,
       organizationId,
       role: 'JUNIOR',
-      currentLineId: lineId,
+      currentLineIds: [lineId],
     };
   };
   const juniorB = await junior(w.otherLine.id);

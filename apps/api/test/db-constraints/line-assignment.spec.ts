@@ -93,25 +93,52 @@ describe('line_assignment constraints (M03)', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('rejects a staff member holding two current lines at once', async () => {
+  it('accepts a staff member holding several current lines at once', async () => {
     await expect(
       withRollback(prisma, async (tx) => {
         const a = await createLine(tx);
-        const b = await createLine(tx);
-        const junior = await createStaff(tx, a.organization.id, 'JUNIOR');
+        const b = await tx.line.create({
+          data: {
+            organizationId: a.organization.id,
+            sectorId: a.sector.id,
+            code: `L-${a.line.id}-2`,
+            name: 'Second line',
+          },
+        });
+        const senior = await createStaff(tx, a.organization.id, 'SENIOR');
         await assign(tx, {
           lineId: a.line.id,
+          staffProfileId: senior.id,
+          assignmentRole: 'SENIOR',
+        });
+        await assign(tx, {
+          lineId: b.id,
+          staffProfileId: senior.id,
+          assignmentRole: 'SENIOR',
+        });
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects a second open assignment of one person to the same line', async () => {
+    await expect(
+      withRollback(prisma, async (tx) => {
+        const { organization, line } = await createLine(tx);
+        const junior = await createStaff(tx, organization.id, 'JUNIOR');
+        await assign(tx, {
+          lineId: line.id,
           staffProfileId: junior.id,
           assignmentRole: 'JUNIOR',
         });
         await assign(tx, {
-          lineId: b.line.id,
+          lineId: line.id,
           staffProfileId: junior.id,
           assignmentRole: 'JUNIOR',
+          effectiveFrom: new Date('2026-09-05'),
         });
       }),
     ).rejects.toThrow(
-      /Unique constraint failed on the (fields: \(`staffProfileId`\)|constraint: `line_assignment_current_staff_key`)/,
+      /Unique constraint failed on the (fields: \(`staffProfileId`,`lineId`\)|constraint: `line_assignment_current_staff_line_key`)/,
     );
   });
 

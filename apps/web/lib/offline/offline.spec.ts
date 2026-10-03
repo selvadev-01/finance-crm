@@ -39,11 +39,13 @@ function route(): RouteView {
   return {
     businessDate: TODAY,
     day: { kind: "WORKING" },
-    lineId: "line-1",
-    line: { code: "LN-01", name: "Market Road" },
+    lines: [
+      { lineId: "line-1", code: "LN-01", name: "Market Road", holiday: null },
+    ],
     customers: [
       {
         customerId: "cus-1",
+        lineId: "line-1",
         customerCode: "CUS-00001",
         name: "Lakshmi",
         address: "12 Market Road",
@@ -497,6 +499,32 @@ describe("offline outbox (offline-sync.md, BR-13)", () => {
       expect(
         afterRefusal!.route.customers[0]!.accounts[0]!.outstandingAmount,
       ).toBe("1000.00");
+    });
+
+    it("a route cached before staff worked several lines still reads, with its one line and the queued money on it", async () => {
+      const { lines, customers, ...rest } = route();
+      const singleLine = {
+        ...rest,
+        lineId: "line-1",
+        line: { code: "LN-01", name: "Market Road" },
+        customers: customers.map(
+          ({ lineId: _lineId, ...customer }) => customer,
+        ),
+      };
+      await db.put("route", {
+        businessDate: TODAY,
+        server: singleLine as unknown as RouteView,
+        fetchedAt: Date.parse("2026-09-14T03:00:00Z"),
+      });
+      await record(db, "acc-1", "100", new Date("2026-09-14T04:00:00Z"));
+
+      const local = await readRoute(db, TODAY);
+
+      expect(local!.route.lines).toEqual(lines);
+      expect(local!.route.customers[0]!.lineId).toBe("line-1");
+      expect(local!.route.customers[0]!.accounts[0]!.outstandingAmount).toBe(
+        "900.00",
+      );
     });
 
     it("once synced and the route is fetched again, the server's figure is not reduced twice", async () => {

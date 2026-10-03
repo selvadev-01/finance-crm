@@ -67,6 +67,8 @@ import {
 } from "../../../lib/money";
 import { homeMenu } from "../../../lib/home-menu";
 import { useApiQuery } from "../../../lib/use-api-query";
+import { useSignedIn } from "../../../lib/use-me";
+import { LineFilter } from "../../../components/line-filter";
 import {
   countShare,
   LiveStamp,
@@ -115,16 +117,43 @@ const EXCEPTIONS_ANCHOR = "exceptions";
  * money is the day close's own (S-05); each Junior's cash is the discrepancy
  * report's row (BR-17). A figure the API could not compute shows "—" (S-07).
  */
-export function LineDashboard({ date }: { date: string | undefined }) {
+export function LineDashboard({
+  date,
+  lineId,
+}: {
+  date: string | undefined;
+  /** One of a Senior's several lines (decided 2026-10-03); else their first. */
+  lineId?: string | undefined;
+}) {
   const router = useRouter();
+  const me = useSignedIn();
   const phone = usePhoneLayout();
   const today = toBusinessDate(new Date());
   const shown = date ?? today;
   const future = shown > today;
   const query = useApiQuery(
     dashboardContract.getLine,
-    future ? null : { query: date ? { date } : {} },
+    future
+      ? null
+      : { query: { ...(date ? { date } : {}), ...(lineId ? { lineId } : {}) } },
   );
+  // Where the page goes for another day or line, keeping the other choice.
+  const go = (next: { date?: string; line?: string }) => {
+    const params = new URLSearchParams();
+    const day = next.date ?? shown;
+    const line = next.line ?? lineId ?? "";
+    if (day !== today) params.set("date", day);
+    if (line) params.set("line", line);
+    const search = params.toString();
+    router.push(search ? `/dashboard?${search}` : "/dashboard");
+  };
+  const lineSwitcher =
+    me.currentLineIds.length > 1 ? (
+      <LineFilter
+        value={lineId ?? me.currentLineIds[0] ?? ""}
+        onChange={(value) => go({ line: value })}
+      />
+    ) : null;
   // The line's own reads, once the line is known: never a line the page isn't showing.
   const line =
     query.status === "ready" && query.data.state === "LINE"
@@ -182,6 +211,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
       }
       actions={
         <div className="flex flex-wrap items-end gap-2">
+          {lineSwitcher}
           <FilterField label="Date" width="sm">
             <Input
               type="date"
@@ -190,9 +220,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
               onChange={(event) => {
                 const value = event.target.value;
                 if (!value) return;
-                router.push(
-                  value === today ? "/dashboard" : `/dashboard?date=${value}`,
-                );
+                go({ date: value });
               }}
             />
           </FilterField>
@@ -278,8 +306,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
     const dayClose = `/lines/${data.line.lineId}/day-closes/${data.businessDate}`;
     const open =
       day !== null && (day.status === "OPEN" || day.status === "REOPENED");
-    const onDate = (value: string) =>
-      router.push(value === today ? "/dashboard" : `/dashboard?date=${value}`);
+    const onDate = (value: string) => go({ date: value });
     return (
       <>
         {day && day.day.kind !== "WORKING" ? (
@@ -289,6 +316,7 @@ export function LineDashboard({ date }: { date: string | undefined }) {
               : `Holiday: ${day.day.name}. No collections are due.`}
           </FormMessage>
         ) : null}
+        {lineSwitcher}
         <LineSummary
           view={data}
           day={day}

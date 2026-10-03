@@ -70,7 +70,7 @@ describe('SettingsService (US-094)', () => {
       staffProfileId: owner.id,
       organizationId: id,
       role: 'SUPER_ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     return {

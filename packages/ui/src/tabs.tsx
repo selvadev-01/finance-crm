@@ -47,7 +47,13 @@ export const tabLinkClass = cn(
 );
 
 function List({ className, ...props }: ComponentProps<typeof RadixTabs.List>) {
-  return <RadixTabs.List className={cn(tabListClass, className)} {...props} />;
+  return (
+    <RadixTabs.List
+      data-tour="tabs"
+      className={cn(tabListClass, className)}
+      {...props}
+    />
+  );
 }
 
 function Trigger({

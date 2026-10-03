@@ -50,7 +50,7 @@ export function ProfileScreen({
 }) {
   const [changing, setChanging] = useState(false);
   const [changed, setChanged] = useState(false);
-  const line = local?.route.line ?? null;
+  const lines = local?.route.lines ?? [];
 
   return (
     <FieldPage title="Profile" testId="profile">
@@ -72,10 +72,17 @@ export function ProfileScreen({
             </p>
           </div>
         </div>
-        {line ? (
-          <p className="flex w-fit items-center gap-1.5 rounded-pill bg-accent-subtle px-3 py-1 text-sm font-medium text-accent">
-            <span className="font-mono">{line.code}</span> · {line.name}
-          </p>
+        {lines.length > 0 ? (
+          <ul className="flex flex-wrap gap-2" aria-label="Your lines">
+            {lines.map((line) => (
+              <li
+                key={line.lineId}
+                className="flex w-fit items-center gap-1.5 rounded-pill bg-accent-subtle px-3 py-1 text-sm font-medium text-accent"
+              >
+                <span className="font-mono">{line.code}</span> · {line.name}
+              </li>
+            ))}
+          </ul>
         ) : null}
         <p className="text-xs text-ink-muted">{me.organization.name}</p>
       </div>
@@ -211,9 +218,7 @@ function LanguageTile({ connected }: { connected: boolean }) {
             aria-label="Notification language"
             value={preferences.data.language}
             disabled={saving}
-            onChange={(event) =>
-              void choose(event.target.value as "EN" | "TA")
-            }
+            onChange={(event) => void choose(event.target.value as "EN" | "TA")}
             className="rounded-control border border-border bg-surface px-2 py-1 text-sm text-ink"
           >
             <option value="EN">English</option>

@@ -61,11 +61,12 @@ const WRITE_ROUTES: Record<string, Decision> = {
     ],
   },
   'POST /api/lines/:lineId/visiting-order': { audits: [['line', 'UPDATE']] },
+  // Adds a line; the Junior's other lines stay open (decided 2026-10-03).
   'POST /api/lines/:lineId/junior-assignment': {
-    audits: [
-      ['line_assignment', 'CREATE'],
-      ['line_assignment', 'UPDATE'],
-    ],
+    audits: [['line_assignment', 'CREATE']],
+  },
+  'POST /api/line-assignments/:assignmentId/end': {
+    audits: [['line_assignment', 'UPDATE']],
   },
   // M15 settings (US-094): an override row, or the organisation's own record.
   'PATCH /api/settings/:key': {

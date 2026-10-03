@@ -61,7 +61,7 @@ describe('ExportService (M12 export)', () => {
       staffProfileId: admin.id,
       organizationId: organization.id,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     return {

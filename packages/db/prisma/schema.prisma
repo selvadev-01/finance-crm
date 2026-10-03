@@ -509,8 +509,9 @@ model LineAssignment {
 
   // One current Senior per line.
   @@unique([lineId], map: "line_assignment_current_senior_key", where: raw("(\"assignmentRole\" = 'SENIOR'::\"AssignmentRole\") AND (\"effectiveTo\" IS NULL)"))
-  // A staff member works one line at a time.
-  @@unique([staffProfileId], map: "line_assignment_current_staff_key", where: raw("(\"effectiveTo\" IS NULL)"))
+  // A staff member may work several lines, but is on each one once
+  // (decided 2026-10-03; was one line at a time).
+  @@unique([staffProfileId, lineId], map: "line_assignment_current_staff_line_key", where: raw("(\"effectiveTo\" IS NULL)"))
   // Serves the current-staffing lookup (erd.md).
   @@index([lineId, effectiveTo])
   @@index([staffProfileId])

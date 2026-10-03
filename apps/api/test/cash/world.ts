@@ -72,7 +72,7 @@ export async function cashWorld(tx: PrismaClient) {
       staffProfileId: staff.id,
       organizationId,
       role,
-      currentLineId,
+      currentLineIds: currentLineId ? [currentLineId] : [],
     };
   };
   const admin = await person('ADMIN', null, null);

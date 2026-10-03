@@ -37,7 +37,7 @@ type AssignmentRow = Prisma.LineAssignmentGetPayload<{
   select: typeof assignmentFields;
 }>;
 
-function staffFields(today: CalendarDate) {
+function staffFields(context: RequestContext, today: CalendarDate) {
   return {
     id: true,
     userId: true,
@@ -47,14 +47,14 @@ function staffFields(today: CalendarDate) {
     status: true,
     joinedAt: true,
     user: { select: { name: true, email: true } },
-    // One open row per person is a partial unique index, but closed rows
-    // could still overlap if hand-edited — the latest start wins, exactly as
-    // in RequestContextResolver, so Team and scope agree on "today's line".
+    // Every assignment in effect today, exactly as RequestContextResolver
+    // reads them, so Team and scope agree on "today's lines". A Senior or
+    // Junior may hold several (decided 2026-10-03). Scoped like the history:
+    // a Senior sees a shared Junior's assignments on their own lines only.
     assignments: {
-      where: assignmentInEffectOn(today),
+      where: inScope(assignmentScope(context), assignmentInEffectOn(today)),
       select: assignmentFields,
-      orderBy: [{ effectiveFrom: 'desc' as const }, { id: 'desc' as const }],
-      take: 1,
+      orderBy: { line: { code: 'asc' as const } },
     },
   } as const satisfies Prisma.StaffProfileSelect;
 }
@@ -93,7 +93,6 @@ export function staffSearchTerms(q: string): Prisma.StaffProfileWhereInput[] {
 }
 
 function toSummary(row: StaffRow): StaffSummary {
-  const current = row.assignments[0];
   return {
     staffProfileId: row.id,
     userId: row.userId,
@@ -104,14 +103,14 @@ function toSummary(row: StaffRow): StaffSummary {
     role: row.role,
     status: row.status,
     joinedAt: fromUtcMidnight(row.joinedAt),
-    currentAssignment: current ? toAssignment(current) : null,
+    currentAssignments: row.assignments.map(toAssignment),
   };
 }
 
 /**
  * The Team read model (M01 staff records joined to M03 assignments, S-14).
  * Scoped by `staffScope`: Admins see their organization, a Senior the staff on
- * their own line today, and a staff member outside that is `404`.
+ * their own lines today, and a staff member outside that is `404`.
  */
 @Injectable()
 export class StaffDirectoryService {
@@ -136,7 +135,7 @@ export class StaffDirectoryService {
     const [rows, total] = await Promise.all([
       this.database.client.staffProfile.findMany({
         where,
-        select: staffFields(today),
+        select: staffFields(context, today),
         ...pageArgs(page),
       }),
       this.database.client.staffProfile.count({ where }),
@@ -152,7 +151,7 @@ export class StaffDirectoryService {
     const row = foundInScope(
       await this.database.client.staffProfile.findFirst({
         where: inScope(staffScope(context, today), { id: staffProfileId }),
-        select: staffFields(today),
+        select: staffFields(context, today),
       }),
       'staff',
     );

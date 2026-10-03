@@ -41,7 +41,7 @@ export async function signedInAs(
           name: NAMES[role],
           email: "layout-test@rasi.test",
           role,
-          currentLineId: null,
+          currentLineIds: [],
           organization: {
             name: "Sri Murugan Finance",
             slug: "sri-murugan-finance",

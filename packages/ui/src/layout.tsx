@@ -199,6 +199,7 @@ export function StatGrid({
 }: ComponentProps<"dl"> & VariantProps<typeof statGrid>) {
   return (
     <dl
+      data-tour="stats"
       data-frame={frame ?? "ruled"}
       className={cn("group/stats", statGrid({ columns, frame }), className)}
       {...props}

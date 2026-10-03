@@ -53,7 +53,7 @@ describe('StaffAdminService (US-092)', () => {
       staffProfileId: actor.id,
       organizationId: organization.id,
       role: actorRole,
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     const service = new StaffAdminService(
@@ -455,7 +455,7 @@ describe('StaffAdminService (US-092)', () => {
 
         expect(result.staff.status).toBe('ACTIVE');
         expect(result.sessionsRevoked).toBe(0);
-        expect(result.openAssignment).toBeNull();
+        expect(result.openAssignments).toEqual([]);
       });
     });
 
@@ -494,7 +494,9 @@ describe('StaffAdminService (US-092)', () => {
 
         // The assignment is reported, never rewritten: closing it today would
         // change a date collections are already attributed by (M03, BR-15).
-        expect(result.openAssignment).toMatchObject({ lineId: line.id });
+        expect(result.openAssignments).toEqual([
+          expect.objectContaining({ lineId: line.id }),
+        ]);
         expect(
           await tx.lineAssignment.findFirstOrThrow({
             where: { staffProfileId: junior.id },
@@ -502,7 +504,7 @@ describe('StaffAdminService (US-092)', () => {
         ).toMatchObject({ effectiveTo: null });
         expect(
           await tx.auditLog.findFirst({ where: { entityId: junior.id } }),
-        ).toMatchObject({ after: { openAssignmentLeft: line.id } });
+        ).toMatchObject({ after: { openAssignmentsLeft: [line.id] } });
       });
     });
 

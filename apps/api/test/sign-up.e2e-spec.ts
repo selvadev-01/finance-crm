@@ -87,7 +87,7 @@ describe('organization sign-up (US-006, e2e)', () => {
     expect(me.body).toMatchObject({
       staffProfileId: response.body.staffProfileId,
       role: 'SUPER_ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
       organization: { name: input.organizationName, slug: response.body.slug },
     });
     // An empty organization, and only its own.

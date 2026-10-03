@@ -20,7 +20,6 @@ import { isUniqueViolation } from './prisma-errors.js';
 export interface AssignmentResult {
   assignment: Assignment;
   closed: Assignment[];
-  linesWithoutSenior: string[];
 }
 
 type AssignmentRow = Prisma.LineAssignmentGetPayload<{
@@ -47,14 +46,20 @@ function toAssignment(row: AssignmentRow): Assignment {
 /**
  * Staffing a line (M03, US-012, US-013).
  *
- * Assignments are temporal: a change **closes** the outgoing row — its
- * `effectiveTo` becomes the day before the new `effectiveFrom` — and opens a
- * new one, in one transaction. Nothing is deleted. Collections are not
+ * **A Senior or Junior may work several lines at once (decided 2026-10-03).**
+ * Assigning someone to a line adds it; their other lines stay. Leaving a line
+ * is its own act, {@link AssignmentService.end}. A line still has one Senior,
+ * so assigning a Senior closes the line's incumbent Senior — its
+ * `effectiveTo` becomes the day before the new `effectiveFrom` — in the same
+ * transaction.
+ *
+ * Assignments are temporal and nothing is deleted. Collections are not
  * touched, because their `lineId` and `collectedByUserId` were frozen when
  * they were recorded (BR-15).
  *
- * The partial unique indexes on `line_assignment` are the backstop for a
- * concurrent change: a second writer gets `409 ASSIGNMENT_CONFLICT`.
+ * The partial unique indexes on `line_assignment` (one open Senior per line,
+ * one open row per person and line) are the backstop for a concurrent change:
+ * a second writer gets `409 ASSIGNMENT_CONFLICT`.
  */
 @Injectable()
 export class AssignmentService {
@@ -65,11 +70,8 @@ export class AssignmentService {
   ) {}
 
   /**
-   * US-012: assigns a Senior, closing the line's incumbent Senior.
-   *
-   * A Senior already running another line leaves it (one line at a time), and
-   * that line is reported in `linesWithoutSenior` — decided 2026-09-13: the
-   * move is allowed rather than refused, so two Seniors can be swapped.
+   * US-012: assigns a Senior, closing the line's incumbent Senior. A Senior
+   * already running other lines keeps them.
    */
   assignSenior(
     context: RequestContext,
@@ -79,7 +81,7 @@ export class AssignmentService {
     return this.assign(context, lineId, input, 'SENIOR');
   }
 
-  /** US-013: assigns a Junior to a line, closing wherever they were. */
+  /** US-013: adds a line to a Junior; the lines they already work stay. */
   assignJunior(
     context: RequestContext,
     lineId: string,
@@ -131,24 +133,24 @@ export class AssignmentService {
         );
         this.checkStaff(staff, role, effectiveFrom);
 
+        // Only this line's open rows: this person already on it, or — for a
+        // Senior — the incumbent Senior it replaces. Their other lines are
+        // not this change's business.
         const open = await tx.lineAssignment.findMany({
           where: {
             effectiveTo: null,
+            lineId: line.id,
             OR: [
               { staffProfileId: staff.id },
               ...(role === 'SENIOR'
-                ? [{ lineId: line.id, assignmentRole: 'SENIOR' as const }]
+                ? [{ assignmentRole: 'SENIOR' as const }]
                 : []),
             ],
           },
           select: assignmentFields,
         });
 
-        if (
-          open.some(
-            (row) => row.staffProfileId === staff.id && row.lineId === line.id,
-          )
-        ) {
+        if (open.some((row) => row.staffProfileId === staff.id)) {
           throw new ConflictError(
             'ALREADY_ASSIGNED',
             'This staff member is already assigned to this line',
@@ -157,7 +159,6 @@ export class AssignmentService {
 
         const closedOn = addCalendarDays(effectiveFrom, -1);
         const closed: Assignment[] = [];
-        const linesWithoutSenior: string[] = [];
 
         // Every outgoing row is checked before any is changed.
         for (const row of open) {
@@ -189,13 +190,6 @@ export class AssignmentService {
             after: { effectiveTo: closedOn },
           });
           closed.push(toAssignment(updated));
-          if (
-            row.staffProfileId === staff.id &&
-            row.assignmentRole === 'SENIOR' &&
-            row.lineId !== line.id
-          ) {
-            linesWithoutSenior.push(row.lineId);
-          }
         }
 
         const created = await tx.lineAssignment.create({
@@ -217,7 +211,6 @@ export class AssignmentService {
             staffProfileId: staff.id,
             assignmentRole: role,
             effectiveFrom,
-            ...(linesWithoutSenior.length > 0 ? { linesWithoutSenior } : {}),
           },
         });
 
@@ -228,19 +221,9 @@ export class AssignmentService {
           lineId: line.id,
           lineName: line.name,
           effectiveFrom,
-          previousLineIds: open
-            .filter(
-              (row) =>
-                row.staffProfileId === staff.id && row.lineId !== line.id,
-            )
-            .map((row) => row.lineId),
         });
 
-        return {
-          assignment: toAssignment(created),
-          closed,
-          linesWithoutSenior,
-        };
+        return { assignment: toAssignment(created), closed };
       });
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -251,6 +234,71 @@ export class AssignmentService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Takes a Senior or Junior off one line: the open assignment's last day
+   * becomes `effectiveTo`, inclusive. Their other lines are untouched. Like
+   * starting an assignment, it may be dated back — an Admin recording that
+   * someone left yesterday — but never before the assignment began.
+   *
+   * A line whose Senior leaves has none until another is assigned; the line
+   * list already flags "No Senior" (US-014).
+   */
+  async end(
+    context: RequestContext,
+    assignmentId: string,
+    input: { effectiveTo: string },
+  ): Promise<Assignment> {
+    const effectiveTo = parseCalendarDate(input.effectiveTo);
+    return this.database.transaction(async (tx) => {
+      const found = foundInScope(
+        await tx.lineAssignment.findFirst({
+          where: { id: assignmentId, line: lineScope(context) },
+          select: { id: true },
+        }),
+        'assignment',
+      );
+      // Locked so a concurrent end or reassignment waits, then sees the row
+      // already closed.
+      await tx.$queryRaw`SELECT id FROM line_assignment WHERE id = ${found.id} FOR UPDATE`;
+      const row = await tx.lineAssignment.findUniqueOrThrow({
+        where: { id: found.id },
+        select: assignmentFields,
+      });
+      if (row.effectiveTo !== null) {
+        throw new ConflictError(
+          'ASSIGNMENT_ALREADY_ENDED',
+          `This assignment already ended on ${fromUtcMidnight(row.effectiveTo)}`,
+        );
+      }
+      const effectiveFrom = fromUtcMidnight(row.effectiveFrom);
+      if (effectiveTo < effectiveFrom) {
+        throw new DomainError(
+          'EFFECTIVE_TO_BEFORE_START',
+          'The last day cannot be before the assignment began',
+          [
+            {
+              field: 'effectiveTo',
+              issue: `must be on or after ${effectiveFrom}`,
+            },
+          ],
+        );
+      }
+      const updated = await tx.lineAssignment.update({
+        where: { id: row.id },
+        data: { effectiveTo: toUtcMidnight(effectiveTo) },
+        select: assignmentFields,
+      });
+      await this.audit.record(context, {
+        action: 'UPDATE',
+        entityTable: 'line_assignment',
+        entityId: row.id,
+        before: { effectiveTo: null },
+        after: { effectiveTo },
+      });
+      return toAssignment(updated);
+    });
   }
 
   private checkStaff(

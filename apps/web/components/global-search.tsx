@@ -77,6 +77,7 @@ export function GlobalSearch({
         >
           <button
             type="button"
+            data-tour="search"
             aria-haspopup="dialog"
             onClick={() => setOpen(true)}
           />
@@ -100,6 +101,7 @@ function SearchTrigger({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
+      data-tour="search"
       aria-haspopup="dialog"
       aria-keyshortcuts="Control+K Meta+K"
       className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control border border-border bg-surface px-2.5 text-left text-body text-ink-subtle transition-colors hover:border-border-strong hover:text-ink-muted sm:max-w-xs"

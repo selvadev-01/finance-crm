@@ -39,7 +39,7 @@ describe('SectorService and LineService (US-010, US-011)', () => {
       staffProfileId: admin.id,
       organizationId: organization.id,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     const audit = new AuditWriter(database);
@@ -232,7 +232,7 @@ describe('SectorService and LineService (US-010, US-011)', () => {
           staffProfileId: admin.id,
           organizationId: withAccount.organization.id,
           role: 'SUPER_ADMIN',
-          currentLineId: null,
+          currentLineIds: [],
         };
 
         await expect(

@@ -275,11 +275,46 @@ describe('field expenses (ADR-0018)', () => {
     });
   });
 
+  it('a Junior on two lines names the line, which must be one of theirs (decided 2026-10-03)', async () => {
+    await withRollback(prisma, async (tx) => {
+      const w = await world(tx);
+      const onTwo: RequestContext = {
+        ...w.junior,
+        currentLineIds: [w.line.id, w.otherLine.id],
+      };
+      const ask = (who: RequestContext, lineId?: string) =>
+        w.field.request(
+          who,
+          {
+            categoryId: w.fuel.id,
+            amount: '50',
+            note: 'Petrol for the round',
+            ...(lineId ? { lineId } : {}),
+          },
+          MONDAY,
+        );
+
+      await expect(ask(onTwo)).rejects.toMatchObject({
+        code: 'LINE_REQUIRED',
+        status: 422,
+      });
+      const spent = await ask(onTwo, w.otherLine.id);
+      expect(
+        await tx.expense.findUniqueOrThrow({ where: { id: spent.id } }),
+      ).toMatchObject({ lineId: w.otherLine.id });
+      // A line they are not on is missing, not forbidden (M02).
+      await expect(ask(w.junior, w.otherLine.id)).rejects.toMatchObject({
+        code: 'LINE_NOT_FOUND',
+        status: 404,
+      });
+    });
+  });
+
   it('refuses someone with no line today, and a retired category', async () => {
     await withRollback(prisma, async (tx) => {
       const w = await world(tx);
       await expect(
-        w.petrol({ ...w.junior, currentLineId: null }),
+        w.petrol({ ...w.junior, currentLineIds: [] }),
       ).rejects.toMatchObject({ code: 'NOT_ON_A_LINE', status: 422 });
       await tx.expenseCategory.update({
         where: { id: w.fuel.id },

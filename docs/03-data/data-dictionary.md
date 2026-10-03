@@ -88,7 +88,7 @@ Temporal staffing record (BR-15 rationale).
 Constraints:
 
 - Partial unique `line_assignment_current_senior_key` on `(lineId)` where `assignmentRole = 'SENIOR' AND effectiveTo IS NULL` — one current Senior per line
-- Partial unique `line_assignment_current_staff_key` on `(staffProfileId)` where `effectiveTo IS NULL` — a staff member works one line at a time
+- Partial unique `line_assignment_current_staff_line_key` on `(staffProfileId, lineId)` where `effectiveTo IS NULL` — a staff member may work several lines but holds one open assignment on each (decided 2026-10-03, migration `line_assignment_many_lines`; it replaced `line_assignment_current_staff_key`, one line at a time)
 - Check `effectiveTo IS NULL OR effectiveTo >= effectiveFrom`
 
 The partial uniques are declared in `schema.prisma` (`partialIndexes` preview), so Prisma manages them.

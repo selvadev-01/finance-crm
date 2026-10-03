@@ -334,7 +334,7 @@ describe('BusinessOverviewService (US-080)', () => {
         staffProfileId: admin.id,
         organizationId: bare.id,
         role: 'SUPER_ADMIN',
-        currentLineId: null,
+        currentLineIds: [],
       };
       const view = await w.overview.view(context, MONDAY, MONDAY_EVENING);
       expect(view).toMatchObject({

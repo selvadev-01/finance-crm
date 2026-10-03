@@ -51,7 +51,87 @@ export type AssignTarget =
 interface Outcome {
   effectiveFrom: string;
   closed: Assignment[];
-  linesWithoutSenior: string[];
+}
+
+/**
+ * Take a Senior or Junior off one line (US-013): the assignment's last day,
+ * inclusive. Their other lines are untouched. Like a start, the date is never
+ * filled in — "Use today" is a choice.
+ */
+export function EndAssignmentDialog({
+  assignment,
+  staffName,
+  onClose,
+  onEnded,
+}: {
+  assignment: {
+    assignmentId: string;
+    lineName: string;
+    assignmentRole: AssignmentRole;
+    effectiveFrom: string;
+  };
+  staffName: string;
+  onClose: () => void;
+  onEnded: () => void;
+}) {
+  const today = toBusinessDate(new Date());
+  const form = useZodForm(org.endAssignment.body, {
+    defaultValues: { effectiveTo: "" },
+  });
+  const senior = assignment.assignmentRole === "SENIOR";
+  return (
+    <DialogForm
+      form={form}
+      onClose={onClose}
+      title={`Take ${staffName} off ${assignment.lineName}`}
+      description={
+        senior
+          ? "Their other lines stay theirs. This line has no Senior after their last day until you assign one."
+          : "Their other lines stay theirs. Collections they already recorded on this line stay on it."
+      }
+      submitLabel="Take off line"
+      pendingLabel="Saving…"
+      onSubmit={async (body) => {
+        const result = await apiWrite(org.endAssignment, {
+          params: { assignmentId: assignment.assignmentId },
+          body,
+        });
+        if (!result.ok) {
+          return applyWriteFailure(form.setError, result, {
+            fields: ["effectiveTo"],
+          });
+        }
+        toast({
+          title: `${staffName} leaves ${assignment.lineName} after ${formatBusinessDate(result.body.effectiveTo ?? body.effectiveTo)}`,
+        });
+        onEnded();
+      }}
+    >
+      <div className="flex flex-col gap-1">
+        <FormField
+          name="effectiveTo"
+          label="Last day on the line"
+          hint={`On or after ${formatBusinessDate(assignment.effectiveFrom)}, when it began.`}
+        >
+          <Input type="date" min={assignment.effectiveFrom} />
+        </FormField>
+        <div>
+          <Button
+            tone="link"
+            size="sm"
+            onClick={() =>
+              form.setValue("effectiveTo", today, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+          >
+            Use today, {formatBusinessDate(today)}
+          </Button>
+        </div>
+      </div>
+    </DialogForm>
+  );
 }
 
 /** The request body plus the line, which travels in the path. */
@@ -63,10 +143,11 @@ const assignSchema = org.assignSenior.body.extend({
  * S-15 Assign staff to line (US-012, US-013).
  *
  * **The effective date is never filled in for the Admin** — "the UI never
- * implies now" (M03). "Use today" is one tap, but it is a choice. The API
- * closes whatever the assignment replaces on the day before; the result step
- * says what was closed and names any line left without a Senior, because that
- * is allowed (decided 2026-09-13) and must not happen silently.
+ * implies now" (M03). "Use today" is one tap, but it is a choice.
+ *
+ * Staff may work several lines (decided 2026-10-03): assigning adds this line
+ * and keeps their others. Only a line's outgoing Senior is closed, on the day
+ * before, and the result step says so.
  */
 export function AssignDialog({
   target,
@@ -111,15 +192,6 @@ export function AssignDialog({
             ) : null,
           )}
         </div>
-        {outcome.linesWithoutSenior.length > 0 ? (
-          <FormMessage tone="warning">
-            {outcome.linesWithoutSenior
-              .map((id) => lineNames.get(id) ?? "A line")
-              .join(", ")}{" "}
-            {outcome.linesWithoutSenior.length === 1 ? "has" : "have"} no Senior
-            from that date. Assign one before collections start there.
-          </FormMessage>
-        ) : null}
         <DialogActions>
           <Button tone="primary" onClick={onAssigned}>
             Done
@@ -148,9 +220,12 @@ export function AssignDialog({
   const candidateOptions = candidates.map((person) => ({
     value: person.staffProfileId,
     label: person.name,
-    hint: person.currentAssignment
-      ? `Now on ${person.currentAssignment.lineName}`
-      : "No line today",
+    hint:
+      person.currentAssignments.length > 0
+        ? `Also on ${person.currentAssignments
+            .map((assignment) => assignment.lineName)
+            .join(", ")}`
+        : "No line today",
   }));
 
   return (
@@ -164,8 +239,8 @@ export function AssignDialog({
       }
       description={
         role === "SENIOR"
-          ? "A line has one Senior. The current Senior’s assignment ends the day before this one starts."
-          : "A Junior works one line. Their current assignment ends the day before this one starts."
+          ? "A line has one Senior: the current Senior’s assignment ends the day before this one starts. Any other lines this Senior runs stay theirs."
+          : "This line is added to the Junior’s lines. Any lines they already work stay theirs."
       }
       submitLabel="Assign"
       pendingLabel="Assigning…"
@@ -184,7 +259,6 @@ export function AssignDialog({
         setOutcome({
           effectiveFrom: result.body.assignment.effectiveFrom,
           closed: result.body.closed,
-          linesWithoutSenior: result.body.linesWithoutSenior,
         });
       }}
     >
