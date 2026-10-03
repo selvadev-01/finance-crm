@@ -53,7 +53,7 @@ export function BalanceSheetView({
   if (!allowed) {
     return (
       <EmptyFrame>
-        <NotPermitted description="The books are for Super Admins and Admins." />
+        <NotPermitted description="The ledger is for Super Admins and Admins." />
       </EmptyFrame>
     );
   }

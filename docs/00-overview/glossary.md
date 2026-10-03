@@ -133,6 +133,10 @@ A single debit or credit line in the ledger. Every transaction has at least two 
 
 | In code and docs                     | On screen                 |
 | ------------------------------------ | ------------------------- |
+| Books (the section, `/books`)        | Ledger                    |
+| Cash and receivable ledger accounts  | Cash · Customer dues tabs |
+| Debit / credit (on those accounts)   | Money in / Money out      |
+| Receivable debit / credit            | Lent / Repaid             |
 | Office cash (`CASH_AT_OFFICE`)       | Cash in hand              |
 | Cash in hand of a Senior or Junior   | With collection staff     |
 | Loans receivable (`LOAN_RECEIVABLE`) | To collect from customers |

@@ -193,7 +193,9 @@ test.describe("books (ADR-0018)", () => {
     await signedInAs(page, "SUPER_ADMIN", answers);
     await page.goto("/books");
 
-    await expect(page.getByRole("heading", { name: "Money" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Money", exact: true }),
+    ).toBeVisible();
     const today = page.getByRole("definition");
     await expect(today.getByText("−₹1,200.00")).toBeVisible();
     await expect(today.getByText("₹100.00")).toBeVisible();
@@ -216,6 +218,8 @@ test.describe("books (ADR-0018)", () => {
     }
     // No bank anywhere.
     await expect(page.getByText("SBI Mylapore")).toHaveCount(0);
+    // The latest entries are the third tab, beside cash and customer dues.
+    await page.getByRole("tab", { name: "Latest entries" }).click();
     await expect(
       page
         .getByRole("list", { name: "Latest entries" })
@@ -283,7 +287,7 @@ test.describe("books (ADR-0018)", () => {
     await signedInAs(page, "ADMIN", answers);
     await page.goto("/books");
 
-    await expect(page.getByRole("heading", { name: "Books" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ledger" })).toBeVisible();
     const where = page.getByRole("list", { name: "Cash & bank position" });
     await expect(where.getByText("−₹1,200.00")).toBeVisible();
     await expect(
@@ -466,9 +470,9 @@ test.describe("books (ADR-0018)", () => {
     await page.goto("/books");
 
     await expect(
-      page.getByText("The books are for Super Admins and Admins."),
+      page.getByText("The ledger is for Super Admins and Admins."),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Books" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Ledger" })).toHaveCount(0);
   });
 
   for (const [name, viewport] of [

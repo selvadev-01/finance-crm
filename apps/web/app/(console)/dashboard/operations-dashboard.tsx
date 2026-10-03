@@ -1005,7 +1005,7 @@ function BooksTodayCard({ date }: { date: string }) {
   return (
     <Card.Root surface="flat" className="min-w-0">
       <Card.Header
-        title="Books today"
+        title="Ledger today"
         actions={
           position ? (
             <span
@@ -1080,7 +1080,7 @@ function BooksTodayCard({ date }: { date: string }) {
           </dl>
         )}
         <Link href="/books" className={arrowLinkClass}>
-          Open Books
+          Open ledger
           <ArrowRight aria-hidden size={14} />
         </Link>
       </Card.Body>

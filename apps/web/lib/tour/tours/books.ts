@@ -2,7 +2,7 @@ import { AT, type ScreenTour, step } from "../content";
 
 const booksTabs = step(
   AT.sectionTabs,
-  ["The parts of the books", "Books-oda parts"],
+  ["The parts of the ledger", "Ledger-oda parts"],
   [
     "Summary, expenses, owner money and income, and profit — each a tab.",
     "Summary, expenses, owner money, income, profit — ovvonnum oru tab.",
@@ -45,6 +45,14 @@ export const BOOKS_TOURS: readonly ScreenTour[] = [
         [
           "Add money when the owner puts capital in, Add expense for office spends, Other income for anything else that comes in, and Owner took money when the owner draws.",
           "Owner capital podumbodhu Add money, office selavu-ku Add expense, vera varumaanam-ku Other income, owner panam edutha Owner took money.",
+        ],
+      ),
+      step(
+        undefined,
+        ["Cash, dues and entries", "Cash, baakki, entries"],
+        [
+          "Cash at the office and with each staff member, what customers still owe, and the latest entries — a tab each. View entries opens every movement of one account.",
+          "Office-la, ovvoru staff kaila irukkura cash, customers tharavendiyadhu, latest entries — ovvonnum oru tab. View entries-la ovvoru account-oda movement-um paakalaam.",
         ],
       ),
     ],

@@ -70,7 +70,7 @@ export function BankAccounts() {
     <>
       <PageHeader
         title="Bank accounts"
-        description="Where the business keeps money outside the office. Money moves in and out of them from Books."
+        description="Where the business keeps money outside the office. Money moves in and out of them from the ledger."
         actions={
           owner ? (
             <Button tone="primary" onClick={() => setDialog({ kind: "add" })}>
