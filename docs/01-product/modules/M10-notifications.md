@@ -156,6 +156,10 @@ In `apps/api/src/notifications/`, `packages/notifications` and `apps/web/lib/not
 
   | `EXPENSE_DECIDED` | `SUCCESS` approved / `WARNING` rejected | The spender, with a rejection's reason; links to `/route#expense` | a field expense approved or rejected (ADR-0018) |
 
+  | `ACCOUNT_APPROVAL_REQUESTED` | `WARNING` | The Admins and the Super Admin — never the Senior who opened it; links to the account | a Senior opens an account, which waits for approval (decided 2026-10-03, M05) |
+
+  | `ACCOUNT_APPROVED` | `SUCCESS` | The Senior who opened the account; links to the account. Not raised when the Super Admin disburses it directly — `ACCOUNT_DISBURSED` tells the line's Senior | an Admin or the Super Admin approves a Senior's account (decided 2026-10-03) |
+
   **Decided 2026-09-24 with the business** (migration `account_disbursed_event`): a disbursed account is a new visit on the round, so the Senior hears the instalment and the day it starts — "₹150.00 a day from 05 Jan 2026". A mid-term account says "running account" and gives its first unpaid slot, not its original first day. The recipient is the Senior of the customer's **current** line, which a transfer can make different from the line the account was opened on. Links to the account.
 
   **Decided 2026-09-20 with the business:** an overdue account is a `WARNING`, not an `ALERT` — going overdue is expected on a slow account, and the loud events stay the low and no-payment visits of a single day. The notice links to the overdue report filtered to that line (US-087), which is where the list belongs.

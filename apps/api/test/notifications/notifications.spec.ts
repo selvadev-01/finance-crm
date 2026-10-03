@@ -17,6 +17,7 @@ import { PushDispatchService } from '../../src/notifications/push-dispatch.servi
 import { NotificationTemplates } from '../../src/notifications/templates/notification-templates.js';
 import type { AppConfig } from '../../src/platform/config/config.js';
 import { Database } from '../../src/platform/database/database.js';
+import { fundOfficeCash } from '../accounts/fund-office-cash.js';
 import { at, cashWorld, counts, MONDAY, SATURDAY } from '../cash/world.js';
 import { createTestPrismaClient, openLinePeriod } from '../database.js';
 import { withRollback } from '../with-rollback.js';
@@ -291,7 +292,9 @@ describe('notifications (M10, US-070…US-073)', () => {
           },
         });
         // Disbursed Saturday 3 January, entered Saturday 10 January with the
-        // first three slots paid: the tail starts Monday 12 January.
+        // first three slots paid: the tail starts Monday 12 January. It takes
+        // 1,700 less the 300 back out of cash-in-hand, so that goes in first.
+        await fundOfficeCash(w.database, w.owner, '1400.00', SATURDAY);
         const account = await w.accounts.create(
           w.admin,
           {

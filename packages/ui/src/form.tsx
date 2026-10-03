@@ -8,7 +8,10 @@ import {
   isValidElement,
   type ReactElement,
   type ReactNode,
+  createContext,
+  use,
   useId,
+  useState,
 } from "react";
 import {
   type Control,
@@ -28,6 +31,7 @@ import {
 } from "react-hook-form";
 import type { z } from "zod";
 
+import { BusyOverlay, BusyScope } from "./busy-overlay";
 import { Button, type ButtonVariants } from "./button";
 import { cn } from "./cn";
 import { Dialog, DialogActions, type DialogProps } from "./dialog";
@@ -84,6 +88,13 @@ interface FormProps<Input extends FieldValues, Output> extends Omit<
 > {
   form: UseFormReturn<Input, unknown, Output>;
   onSubmit: SubmitHandler<Output>;
+  /**
+   * How a submit in flight shows: `overlay` blurs the whole screen with a
+   * centred spinner (the default); `inline` keeps it to the button's own
+   * spinner — for sign-in, where the form is the whole page already. Either
+   * way every control is locked.
+   */
+  busy?: "overlay" | "inline";
 }
 
 /**
@@ -94,6 +105,7 @@ interface FormProps<Input extends FieldValues, Output> extends Omit<
 export function Form<Input extends FieldValues, Output>({
   form,
   onSubmit,
+  busy = "overlay",
   className,
   children,
   ...props
@@ -106,11 +118,51 @@ export function Form<Input extends FieldValues, Output>({
         className={cn("flex flex-col gap-[var(--stack-gap)]", className)}
         {...props}
       >
-        {children}
+        <LockWhileSubmitting busy={busy}>{children}</LockWhileSubmitting>
       </form>
     </FormProvider>
   );
 }
+
+/**
+ * While the write is in flight, nothing in the form can be changed or
+ * pressed: a second button — "Save and disburse" beside "Save as pending", a
+ * "Use today", Cancel — would start another action against the same data. A
+ * disabled `<fieldset>` disables every control inside it at once; its
+ * `contents` display keeps it out of the layout, and links, which a fieldset
+ * cannot disable, stop taking clicks.
+ */
+function LockWhileSubmitting({
+  busy,
+  children,
+}: {
+  busy: "overlay" | "inline";
+  children: ReactNode;
+}) {
+  const { isSubmitting } = useFormState();
+  // The pressed button's pending label — "Saving…", "Sending…" — is what the
+  // whole-screen overlay says; Enter, which presses none, says "Saving…".
+  const [label, setLabel] = useState<string | null>(null);
+  return (
+    <PendingLabel value={setLabel}>
+      <BusyScope value>
+        <fieldset
+          disabled={isSubmitting}
+          aria-busy={isSubmitting || undefined}
+          className="contents [&:disabled_a]:pointer-events-none [&:disabled_a]:opacity-50"
+        >
+          {children}
+        </fieldset>
+        {isSubmitting && busy === "overlay" ? (
+          <BusyOverlay label={label ?? "Saving…"} />
+        ) : null}
+      </BusyScope>
+    </PendingLabel>
+  );
+}
+
+/** Lets the pressed `SubmitButton` name what the form's overlay says. */
+const PendingLabel = createContext<(label: string) => void>(() => undefined);
 
 /* ------------------------------------------------------------------------- */
 
@@ -378,6 +430,7 @@ export function SubmitButton({
   onClick?: ComponentProps<"button">["onClick"];
 }) {
   const { isSubmitting } = useFormState();
+  const announce = use(PendingLabel);
   return (
     <Button
       type="submit"
@@ -387,7 +440,10 @@ export function SubmitButton({
       className={className}
       name={name}
       value={value}
-      onClick={onClick}
+      onClick={(event) => {
+        announce(pendingLabel);
+        onClick?.(event);
+      }}
       // `FormActions` gives the form's one commit button a row of its own on a phone.
       data-commit={tone === "primary" ? "" : undefined}
     >

@@ -154,6 +154,94 @@ describe("Form", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("locks every control while the write is in flight, shows the button busy, and frees them after", async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => undefined;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const other = vi.fn();
+    function Harness() {
+      const form = useZodForm(z.object({ name: z.string().min(1) }), {
+        defaultValues: { name: "Market Road" },
+      });
+      return (
+        <Form form={form} onSubmit={onSubmit}>
+          <FormField name="name" label="Name">
+            <Input />
+          </FormField>
+          <FormActions>
+            <button type="button" onClick={other}>
+              Use today
+            </button>
+            <SubmitButton pendingLabel="Saving…">Save</SubmitButton>
+          </FormActions>
+        </Form>
+      );
+    }
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const saving = await screen.findByRole("button", { name: "Saving…" });
+    expect(saving).toBeDisabled();
+    expect(saving).toHaveAttribute("aria-busy", "true");
+    expect(saving.querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Use today" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Use today" }));
+    expect(other).not.toHaveBeenCalled();
+    // One whole-screen overlay, saying what the pressed button said — the
+    // busy SubmitButton inside the form draws none of its own.
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+
+    await act(async () => finish());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save" })).toBeEnabled(),
+    );
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Use today" })).toBeEnabled();
+    expect(onSubmit).toHaveBeenCalledOnce();
+  });
+
+  it("an inline form locks while submitting but leaves the screen unblurred (sign-in)", async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => undefined;
+    function Harness() {
+      const form = useZodForm(z.object({ name: z.string().min(1) }), {
+        defaultValues: { name: "Ram" },
+      });
+      return (
+        <Form
+          form={form}
+          busy="inline"
+          onSubmit={() =>
+            new Promise<void>((resolve) => {
+              finish = resolve;
+            })
+          }
+        >
+          <FormField name="name" label="Name">
+            <Input />
+          </FormField>
+          <SubmitButton pendingLabel="Signing in…">Sign in</SubmitButton>
+        </Form>
+      );
+    }
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    const busy = await screen.findByRole("button", { name: "Signing in…" });
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+    expect(screen.queryByRole("status")).toBeNull();
+    await act(async () => finish());
+  });
+
   it("submits the parsed values, trimmed by the schema", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@repo/db';
+
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 
 /** Injection token for the base Prisma client. Tier 1 tests override it. */
 export const PRISMA_CLIENT = Symbol('PRISMA_CLIENT');
@@ -18,6 +20,8 @@ export interface TransactionOptions {
 /**
  * Explicit, and shorter than a request timeout: a transaction holding locks
  * for longer than this is a bug to surface, not a load spike to wait out.
+ * `timeout` is `DB_TRANSACTION_TIMEOUT_MS` when the app is configured — more
+ * for a database across a network, where every statement pays a round trip.
  */
 const DEFAULT_TRANSACTION_OPTIONS = {
   maxWait: 2_000,
@@ -47,7 +51,18 @@ const DEFAULT_TRANSACTION_OPTIONS = {
 export class Database {
   private readonly current = new AsyncLocalStorage<Prisma.TransactionClient>();
 
-  constructor(@Inject(PRISMA_CLIENT) private readonly base: PrismaClient) {}
+  private readonly defaults: TransactionOptions;
+
+  constructor(
+    @Inject(PRISMA_CLIENT) private readonly base: PrismaClient,
+    // Optional so a Tier 1 test can build one over its transaction alone.
+    @Optional() @Inject(APP_CONFIG) config?: AppConfig,
+  ) {
+    this.defaults = {
+      ...DEFAULT_TRANSACTION_OPTIONS,
+      ...(config ? { timeout: config.DB_TRANSACTION_TIMEOUT_MS } : {}),
+    };
+  }
 
   /** The open transaction if the caller is inside one, otherwise the base client. */
   get client(): Prisma.TransactionClient {
@@ -73,7 +88,7 @@ export class Database {
     }
 
     return this.base.$transaction((tx) => this.current.run(tx, () => run(tx)), {
-      ...DEFAULT_TRANSACTION_OPTIONS,
+      ...this.defaults,
       ...options,
     });
   }

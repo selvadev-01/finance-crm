@@ -37,6 +37,8 @@ export const notificationEventSchema = z.enum([
   "JOB_FAILED",
   "EXPENSE_REQUESTED",
   "EXPENSE_DECIDED",
+  "ACCOUNT_APPROVAL_REQUESTED",
+  "ACCOUNT_APPROVED",
 ]);
 
 export const notificationSchema = z.object({

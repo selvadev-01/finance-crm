@@ -1,6 +1,8 @@
+import { CircleNotch } from "@phosphor-icons/react/dist/ssr";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 
+import { ButtonBusyOverlay } from "./busy-overlay";
 import { cn } from "./cn";
 
 /**
@@ -75,7 +77,21 @@ export function buttonClass(
 export const arrowLinkClass =
   "-my-[0.8125rem] inline-flex items-center gap-1 py-[0.8125rem] text-label text-accent underline-offset-4 hover:underline";
 
-export function Button({ tone, size, className, type, ...props }: ButtonProps) {
+/**
+ * A button whose action is in flight says so with `aria-busy` — the same
+ * attribute a screen reader hears — and draws a spinner before its label.
+ * There is no `loading` prop: the state is the attribute, so it cannot
+ * disagree with what assistive technology is told.
+ */
+export function Button({
+  tone,
+  size,
+  className,
+  type,
+  children,
+  ...props
+}: ButtonProps) {
+  const busy = props["aria-busy"] === true || props["aria-busy"] === "true";
   return (
     <button
       // Buttons inside a form default to submit, which has surprised every
@@ -83,6 +99,21 @@ export function Button({ tone, size, className, type, ...props }: ButtonProps) {
       type={type ?? "button"}
       className={cn(button({ tone, size }), className)}
       {...props}
-    />
+    >
+      {busy ? (
+        <CircleNotch
+          aria-hidden
+          weight="bold"
+          className="size-4 animate-spin motion-reduce:animate-none"
+        />
+      ) : null}
+      {children}
+      {/* The whole screen blurs with a centred spinner while it works. */}
+      {busy ? (
+        <ButtonBusyOverlay
+          label={typeof children === "string" ? children : "Please wait…"}
+        />
+      ) : null}
+    </button>
   );
 }

@@ -96,7 +96,7 @@ expected = min(D, outstanding)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: created
+    [*] --> PENDING: created (a Senior's waits for approval)
     PENDING --> ACTIVE: disbursed
     ACTIVE --> COMPLETED: outstanding <= 0
     ACTIVE --> DEFAULTED: Super Admin
@@ -113,6 +113,8 @@ stateDiagram-v2
 | `COMPLETED`   | No         | Automatic on `outstanding ≤ 0` |
 | `DEFAULTED`   | No         | Super Admin, reason mandatory  |
 | `WRITTEN_OFF` | No         | Super Admin, reason mandatory  |
+
+**Approval (decided 2026-10-03).** A Senior may open an account for a customer on their own lines. It is `PENDING` with `approvedAt` null until an Admin or the Super Admin approves it (`POST /api/accounts/:accountId/approval`, `account.approve`); the Super Admin may instead disburse it straight away, which approves it in the same transaction. An Admin's or the Super Admin's account is approved as it is created. A Senior cannot enter a mid-term account — it is born `ACTIVE` with its money posted, so there is nothing to wait in (`403 MID_TERM_NEEDS_ADMIN`). The database refuses any account past `PENDING` without `approvedAt`. `GET /api/accounts?awaitingApproval=true` lists those waiting. The Admins and the Super Admin are told when one is opened (`ACCOUNT_APPROVAL_REQUESTED`), and the Senior when it is approved (`ACCOUNT_APPROVED`) — see [M10](M10-notifications.md).
 
 > Write-off is Super Admin only because it destroys receivable value. It must not be an action an Admin can take to tidy up a difficult account.
 
@@ -136,13 +138,14 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 ## Operations
 
-| Operation                    | Actor                                        |
-| ---------------------------- | -------------------------------------------- |
-| Create                       | Admin+                                       |
-| Update terms                 | Admin+, **pre-disbursement only**            |
-| Disburse                     | Super Admin only (decided 2026-10-02)        |
-| Mark defaulted / written off | Super Admin                                  |
-| View, view schedule          | Admin+, Senior (own line), Junior (assigned) |
+| Operation                    | Actor                                          |
+| ---------------------------- | ---------------------------------------------- |
+| Create                       | Admin+; Senior on own lines, awaiting approval |
+| Approve a Senior's account   | Admin+                                         |
+| Update terms                 | Admin+, **pre-disbursement only**              |
+| Disburse                     | Super Admin only (decided 2026-10-02)          |
+| Mark defaulted / written off | Super Admin                                    |
+| View, view schedule          | Admin+, Senior (own line), Junior (assigned)   |
 
 ---
 
@@ -160,15 +163,15 @@ Completion is **balance-driven, not day-driven** (BR-05). Day 100 is a target.
 
 In `apps/api/src/accounts/`, served through `packages/contracts/src/account.contract.ts`. Status is in the [backlog](../../06-delivery/backlog.md).
 
-| Endpoint                                            | Permission             | Refusals                                                                                                                                                                                                       |
-| --------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/accounts/preview`                        | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                                                                                                                                     |
-| `POST /api/accounts`                                | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`; `disburse: true` also disburses a day-one account — Super Admin only, else `403 PERMISSION_DENIED` |
-| `PATCH /api/accounts/:accountId`                    | `account.updateTerms`  | `400` (BR-01, at the field), `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_PAST`                                                                                                                 |
-| `POST /api/accounts/:accountId/disbursement`        | `account.disburse`     | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`, `422 INSUFFICIENT_CASH_IN_HAND`                                                                                                           |
-| `POST /api/accounts/:accountId/closure`             | `account.close`        | `404`, `422 ACCOUNT_NOT_ACTIVE`; `400` without a reason. Super Admin only                                                                                                                                      |
-| `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                                                                                |
-| `GET /api/accounts/:accountId/schedule`             | `account.viewSchedule` | `404`                                                                                                                                                                                                          |
+| Endpoint                                            | Permission             | Refusals                                                                                                                                                                                                                                                         |
+| --------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/accounts/preview`                        | `account.create`       | `400` (BR-01, at the field), `404` customer, `422` as below. Saves nothing                                                                                                                                                                                       |
+| `POST /api/accounts`                                | `account.create`       | `422 CUSTOMER_BLACKLISTED`, `LINE_INACTIVE`, `COLLECTED_TO_DATE_REQUIRED`, `COLLECTED_TO_DATE_NOT_ALLOWED`, `INSUFFICIENT_CASH_IN_HAND` (a mid-term account); `disburse: true` also disburses a day-one account — Super Admin only, else `403 PERMISSION_DENIED` |
+| `PATCH /api/accounts/:accountId`                    | `account.updateTerms`  | `400` (BR-01, at the field), `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_PAST`                                                                                                                                                                   |
+| `POST /api/accounts/:accountId/disbursement`        | `account.disburse`     | `404`, `422 ACCOUNT_NOT_PENDING`, `422 DISBURSEMENT_DATE_IN_FUTURE`, `422 INSUFFICIENT_CASH_IN_HAND`                                                                                                                                                             |
+| `POST /api/accounts/:accountId/closure`             | `account.close`        | `404`, `422 ACCOUNT_NOT_ACTIVE`; `400` without a reason. Super Admin only                                                                                                                                                                                        |
+| `GET /api/accounts`, `GET /api/accounts/:accountId` | `account.view`         | `404` out of scope. `investedAmount` and `profitAmount` are `null` for a Junior                                                                                                                                                                                  |
+| `GET /api/accounts/:accountId/schedule`             | `account.viewSchedule` | `404`                                                                                                                                                                                                                                                            |
 
 **Validation.** BR-01's rules are checked in the contract, in US-030's words: "must be below the account amount — profit cannot be zero or negative", and "50 × 100 days cannot clear 10,000" — with the unit following the frequency, so a weekly account reads "50 × 20 weeks cannot clear 10,000". The form and the API therefore give the same answer, and the database CHECKs repeat the rules.
 
@@ -192,7 +195,7 @@ In `apps/api/src/accounts/`, served through `packages/contracts/src/account.cont
 - The BR-18 posting goes through `LedgerService` in the same transaction.
 - A pending account whose planned date has passed is disbursed today: its disbursement date moves, its schedule is regenerated, and the audit entry records both dates.
 - **The Senior of the customer's current line is told** (`ACCOUNT_DISBURSED`, INFORMATION, decided 2026-09-24): the instalment and the day it starts, in the same transaction. A mid-term account raises the same event as a "running account", giving its first unpaid slot ([M10](M10-notifications.md#categories-and-events)). The Admin who acted is never told.
-- **A loan is paid out of the capital put in (decided 2026-10-02).** Only the Super Admin disburses; an Admin saves the account as pending. A day-one disbursement locks the office-cash ledger row and is refused `422 INSUFFICIENT_CASH_IN_HAND` when cash-in-hand holds less than `I`, before anything is written. Capital is recorded on Books (`/books/money`, [M09](M09-ledger.md#postings)); the disburse dialog shows cash-in-hand now and after the loan and links there when it is short. A mid-term account is history being entered, so it is not checked and an Admin still creates one.
+- **A loan is paid out of the capital put in (decided 2026-10-02).** Only the Super Admin disburses; an Admin saves the account as pending. A day-one disbursement locks the office-cash ledger row and is refused `422 INSUFFICIENT_CASH_IN_HAND` when cash-in-hand holds less than `I`, before anything is written. Capital is recorded on Books (`/books/money`, [M09](M09-ledger.md#postings)); the disburse dialog shows cash-in-hand now and after the loan and links there when it is short. An Admin still creates a mid-term account, but **since 2026-10-03 it is checked too**: its opening takes `I` out of office cash and puts back the collected-to-date, so it is refused `422 INSUFFICIENT_CASH_IN_HAND` when cash-in-hand holds less than `I − collected to date`. A mid-term account collected past `I` takes nothing. The check runs before anything is written, including the account code. Found on a live organisation, where a loan entered with yesterday's date left office cash at −₹8,200 with no capital put in. The form shows cash-in-hand now and after the account, with **Add money** for the Super Admin and "ask the owner" for an Admin. Worked example: ₹8,500 given and ₹300 back needs ₹8,200, so ₹8,199 is refused and ₹8,200 leaves office cash at exactly ₹0.
 
 **Correcting terms before disbursement (US-030, 2026-09-20).** `PATCH /api/accounts/:accountId` takes the whole set of terms and checks them exactly as creation does (BR-01, in the contract). Only a `PENDING` account: after disbursement the amounts are immutable in the service and in the database (`constraints_account_lifecycle`), so this is the only window in which a typo can be fixed rather than written off.
 

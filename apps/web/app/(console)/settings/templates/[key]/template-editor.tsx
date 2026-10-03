@@ -61,8 +61,16 @@ const IN_APP: FieldSpec[] = [
 ];
 
 const EMAIL: FieldSpec[] = [
-  { name: "emailSubject", label: "Subject", hint: "One line, up to 150 characters." },
-  { name: "emailHeading", label: "Heading", hint: "The first line of the email." },
+  {
+    name: "emailSubject",
+    label: "Subject",
+    hint: "One line, up to 150 characters.",
+  },
+  {
+    name: "emailHeading",
+    label: "Heading",
+    hint: "The first line of the email.",
+  },
   {
     name: "emailBody",
     label: "Message",
@@ -74,7 +82,12 @@ const EMAIL: FieldSpec[] = [
     label: "Button",
     hint: "Up to 40 characters. The button always opens the subject in Rasi.",
   },
-  { name: "emailFooter", label: "Footer", hint: "Why they are getting this email.", rows: 2 },
+  {
+    name: "emailFooter",
+    label: "Footer",
+    hint: "Why they are getting this email.",
+    rows: 2,
+  },
 ];
 
 /**
@@ -165,11 +178,14 @@ function Channels({
       body: { [channel]: enabled },
     });
     setSaving(false);
-    setProblem(result.ok ? null : (result.form ?? "Could not save. Try again."));
+    setProblem(
+      result.ok ? null : (result.form ?? "Could not save. Try again."),
+    );
     if (result.ok) {
       toast({
         title: `${detail.label} ${enabled ? "will be" : "will not be"} ${channel === "push" ? "pushed" : "emailed"}`,
-        description: "From the next one sent. Messages already sent are unchanged.",
+        description:
+          "From the next one sent. Messages already sent are unchanged.",
       });
       onChanged();
     }
@@ -249,23 +265,33 @@ function Editor({
         detail.versions.map((version) => [version.language, version.content]),
       ) as Record<TemplateLanguage, TemplateContentInput>,
   );
-  const [saveErrors, setSaveErrors] = useState<Partial<Record<FieldName, string>>>({});
+  const [saveErrors, setSaveErrors] = useState<
+    Partial<Record<FieldName, string>>
+  >({});
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
   const [resetting, setResetting] = useState(false);
-  const fields = useRef(new Map<FieldName, HTMLInputElement | HTMLTextAreaElement>());
+  const fields = useRef(
+    new Map<FieldName, HTMLInputElement | HTMLTextAreaElement>(),
+  );
   const lastField = useRef<FieldName | null>(null);
 
   const version = detail.versions.find((v) => v.language === language)!;
   const draft = drafts[language];
   const dirty = (lang: TemplateLanguage) =>
-    !sameContent(drafts[lang], detail.versions.find((v) => v.language === lang)!.content);
+    !sameContent(
+      drafts[lang],
+      detail.versions.find((v) => v.language === lang)!.content,
+    );
   const preview = usePreview(detail.key, language, draft);
   const errors = { ...preview.problems, ...saveErrors };
   const hasPush = draft.title !== null;
 
   function edit(name: FieldName, value: string) {
-    setDrafts((all) => ({ ...all, [language]: { ...all[language], [name]: value } }));
+    setDrafts((all) => ({
+      ...all,
+      [language]: { ...all[language], [name]: value },
+    }));
     setSaveErrors((all) => ({ ...all, [name]: undefined }));
     setProblem(null);
   }
@@ -308,7 +334,8 @@ function Editor({
     }
     toast({
       title: `${detail.label} saved in ${LANGUAGE_LABEL[language]}`,
-      description: "The next one sent uses these words. Messages already sent are unchanged.",
+      description:
+        "The next one sent uses these words. Messages already sent are unchanged.",
     });
     onSaved();
   }
@@ -326,7 +353,9 @@ function Editor({
     const { inApp, pushDevices, emailQueued } = result.body;
     const reached = [
       inApp ? "your bell" : null,
-      pushDevices > 0 ? `${pushDevices} ${pushDevices === 1 ? "device" : "devices"}` : null,
+      pushDevices > 0
+        ? `${pushDevices} ${pushDevices === 1 ? "device" : "devices"}`
+        : null,
       emailQueued ? "your inbox" : null,
     ].filter(Boolean);
     toast({
@@ -386,7 +415,9 @@ function Editor({
                         spec={spec}
                         value={draft[spec.name] ?? ""}
                         error={errors[spec.name]}
-                        register={(el) => register(fields.current, spec.name, el)}
+                        register={(el) =>
+                          register(fields.current, spec.name, el)
+                        }
                         onFocus={() => (lastField.current = spec.name)}
                         onChange={(value) => edit(spec.name, value)}
                       />
@@ -416,20 +447,27 @@ function Editor({
                   ))}
                 </Section>
 
-                {problem ? <FormMessage tone="critical">{problem}</FormMessage> : null}
+                {problem ? (
+                  <FormMessage tone="critical">{problem}</FormMessage>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     tone="primary"
                     disabled={!dirty(language) || pending !== null}
                     onClick={() => void save()}
                   >
-                    {pending === "save" ? "Saving…" : `Save ${LANGUAGE_LABEL[language]}`}
+                    {pending === "save"
+                      ? "Saving…"
+                      : `Save ${LANGUAGE_LABEL[language]}`}
                   </Button>
                   <Button
                     tone="ghost"
                     disabled={!dirty(language) || pending !== null}
                     onClick={() => {
-                      setDrafts((all) => ({ ...all, [language]: version.content }));
+                      setDrafts((all) => ({
+                        ...all,
+                        [language]: version.content,
+                      }));
                       setSaveErrors({});
                       setProblem(null);
                     }}
@@ -492,10 +530,11 @@ function Placeholders({
         <div className="flex flex-col gap-0.5">
           <h3 className="text-label text-ink">Placeholders</h3>
           <p className="text-caption text-ink-muted">
-            Press one to put it where your cursor is. Rasi fills it in for each person.{" "}
-            <code className="font-mono">{"{{#name}}…{{/name}}"}</code> shows words only when{" "}
-            <code className="font-mono">name</code> has a value;{" "}
-            <code className="font-mono">{"{{^name}}…{{/name}}"}</code> only when it has none.
+            Press one to put it where your cursor is. Rasi fills it in for each
+            person. <code className="font-mono">{"{{#name}}…{{/name}}"}</code>{" "}
+            shows words only when <code className="font-mono">name</code> has a
+            value; <code className="font-mono">{"{{^name}}…{{/name}}"}</code>{" "}
+            only when it has none.
           </p>
         </div>
         <ul className="flex flex-wrap gap-2">
@@ -577,7 +616,8 @@ function ResetDialog({
       params: { key: detail.key, language },
     });
     setPending(false);
-    if (!result.ok) return setProblem(result.form ?? "The template was not reset.");
+    if (!result.ok)
+      return setProblem(result.form ?? "The template was not reset.");
     toast({
       title: `${detail.label} back to Rasi’s words in ${LANGUAGE_LABEL[language]}`,
       description: "The next one sent uses them.",
@@ -601,7 +641,12 @@ function ResetDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="danger" onClick={() => void confirm()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="danger"
+          onClick={() => void confirm()}
+          disabled={pending}
+        >
           {pending ? "Resetting…" : "Use Rasi’s words"}
         </Button>
       </DialogActions>
@@ -620,6 +665,9 @@ function register(
 
 const isInApp = (name: FieldName) => name === "title" || name === "body";
 
-function sameContent(a: TemplateContentInput, b: TemplateContentInput): boolean {
+function sameContent(
+  a: TemplateContentInput,
+  b: TemplateContentInput,
+): boolean {
   return (Object.keys(a) as FieldName[]).every((name) => a[name] === b[name]);
 }

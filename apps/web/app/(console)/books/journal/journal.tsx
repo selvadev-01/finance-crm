@@ -616,7 +616,12 @@ function PostJournalDialog({
         <Button tone="ghost" onClick={close} disabled={pending}>
           Cancel
         </Button>
-        <Button tone="primary" onClick={() => void submit()} disabled={pending}>
+        <Button
+          aria-busy={pending || undefined}
+          tone="primary"
+          onClick={() => void submit()}
+          disabled={pending}
+        >
           {pending ? "Posting…" : "Post entry"}
         </Button>
       </DialogActions>

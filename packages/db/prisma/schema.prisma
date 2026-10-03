@@ -302,6 +302,10 @@ enum NotificationEvent {
   /// field expense to approve, and its decision back to the spender.
   EXPENSE_REQUESTED
   EXPENSE_DECIDED
+  /// Added 2026-10-03 (migration account_approval_notification_events): a
+  /// Senior's account waiting for the Admins, and its approval back to them.
+  ACCOUNT_APPROVAL_REQUESTED
+  ACCOUNT_APPROVED
 }
 
 enum PushProvider {
@@ -661,6 +665,12 @@ model AccountLoan {
   isOverdue         Boolean       @default(false)
   /// Required for DEFAULTED and WRITTEN_OFF.
   closureNote       String?
+  /// A Senior's account waits for an Admin or the Super Admin before it can
+  /// be disbursed (decided 2026-10-03); an Admin's is approved as created.
+  /// CHECK: only a PENDING account may be unapproved
+  /// (migration account_approval).
+  approvedAt        DateTime?     @db.Timestamptz(3)
+  approvedByUserId  String?
 
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @db.Timestamptz(3)

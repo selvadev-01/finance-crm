@@ -226,7 +226,7 @@ describe('StaffAdminService (US-092)', () => {
           role: 'JUNIOR',
           status: 'ACTIVE',
           joinedAt: today,
-          currentAssignment: null,
+          currentAssignments: [],
         });
         expect(result.staff.staffCode).toMatch(/^JR-[0-9A-F]{8}$/);
         expect(result.temporaryPassword).toMatch(

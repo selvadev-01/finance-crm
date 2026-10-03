@@ -21,6 +21,7 @@ import {
   Section,
   Stat,
   StatGrid,
+  toast,
 } from "@repo/ui";
 import Link from "next/link";
 import { useState } from "react";
@@ -41,7 +42,11 @@ import { apiWrite } from "../../../../lib/api-write";
 import { CADENCE } from "../../../../lib/cadence";
 import { isNegativeMoney, subtractMoney } from "../../../../lib/money";
 import { signedAmount } from "../../books/visuals";
-import { canDisburse, canManageOrganisation } from "../../../../lib/roles";
+import {
+  canApproveAccount,
+  canDisburse,
+  canManageOrganisation,
+} from "../../../../lib/roles";
 import { CloseAccount } from "./close-account";
 import { CorrectTerms } from "./correct-terms";
 import { useApiQuery } from "../../../../lib/use-api-query";
@@ -53,6 +58,7 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [closing, setClosing] = useState(false);
   const [correcting, setCorrecting] = useState(false);
+  const [approving, setApproving] = useState(false);
   const account = useApiQuery(accountContract.getAccount, {
     params: { accountId },
   });
@@ -65,29 +71,77 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
   }
 
   const record = account.data;
+
+  async function approve() {
+    setApproving(true);
+    const result = await apiWrite(accountContract.approveAccount, {
+      params: { accountId },
+    });
+    setApproving(false);
+    if (!result.ok) {
+      toast({
+        title: result.form ?? "The account was not approved.",
+        tone: "critical",
+      });
+      return;
+    }
+    toast({ title: `${record.accountCode} approved` });
+    account.reload();
+  }
   const today = toBusinessDate(new Date());
   const canClose = me.role === "SUPER_ADMIN" && record.status === "ACTIVE";
   const pending = canManageOrganisation(me.role) && record.status === "PENDING";
   // Paying the money out is the Super Admin's alone (decided 2026-10-02).
   const mayDisburse = pending && canDisburse(me.role);
+  // A Senior's account waits for an Admin or the Super Admin (decided
+  // 2026-10-03); the Super Admin's disbursement approves it on the way.
+  const awaitingApproval =
+    record.status === "PENDING" && record.approvedAt === null;
+  const mayApprove =
+    awaitingApproval && canApproveAccount(me.role) && !mayDisburse;
 
   const actions = [
+    awaitingApproval && !canApproveAccount(me.role) ? (
+      <p key="approval" className="text-body text-ink-muted">
+        Waiting for an Admin to approve
+      </p>
+    ) : null,
+    mayApprove ? (
+      <Button
+        aria-busy={approving || undefined}
+        key="approve"
+        tone="primary"
+        disabled={approving}
+        onClick={() => void approve()}
+      >
+        {approving ? "Approving…" : "Approve"}
+      </Button>
+    ) : null,
     pending && record.disbursementDate > today ? (
       <p key="waiting" className="text-body text-ink-muted">
         Can be disbursed from {formatBusinessDate(record.disbursementDate)}
       </p>
     ) : mayDisburse ? (
-      <Button key="disburse" tone="primary" onClick={() => setConfirming(true)}>
-        Disburse
+      <Button
+        key="disburse"
+        tone="primary"
+        disabled={approving}
+        onClick={() => setConfirming(true)}
+      >
+        {awaitingApproval ? "Approve and disburse" : "Disburse"}
       </Button>
-    ) : pending ? (
+    ) : pending && !awaitingApproval ? (
       <p key="owner" className="text-body text-ink-muted">
         Waiting for the Super Admin to disburse
       </p>
     ) : null,
     // US-030: terms are correctable only before disbursement.
     pending ? (
-      <Button key="correct" onClick={() => setCorrecting(true)}>
+      <Button
+        key="correct"
+        disabled={approving}
+        onClick={() => setCorrecting(true)}
+      >
         Correct terms
       </Button>
     ) : null,
@@ -378,6 +432,7 @@ function DisburseDialog({
           Cancel
         </Button>
         <Button
+          aria-busy={pending || undefined}
           tone="primary"
           onClick={() => void disburse()}
           disabled={pending || short}

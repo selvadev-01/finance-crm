@@ -81,6 +81,7 @@ export function VisitingOrderSection({ lineId }: { lineId: string }) {
               </Button>
             ) : null}
             <Button
+              aria-busy={saving || undefined}
               tone="primary"
               onClick={() => void save()}
               disabled={saving}

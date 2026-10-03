@@ -32,6 +32,18 @@ describe('account lifecycle constraints (BR-03, BR-05, BR-07)', () => {
     ).rejects.toThrow('account_loan_first_collection_after_disbursement_check');
   });
 
+  it('rejects an account past PENDING that was never approved (decided 2026-10-03)', async () => {
+    await expect(
+      withRollback(prisma, async (tx) => {
+        const { account } = await createActiveAccount(tx);
+        await tx.accountLoan.update({
+          where: { id: account.id },
+          data: { approvedAt: null },
+        });
+      }),
+    ).rejects.toThrow('account_loan_approved_before_disbursement_check');
+  });
+
   it('rejects COMPLETED without an actual completion date', async () => {
     await expect(
       withRollback(prisma, async (tx) => {

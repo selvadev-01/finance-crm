@@ -33,6 +33,17 @@ describe('configuration (M16)', () => {
     expect(parseConfig({ ...valid, PORT: '8080' }).PORT).toBe(8080);
   });
 
+  it('keeps transactions to 5 s unless told otherwise, and allows longer for a distant database', () => {
+    expect(parseConfig(valid).DB_TRANSACTION_TIMEOUT_MS).toBe(5_000);
+    expect(
+      parseConfig({ ...valid, DB_TRANSACTION_TIMEOUT_MS: '30000' })
+        .DB_TRANSACTION_TIMEOUT_MS,
+    ).toBe(30_000);
+    expect(problemsFor({ ...valid, DB_TRANSACTION_TIMEOUT_MS: '500' })).toEqual(
+      [expect.stringContaining('DB_TRANSACTION_TIMEOUT_MS')],
+    );
+  });
+
   it('reports every problem at once, not only the first', () => {
     const problems = problemsFor({ PORT: 'eighty', LOG_LEVEL: 'loud' });
     expect(problems).toHaveLength(5);

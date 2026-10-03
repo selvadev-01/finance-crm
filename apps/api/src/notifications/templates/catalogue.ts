@@ -518,8 +518,7 @@ export const CATALOGUE: readonly TemplateDefinition[] = [
     category: 'ALERT',
     group: 'COLLECTIONS',
     label: 'Missed collections',
-    description:
-      'Customers not visited, counted once when the day is closed.',
+    description: 'Customers not visited, counted once when the day is closed.',
     recipients: "The line's Senior",
     variables: [v.lineName, v.date, v.count, v.one],
     en: {
@@ -584,6 +583,65 @@ export const CATALOGUE: readonly TemplateDefinition[] = [
       body: '{{onboardedBy}} {{customerName}} ({{customerCode}}) அவர்களை {{lineName}} இல் சேர்த்தார்',
     },
   }),
+  // A Senior's account waits for an Admin (decided 2026-10-03).
+  event({
+    key: 'ACCOUNT_APPROVAL_REQUESTED',
+    eventType: 'ACCOUNT_APPROVAL_REQUESTED',
+    category: 'WARNING',
+    group: 'ACCOUNTS',
+    label: 'Account to approve',
+    description: 'A Senior opened an account that waits for approval.',
+    recipients: 'The Admins and the Super Admin',
+    variables: [
+      v.lineName,
+      v.customerName,
+      v.accountCode,
+      {
+        name: 'openedBy',
+        description: 'The Senior who opened it',
+        sample: 'Priya Senthil',
+      },
+      {
+        name: 'amount',
+        description: 'The account amount',
+        sample: '₹10,000.00',
+      },
+    ],
+    en: {
+      title: 'Account to approve · {{lineName}}',
+      body: "{{openedBy}} opened {{customerName}}'s account {{accountCode}} for {{amount}}. Approve it before it can be disbursed.",
+    },
+    ta: {
+      title: 'ஒப்புதலுக்கான கணக்கு · {{lineName}}',
+      body: '{{openedBy}} {{customerName}} அவர்களுக்கு {{amount}} க்கான கணக்கு {{accountCode}} தொடங்கினார். பணம் வழங்கும் முன் ஒப்புதல் அளிக்கவும்.',
+    },
+  }),
+  event({
+    key: 'ACCOUNT_APPROVED',
+    eventType: 'ACCOUNT_APPROVED',
+    category: 'SUCCESS',
+    group: 'ACCOUNTS',
+    label: 'Account approved',
+    description: "A Senior's account was approved.",
+    recipients: 'The Senior who opened it',
+    variables: [
+      v.customerName,
+      v.accountCode,
+      {
+        name: 'approvedBy',
+        description: 'Who approved it',
+        sample: 'Lakshmi Narayanan',
+      },
+    ],
+    en: {
+      title: 'Account approved · {{accountCode}}',
+      body: "{{approvedBy}} approved {{customerName}}'s account. The Super Admin disburses it next.",
+    },
+    ta: {
+      title: 'கணக்கு ஒப்புதல் பெற்றது · {{accountCode}}',
+      body: '{{approvedBy}} {{customerName}} அவர்களின் கணக்கை ஒப்புதல் அளித்தார். அடுத்து சூப்பர் அட்மின் பணம் வழங்குவார்.',
+    },
+  }),
   disbursed(false),
   disbursed(true),
   event({
@@ -610,8 +668,7 @@ export const CATALOGUE: readonly TemplateDefinition[] = [
     category: 'WARNING',
     group: 'ACCOUNTS',
     label: 'Accounts overdue',
-    description:
-      'Accounts past their target date, once per line each night.',
+    description: 'Accounts past their target date, once per line each night.',
     recipients: "The line's Senior",
     variables: [v.count, v.one],
     en: {
@@ -770,8 +827,7 @@ export const CATALOGUE: readonly TemplateDefinition[] = [
     category: 'ALERT',
     group: 'SYSTEM',
     label: 'Reconciliation mismatch',
-    description:
-      'The nightly reconciliation found figures that disagree.',
+    description: 'The nightly reconciliation found figures that disagree.',
     recipients: 'Admins and the Super Admin',
     variables: [
       {
@@ -910,6 +966,8 @@ export type TemplateKey =
   | 'REVERSAL_REQUESTED'
   | 'DAY_REOPENED'
   | 'NEW_CUSTOMER'
+  | 'ACCOUNT_APPROVAL_REQUESTED'
+  | 'ACCOUNT_APPROVED'
   | 'ACCOUNT_DISBURSED'
   | 'RUNNING_ACCOUNT_ADDED'
   | 'ACCOUNT_COMPLETED'

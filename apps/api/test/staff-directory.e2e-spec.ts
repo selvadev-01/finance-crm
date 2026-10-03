@@ -16,7 +16,7 @@ import {
 interface Row {
   staffProfileId: string;
   status: string;
-  currentAssignment: { lineId: string; lineName: string } | null;
+  currentAssignments: { lineId: string; lineName: string }[];
 }
 
 /**
@@ -147,12 +147,12 @@ describe('staff directory (S-14, e2e)', () => {
     const byId = new Map<string, Row>(
       response.body.data.map((row: Row) => [row.staffProfileId, row]),
     );
+    expect(byId.get(staff.moved!.staffProfileId)!.currentAssignments).toEqual([
+      expect.objectContaining({ lineId: lineB, lineName: 'Line B' }),
+    ]);
     expect(
-      byId.get(staff.moved!.staffProfileId)!.currentAssignment,
-    ).toMatchObject({ lineId: lineB, lineName: 'Line B' });
-    expect(
-      byId.get(staff.upcoming!.staffProfileId)!.currentAssignment,
-    ).toBeNull();
+      byId.get(staff.upcoming!.staffProfileId)!.currentAssignments,
+    ).toEqual([]);
     expect(byId.get(staff.suspended!.staffProfileId)!.status).toBe('SUSPENDED');
   });
 
@@ -200,7 +200,7 @@ describe('staff directory (S-14, e2e)', () => {
     const upcoming = await as('admin')
       .get(`/api/staff/${staff.upcoming!.staffProfileId}`)
       .expect(200);
-    expect(upcoming.body.currentAssignment).toBeNull();
+    expect(upcoming.body.currentAssignments).toEqual([]);
     expect(upcoming.body.assignments).toEqual([
       expect.objectContaining({ lineId: lineA, upcoming: true }),
     ]);

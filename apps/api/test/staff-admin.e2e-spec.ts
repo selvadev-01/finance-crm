@@ -123,7 +123,7 @@ describe('staff administration (US-092, e2e)', () => {
         phone: body.phone,
         role: 'JUNIOR',
         status: 'ACTIVE',
-        currentAssignment: null,
+        currentAssignments: [],
       });
       expect(response.body.temporaryPassword).toHaveLength(12);
 

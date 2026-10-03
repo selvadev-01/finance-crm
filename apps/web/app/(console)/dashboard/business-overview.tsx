@@ -49,6 +49,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AccountsAwaitingApproval } from "../../../components/accounts-awaiting-approval";
 import { ExportMenu } from "../../../components/export-menu";
 import { LoadFailed } from "../../../components/query-state";
 import { StatusBadge } from "../../../components/status-badge";
@@ -353,6 +354,7 @@ export function BusinessOverview({
   return (
     <>
       {header(view)}
+      <AccountsAwaitingApproval />
       {view.day.kind !== "WORKING" ? (
         <FormMessage tone="info">
           {view.day.kind === "SUNDAY"

@@ -97,6 +97,8 @@ export async function createActiveAccount(tx: PrismaClient) {
       firstCollectionDate: new Date('2026-09-02'),
       targetCompletionDate: new Date('2026-12-10'),
       status: 'ACTIVE',
+      // Past PENDING, so approved (migration account_approval).
+      approvedAt: new Date('2026-09-01'),
     },
   });
   return { organization, sector, line, customer, account };

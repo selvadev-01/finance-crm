@@ -20,7 +20,7 @@ import { Money } from "../../../components/money";
 import { Pager } from "../../../components/pager";
 import { AccountStatusBadge } from "../../../components/status-badge";
 import { sumMoney } from "../../../lib/money";
-import { canManageOrganisation, type Role } from "../../../lib/roles";
+import { canCreateAccount, type Role } from "../../../lib/roles";
 import { usePagedQuery } from "../../../lib/use-paged-query";
 
 /**
@@ -40,7 +40,8 @@ export function CustomerAccounts({
   const accounts = usePagedQuery(accountContract.listAccounts, {
     query: { customerId },
   });
-  const manages = canManageOrganisation(role);
+  // A Senior opens one too, which waits for approval (decided 2026-10-03).
+  const manages = canCreateAccount(role);
   const newAccount = manages ? (
     <Link
       href={`/accounts/new?customerId=${customerId}`}

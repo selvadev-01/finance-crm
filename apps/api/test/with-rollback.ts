@@ -45,7 +45,12 @@ export async function withRollback<T>(
 
         throw ROLLBACK;
       },
-      { timeout: 30_000, maxWait: 10_000 },
+      // TEST_TX_TIMEOUT_MS raises it against a remote database, where a
+      // single test's round trips alone can pass thirty seconds.
+      {
+        timeout: Number(process.env['TEST_TX_TIMEOUT_MS'] ?? 30_000),
+        maxWait: 10_000,
+      },
     );
   } catch (error) {
     if (error !== ROLLBACK) throw error;

@@ -68,6 +68,10 @@ const WRITE_ROUTES: Record<string, Decision> = {
   'POST /api/line-assignments/:assignmentId/end': {
     audits: [['line_assignment', 'UPDATE']],
   },
+  // A Senior's pending account, approved for disbursement (decided 2026-10-03).
+  'POST /api/accounts/:accountId/approval': {
+    audits: [['account_loan', 'APPROVE']],
+  },
   // M15 settings (US-094): an override row, or the organisation's own record.
   'PATCH /api/settings/:key': {
     audits: [

@@ -34,7 +34,11 @@ import { LedgerService } from '../ledger/ledger.service.js';
 import { EventNotices } from '../notifications/event-notices.js';
 import type { RequestContext } from '../platform/context/request-context.js';
 import { Database } from '../platform/database/database.js';
-import { AuthorizationError, DomainError } from '../platform/errors/errors.js';
+import {
+  AuthorizationError,
+  ConflictError,
+  DomainError,
+} from '../platform/errors/errors.js';
 import {
   type Page,
   type PageRequest,
@@ -67,6 +71,7 @@ const accountFields = {
   collectedAmount: true,
   outstandingAmount: true,
   isOverdue: true,
+  approvedAt: true,
   // The customer's line is the round that visits them today; `lineId` above
   // is where the account was opened, and a transfer leaves it behind.
   customer: { select: { name: true, sectorId: true, lineId: true } },
@@ -129,7 +134,16 @@ function toAccount(row: AccountRow, context: RequestContext): Account {
     collectedAmount: money(row.collectedAmount),
     outstandingAmount: money(row.outstandingAmount),
     isOverdue: row.isOverdue,
+    approvedAt: row.approvedAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * An Admin's or the Super Admin's account is approved as it is created; a
+ * Senior's waits for one of them (decided 2026-10-03).
+ */
+function approvesOwnAccounts(context: RequestContext): boolean {
+  return roleHasPermission(context.role, 'account.approve');
 }
 
 type Money = ReturnType<typeof toMoney>;
@@ -157,7 +171,8 @@ interface Plan {
  * - **before today** — a mid-term account, already disbursed in the world:
  *   created ACTIVE with the collected-to-date amount the Admin entered, its
  *   paid slots and regenerated tail from `planMidTermSchedule`, and both the
- *   disbursement and the catch-up posted (decided 2026-09-13).
+ *   disbursement and the catch-up posted (decided 2026-09-13). Office cash
+ *   must hold the net the two take out, or it is refused (decided 2026-10-03).
  */
 @Injectable()
 export class AccountService {
@@ -208,6 +223,32 @@ export class AccountService {
   ): Promise<Account> {
     return this.database.transaction(async (tx) => {
       const plan = await this.plan(context, input, today);
+      const approved = approvesOwnAccounts(context);
+      // A mid-term account is created ACTIVE with its money already posted,
+      // so there is no pending stage to wait in: it is an Admin's to enter.
+      if (plan.kind === 'MID_TERM' && !approved) {
+        throw new AuthorizationError(
+          'MID_TERM_NEEDS_ADMIN',
+          'An account that began before today is entered by an Admin',
+          [{ field: 'disbursementDate', issue: 'must be today or later' }],
+        );
+      }
+      if (plan.kind === 'MID_TERM') {
+        // Before any write — and before `nextval`, which a rollback does not
+        // return — so a refusal leaves nothing behind. Its opening takes `I`
+        // out of office cash and puts back what was collected before Rasi.
+        const invested = toMoney(input.investedAmount);
+        const needed = invested.minus(plan.collected);
+        if (needed.greaterThan(0)) {
+          await this.requireCashInHand(
+            tx,
+            context.organizationId,
+            needed,
+            (held) =>
+              `This mid-term account needs ₹${needed.toFixed(2)} from cash-in-hand (₹${invested.toFixed(2)} given less ₹${plan.collected.toFixed(2)} collected before Rasi), but it holds ₹${held.toFixed(2)}; add capital first`,
+          );
+        }
+      }
       const [{ nextval }] = await tx.$queryRaw<[{ nextval: bigint }]>`
         SELECT nextval('account_code_seq')`;
       const A = toMoney(input.accountAmount);
@@ -232,6 +273,8 @@ export class AccountService {
           status: plan.kind === 'MID_TERM' ? 'ACTIVE' : 'PENDING',
           collectedAmount: plan.collected.toFixed(2),
           outstandingAmount: plan.outstanding.toFixed(2),
+          approvedAt: approved ? new Date() : null,
+          approvedByUserId: approved ? context.userId : null,
           createdByUserId: context.userId,
           schedules: {
             createMany: {
@@ -269,11 +312,26 @@ export class AccountService {
           collectionFrequency: input.collectionFrequency,
           disbursementDate: input.disbursementDate,
           slots: plan.slots.length,
+          ...(approved ? {} : { awaitingApproval: true }),
           ...(plan.kind === 'MID_TERM'
             ? { midTerm: true, collectedToDate: plan.collected.toFixed(2) }
             : {}),
         },
       });
+
+      if (!approved) {
+        // The Admins hear at once, in the transaction that creates it.
+        const created = await this.get(context, account.id);
+        await this.notices.accountAwaitingApproval({
+          actorUserId: context.userId,
+          organizationId: context.organizationId,
+          accountLoanId: created.id,
+          accountCode: created.accountCode,
+          customerName: created.customerName,
+          lineName: created.lineName,
+          accountAmount: created.accountAmount,
+        });
+      }
 
       if (plan.kind === 'MID_TERM') {
         await this.postMidTermOpening(context, account, plan, today);
@@ -346,17 +404,40 @@ export class AccountService {
           `Account ${account.accountCode} is planned for ${planned}; it can be disbursed on or after that day`,
         );
       }
+      // A Senior's account still waiting is approved by the disbursement
+      // itself: the Super Admin releasing the money is the strongest approval
+      // there is, and saves them a second step (decided 2026-10-03). Anyone
+      // who may disburse may approve; this keeps it true if that ever widens.
+      const approvingNow = account.approvedAt === null;
+      if (approvingNow && !approvesOwnAccounts(context)) {
+        throw new DomainError(
+          'ACCOUNT_NOT_APPROVED',
+          `Account ${account.accountCode} is waiting for an Admin to approve it`,
+        );
+      }
 
       // Before any write, so a refusal changes nothing. It takes the office
       // cash lock first; nothing else takes it and then waits on an account.
-      await this.requireCashInHand(tx, account);
+      const invested = toMoney(account.investedAmount.toString());
+      await this.requireCashInHand(
+        tx,
+        account.organizationId,
+        invested,
+        (held) =>
+          `Account ${account.accountCode} needs ₹${invested.toFixed(2)} paid out, but cash-in-hand holds ₹${held.toFixed(2)}; add capital first`,
+      );
 
       // The status change is the guard against disbursing twice: a concurrent
       // disbursement waits on this row's lock, then finds it no longer PENDING
       // and changes nothing — so it is refused here, before any ledger write.
       const claimed = await tx.accountLoan.updateMany({
         where: { id: account.id, status: 'PENDING' },
-        data: { status: 'ACTIVE' },
+        data: {
+          status: 'ACTIVE',
+          ...(approvingNow
+            ? { approvedAt: new Date(), approvedByUserId: context.userId }
+            : {}),
+        },
       });
       if (claimed.count === 0) {
         throw new DomainError(
@@ -408,7 +489,11 @@ export class AccountService {
         entityTable: 'account_loan',
         entityId: account.id,
         before: { status: 'PENDING', disbursementDate: planned },
-        after: { status: 'ACTIVE', disbursementDate: today },
+        after: {
+          status: 'ACTIVE',
+          disbursementDate: today,
+          ...(approvingNow ? { approved: true } : {}),
+        },
       });
       const disbursed = await this.get(context, account.id);
       await this.notices.accountDisbursed({
@@ -426,6 +511,62 @@ export class AccountService {
     });
   }
 
+  /**
+   * Approves a Senior's pending account (decided 2026-10-03): it may now be
+   * disbursed by the Super Admin. Nothing moves; audited `APPROVE`. Only
+   * `PENDING` — an account past it was approved on the way — and only once.
+   */
+  approve(context: RequestContext, accountId: string): Promise<Account> {
+    return this.database.transaction(async (tx) => {
+      const account = foundInScope(
+        await tx.accountLoan.findFirst({
+          where: inScope(accountScope(context), { id: accountId }),
+          select: {
+            id: true,
+            accountCode: true,
+            status: true,
+            createdByUserId: true,
+            customer: { select: { name: true } },
+          },
+        }),
+        'account',
+      );
+      if (account.status !== 'PENDING') {
+        throw new DomainError(
+          'ACCOUNT_NOT_PENDING',
+          `Account ${account.accountCode} is ${account.status.toLowerCase()}; only a pending account waits for approval`,
+        );
+      }
+      // Conditional, so two Admins approving at once approve it once.
+      const now = new Date();
+      const claimed = await tx.accountLoan.updateMany({
+        where: { id: account.id, status: 'PENDING', approvedAt: null },
+        data: { approvedAt: now, approvedByUserId: context.userId },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictError(
+          'ACCOUNT_ALREADY_APPROVED',
+          `Account ${account.accountCode} is already approved`,
+        );
+      }
+      await this.audit.record(context, {
+        action: 'APPROVE',
+        entityTable: 'account_loan',
+        entityId: account.id,
+        before: { approvedAt: null },
+        after: { approvedAt: now.toISOString() },
+      });
+      await this.notices.accountApproved({
+        actorUserId: context.userId,
+        openedByUserId: account.createdByUserId,
+        accountLoanId: account.id,
+        accountCode: account.accountCode,
+        customerName: account.customer.name,
+      });
+      return this.get(context, account.id);
+    });
+  }
+
   async list(
     context: RequestContext,
     page: PageRequest & {
@@ -433,6 +574,7 @@ export class AccountService {
       customerId?: string | undefined;
       lineId?: string | undefined;
       status?: Account['status'] | undefined;
+      awaitingApproval?: boolean | undefined;
     },
   ): Promise<Page<Account>> {
     // One `where` for both reads, so the total is scoped exactly as the rows are.
@@ -441,6 +583,9 @@ export class AccountService {
       ...(page.customerId ? { customerId: page.customerId } : {}),
       ...(page.lineId ? { lineId: page.lineId } : {}),
       ...(page.status ? { status: page.status } : {}),
+      ...(page.awaitingApproval
+        ? { status: 'PENDING' as const, approvedAt: null }
+        : {}),
     });
     const [rows, total] = await Promise.all([
       this.database.client.accountLoan.findMany({
@@ -752,26 +897,22 @@ export class AccountService {
   }
 
   /**
-   * BR-18's disbursement on `businessDate`: debit the account's new receivable
-   * `A`, credit office cash `I` and unearned profit `P`.
-   */
-  /**
-   * A loan is paid out of the money the owner put in (decided 2026-10-02): a
-   * day-one disbursement takes `I` out of office cash, so it is refused when
-   * office cash holds less. The office-cash ledger row is locked to commit, so
-   * two disbursements cannot both spend the same rupees. A mid-term account is
-   * not checked — it was paid out before Rasi, and is history being entered.
+   * A loan is paid out of the money the owner put in (decided 2026-10-02), so
+   * a posting that takes `needed` out of office cash is refused when office
+   * cash holds less: `I` for a day-one disbursement, and for a mid-term account
+   * `I` less what was collected before Rasi — the net its opening takes
+   * (decided 2026-10-03). The office-cash ledger row is locked to commit, so
+   * two of them cannot both spend the same rupees. `refusal` words the error
+   * from what office cash holds.
    */
   private async requireCashInHand(
     tx: Tx,
-    account: {
-      organizationId: string;
-      accountCode: string;
-      investedAmount: Prisma.Decimal;
-    },
+    organizationId: string,
+    needed: Money,
+    refusal: (held: Money) => string,
   ): Promise<void> {
     const officeCash = await this.ledger.organizationAccount(
-      account.organizationId,
+      organizationId,
       'CASH_AT_OFFICE',
     );
     await tx.$queryRaw`SELECT id FROM ledger_account WHERE id = ${officeCash} FOR UPDATE`;
@@ -780,14 +921,15 @@ export class AccountService {
       select: { balance: true },
     });
     const held = toMoney(balance.toString());
-    const needed = toMoney(account.investedAmount.toString());
     if (held.lessThan(needed)) {
-      throw new DomainError(
-        'INSUFFICIENT_CASH_IN_HAND',
-        `Account ${account.accountCode} needs ₹${needed.toFixed(2)} paid out, but cash-in-hand holds ₹${held.toFixed(2)}; add capital first`,
-      );
+      throw new DomainError('INSUFFICIENT_CASH_IN_HAND', refusal(held));
     }
   }
+
+  /**
+   * BR-18's disbursement on `businessDate`: debit the account's new receivable
+   * `A`, credit office cash `I` and unearned profit `P`.
+   */
 
   private async postDisbursement(
     context: RequestContext,

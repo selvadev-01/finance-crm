@@ -103,7 +103,8 @@ export function SignInForm({
   const pending = form.formState.isSubmitting || leaving;
 
   return (
-    <Form form={form} onSubmit={submit}>
+    // The sign-in card is the whole page: its button spins, nothing blurs.
+    <Form form={form} onSubmit={submit} busy="inline">
       <FormRootError />
       <FormField<SignInValues> name="email" label="Email">
         <Input type="email" autoComplete="username" inputMode="email" />

@@ -305,6 +305,7 @@ function RetireBankDialog({
           Cancel
         </Button>
         <Button
+          aria-busy={pending || undefined}
           tone="primary"
           onClick={() => void confirm()}
           disabled={pending || holdsMoney}

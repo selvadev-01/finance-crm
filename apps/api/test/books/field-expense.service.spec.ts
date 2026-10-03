@@ -239,6 +239,57 @@ describe('field expenses (ADR-0018)', () => {
     });
   });
 
+  it('worked example: a spender holding ₹40 cannot have ₹50 approved, and nothing posts — but it can still be rejected', async () => {
+    await withRollback(prisma, async (tx) => {
+      const w = await world(tx);
+      // The Junior collected ₹1,000 and handed ₹960 on, so holds ₹40.
+      const handover = await w.handovers.handOver(
+        w.junior,
+        {
+          lineId: w.line.id,
+          businessDate: MONDAY,
+          counts: counts({ 500: 1, 200: 2, 50: 1, 10: 1 }),
+          note: 'Kept ₹40 for petrol',
+        },
+        evening,
+      );
+      await w.handovers.acknowledge(w.senior, handover.id, evening);
+      expect((await w.cash(w.junior.userId)).own).toBe('40.00');
+
+      const asked = await w.petrol(w.junior);
+      await expect(
+        w.field.decide(w.senior, asked.id, { decision: 'APPROVED' }, evening),
+      ).rejects.toMatchObject({
+        code: 'INSUFFICIENT_CASH_IN_HAND',
+        status: 422,
+      });
+      expect(
+        await tx.ledgerTransaction.count({
+          where: { sourceTable: 'expense', sourceId: asked.id },
+        }),
+      ).toBe(0);
+      expect((await w.cash(w.junior.userId)).own).toBe('40.00');
+
+      // ₹40 is enough for ₹40, and holding nothing is no bar to a rejection.
+      const smaller = await w.petrol(w.junior, '40');
+      await w.field.decide(
+        w.senior,
+        smaller.id,
+        { decision: 'APPROVED' },
+        evening,
+      );
+      expect((await w.cash(w.junior.userId)).own).toBe('0.00');
+      expect(
+        await w.field.decide(
+          w.senior,
+          asked.id,
+          { decision: 'REJECTED' },
+          evening,
+        ),
+      ).toMatchObject({ status: 'REJECTED' });
+    });
+  });
+
   it("nobody decides their own; a Senior's own goes to an Admin and comes off only the office hop", async () => {
     await withRollback(prisma, async (tx) => {
       const w = await world(tx);
@@ -261,8 +312,19 @@ describe('field expenses (ADR-0018)', () => {
         ),
       ).rejects.toMatchObject({ status: 404 });
 
+      // The Senior's petrol comes out of what they took from the Junior.
+      const handover = await w.handovers.handOver(
+        w.junior,
+        {
+          lineId: w.line.id,
+          businessDate: MONDAY,
+          counts: counts({ 500: 2 }),
+        },
+        evening,
+      );
+      await w.handovers.acknowledge(w.senior, handover.id, evening);
       await w.field.decide(w.admin, own.id, { decision: 'APPROVED' }, evening);
-      expect((await w.cash(w.senior.userId)).own).toBe('-80.00');
+      expect((await w.cash(w.senior.userId)).own).toBe('920.00');
       // The line's day counts the Junior hop only.
       expect(
         await w.dayCloses.view(w.senior, w.line.id, MONDAY, evening),

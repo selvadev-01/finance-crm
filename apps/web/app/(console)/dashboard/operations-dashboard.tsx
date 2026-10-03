@@ -47,6 +47,7 @@ import {
   moneyColumn,
   valueColumn,
 } from "../../../components/columns";
+import { AccountsAwaitingApproval } from "../../../components/accounts-awaiting-approval";
 import { ExportMenu } from "../../../components/export-menu";
 import { Money } from "../../../components/money";
 import { LoadFailed } from "../../../components/query-state";
@@ -313,6 +314,7 @@ export function OperationsDashboard({ date }: { date: string | undefined }) {
   return (
     <>
       {header(view)}
+      <AccountsAwaitingApproval />
       {view.day.kind !== "WORKING" ? (
         <FormMessage tone="info">
           {view.day.kind === "SUNDAY"

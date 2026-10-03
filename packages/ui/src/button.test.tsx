@@ -23,6 +23,21 @@ describe("Button", () => {
     );
   });
 
+  it("while busy, blurs the whole screen with a centred spinner and its label", async () => {
+    const { rerender } = render(
+      <Button aria-busy disabled>
+        Approving…
+      </Button>,
+    );
+    const overlay = await screen.findByRole("status");
+    expect(overlay).toHaveTextContent("Approving…");
+    expect(overlay.className).toContain("backdrop-blur");
+    expect(overlay.parentElement).toBe(document.body);
+
+    rerender(<Button>Approve</Button>);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("reads its height from the density variables, never a fixed size", () => {
     expect(buttonClass("primary")).toContain("h-[var(--control-height)]");
     expect(buttonClass("primary", undefined, "sm")).toContain(

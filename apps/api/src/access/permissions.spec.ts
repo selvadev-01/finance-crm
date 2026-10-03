@@ -25,6 +25,7 @@ const ROW_PERMISSIONS: Record<string, Permission | null> = {
   'Customers (M04) › View references': 'customer.viewReferences',
   'Accounts (M05) › List / view': 'account.view',
   'Accounts (M05) › Create': 'account.create',
+  'Accounts (M05) › Approve a Senior’s account': 'account.approve',
   'Accounts (M05) › Disburse': 'account.disburse',
   'Accounts (M05) › Update terms (pre-disbursement)': 'account.updateTerms',
   'Accounts (M05) › Mark `DEFAULTED` / `WRITTEN_OFF`': 'account.close',

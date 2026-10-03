@@ -27,6 +27,8 @@ import {
 } from '../platform/errors/errors.js';
 import { BooksMoneyService, mayDecideExpense } from './books-money.service.js';
 
+type Tx = Database['client'];
+
 /**
  * Books slice 3 (ADR-0018): field expenses — petrol, a tea for a customer's
  * family — paid from cash collected on the round.
@@ -37,7 +39,8 @@ import { BooksMoneyService, mayDecideExpense } from './books-money.service.js';
  *   from the spender's role, so a later promotion never moves it.
  * - **Decided** by someone else (decided 2026-09-24): a Junior's by the line's
  *   Senior or an Admin, a Senior's by an Admin only. No amount cap — the
- *   approval is the control.
+ *   approval is the control — but it is refused when the spender's cash in
+ *   hand holds less than the expense (decided 2026-10-03).
  * - **Approval posts** DR the category's EXPENSE / CR the spender's
  *   CASH_IN_HAND, so their cash in hand falls by what they spent; the handover
  *   then expects that much less, and the line's day counts it beside the cash
@@ -183,6 +186,21 @@ export class FieldExpenseService {
       const approved = input.decision === 'APPROVED';
       const amount = toMoney(row.amount.toString()).toFixed(2);
       const businessDate = fromUtcMidnight(row.businessDate);
+      // Approval only — a rejection moves no money, so it needs none held.
+      const spenderCash = approved
+        ? await this.ledger.cashInHand(
+            context.organizationId,
+            row.spenderUserId!,
+          )
+        : null;
+      if (spenderCash) {
+        await this.requireSpenderCash(
+          tx,
+          spenderCash,
+          row.spenderUserId!,
+          amount,
+        );
+      }
       await tx.expense.update({
         where: { id: row.id },
         data: {
@@ -192,7 +210,7 @@ export class FieldExpenseService {
           decisionNote: input.note ?? null,
         },
       });
-      if (approved) {
+      if (spenderCash) {
         await this.ledger.post(context, {
           transactionType: 'EXPENSE',
           source: { table: 'expense', id: row.id },
@@ -209,10 +227,7 @@ export class FieldExpenseService {
               amount,
             },
             {
-              ledgerAccountId: await this.ledger.cashInHand(
-                context.organizationId,
-                row.spenderUserId!,
-              ),
+              ledgerAccountId: spenderCash,
               direction: 'CREDIT',
               amount,
             },
@@ -250,6 +265,36 @@ export class FieldExpenseService {
       });
     });
     return this.money.getExpense(context, expenseId);
+  }
+
+  /**
+   * An approved field expense comes out of cash the spender is holding, so it
+   * is refused when they hold less (decided 2026-10-03) — otherwise their cash
+   * in hand goes below zero for money they never had. Their ledger row is
+   * locked to commit, so two approvals cannot both spend the same rupees.
+   */
+  private async requireSpenderCash(
+    tx: Tx,
+    ledgerAccountId: string,
+    spenderUserId: string,
+    amount: string,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM ledger_account WHERE id = ${ledgerAccountId} FOR UPDATE`;
+    const { balance } = await tx.ledgerAccount.findUniqueOrThrow({
+      where: { id: ledgerAccountId },
+      select: { balance: true },
+    });
+    const held = toMoney(balance.toString());
+    if (held.lessThan(amount)) {
+      const spender = await tx.user.findUniqueOrThrow({
+        where: { id: spenderUserId },
+        select: { name: true },
+      });
+      throw new DomainError(
+        'INSUFFICIENT_CASH_IN_HAND',
+        `${spender.name} holds ₹${held.toFixed(2)} in cash in hand, so a ₹${amount} expense cannot be approved from it`,
+      );
+    }
   }
 }
 
