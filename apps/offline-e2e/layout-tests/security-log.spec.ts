@@ -90,7 +90,7 @@ const staffList = {
         role: "ADMIN",
         status: "ACTIVE",
         joinedAt: "2026-01-01",
-        currentAssignment: null,
+        currentAssignments: [],
       },
     ],
     nextCursor: null,

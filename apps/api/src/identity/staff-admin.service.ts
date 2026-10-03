@@ -307,11 +307,14 @@ export class StaffAdminService {
     return this.database.transaction(async (tx) => {
       // Read inside the transaction: an assignment made concurrently must
       // either be seen here or wait for this row.
-      const { openAssignment: open } = await this.duty(tx, target.id, today);
-      if (open && open.assignmentRole !== role) {
+      const { openAssignments } = await this.duty(tx, target.id, today);
+      const open = openAssignments.find(
+        (assignment) => assignment.assignmentRole !== role,
+      );
+      if (open) {
         throw new DomainError(
           'STAFF_HAS_OPEN_ASSIGNMENT',
-          `They are the ${ROLE_LABEL[open.assignmentRole]} on ${open.lineName}. Assign someone else to that line first.`,
+          `They are the ${ROLE_LABEL[open.assignmentRole]} on ${open.lineName}. Take them off that line first.`,
           [
             {
               field: 'role',
@@ -392,8 +395,12 @@ export class StaffAdminService {
         after: {
           status: input.status,
           sessionsRevoked: revoked.count,
-          ...(losingAccess && duty.openAssignment
-            ? { openAssignmentLeft: duty.openAssignment.lineId }
+          ...(losingAccess && duty.openAssignments.length > 0
+            ? {
+                openAssignmentsLeft: duty.openAssignments.map(
+                  (assignment) => assignment.lineId,
+                ),
+              }
             : {}),
           ...(losingAccess && duty.unsyncedWork
             ? { unsyncedAtChange: duty.unsyncedWork.unsentCount }
@@ -403,7 +410,7 @@ export class StaffAdminService {
       return {
         staff: await this.directory.get(context, target.id, today),
         sessionsRevoked: revoked.count,
-        openAssignment: losingAccess ? duty.openAssignment : null,
+        openAssignments: losingAccess ? duty.openAssignments : [],
         unsyncedWork: losingAccess ? duty.unsyncedWork : null,
       };
     });
@@ -484,8 +491,8 @@ export class StaffAdminService {
   }
 
   /**
-   * What the staff member would leave behind: the line assignment still open
-   * or starting later, and the collections their phone has not sent (M08).
+   * What the staff member would leave behind: every line assignment still
+   * open or starting later, and the collections their phone has not sent (M08).
    */
   private async duty(
     tx: Tx,
@@ -493,8 +500,8 @@ export class StaffAdminService {
     today: CalendarDate,
   ): Promise<StaffDuty> {
     const day = toUtcMidnight(today);
-    const [assignment, report] = await Promise.all([
-      tx.lineAssignment.findFirst({
+    const [assignments, report] = await Promise.all([
+      tx.lineAssignment.findMany({
         where: {
           staffProfileId,
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: day } }],
@@ -507,7 +514,7 @@ export class StaffAdminService {
           effectiveTo: true,
           line: { select: { code: true, name: true } },
         },
-        orderBy: [{ effectiveFrom: 'desc' }, { id: 'desc' }],
+        orderBy: [{ line: { code: 'asc' } }, { effectiveFrom: 'asc' }],
       }),
       tx.deviceSyncReport.findFirst({
         where: { staffProfileId, unsentCount: { gt: 0 } },
@@ -520,19 +527,17 @@ export class StaffAdminService {
     ]);
 
     return {
-      openAssignment: assignment
-        ? {
-            assignmentId: assignment.id,
-            lineId: assignment.lineId,
-            lineCode: assignment.line.code,
-            lineName: assignment.line.name,
-            assignmentRole: assignment.assignmentRole,
-            effectiveFrom: fromUtcMidnight(assignment.effectiveFrom),
-            effectiveTo: assignment.effectiveTo
-              ? fromUtcMidnight(assignment.effectiveTo)
-              : null,
-          }
-        : null,
+      openAssignments: assignments.map((assignment) => ({
+        assignmentId: assignment.id,
+        lineId: assignment.lineId,
+        lineCode: assignment.line.code,
+        lineName: assignment.line.name,
+        assignmentRole: assignment.assignmentRole,
+        effectiveFrom: fromUtcMidnight(assignment.effectiveFrom),
+        effectiveTo: assignment.effectiveTo
+          ? fromUtcMidnight(assignment.effectiveTo)
+          : null,
+      })),
       unsyncedWork: report
         ? {
             unsentCount: report.unsentCount,
@@ -650,10 +655,10 @@ function mayNotActOn(
 /** Rule 3: what the Admin must acknowledge before access is taken away. */
 function assertOffDuty(name: string, duty: StaffDuty): void {
   const details = [];
-  if (duty.openAssignment) {
+  for (const assignment of duty.openAssignments) {
     details.push({
       field: 'acknowledgeOnDuty',
-      issue: `${name} is still the ${ROLE_LABEL[duty.openAssignment.assignmentRole]} on ${duty.openAssignment.lineName} (${duty.openAssignment.lineCode})`,
+      issue: `${name} is still the ${ROLE_LABEL[assignment.assignmentRole]} on ${assignment.lineName} (${assignment.lineCode})`,
     });
   }
   if (duty.unsyncedWork) {

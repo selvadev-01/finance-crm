@@ -8,7 +8,12 @@ import {
   toUtcMidnight,
 } from '@repo/domain';
 
-import { expenseScope, foundInScope, inScope } from '../access/scope.js';
+import {
+  expenseScope,
+  foundInScope,
+  inScope,
+  isOwnLine,
+} from '../access/scope.js';
 import { AuditWriter } from '../audit/audit.writer.js';
 import { DayCloseService } from '../cash/day-close.service.js';
 import { LedgerService } from '../ledger/ledger.service.js';
@@ -26,7 +31,8 @@ import { BooksMoneyService, mayDecideExpense } from './books-money.service.js';
  * Books slice 3 (ADR-0018): field expenses — petrol, a tea for a customer's
  * family — paid from cash collected on the round.
  *
- * - **Requested** by a Junior or a Senior for their current line, today. It
+ * - **Requested** by a Junior or a Senior for one of their current lines,
+ *   today (they name it when they work several). It
  *   waits `PENDING` and posts nothing; the hop it comes out of is fixed now,
  *   from the spender's role, so a later promotion never moves it.
  * - **Decided** by someone else (decided 2026-09-24): a Junior's by the line's
@@ -53,16 +59,15 @@ export class FieldExpenseService {
 
   async request(
     context: RequestContext,
-    input: { categoryId: string; amount: string; note: string },
+    input: {
+      categoryId: string;
+      amount: string;
+      note: string;
+      lineId?: string | undefined;
+    },
     today: CalendarDate = toBusinessDate(new Date()),
   ): Promise<Expense> {
-    const lineId = context.currentLineId;
-    if (lineId === null) {
-      throw new DomainError(
-        'NOT_ON_A_LINE',
-        'You are not assigned to a line today, so there is no round to spend for',
-      );
-    }
+    const lineId = spentOn(context, input.lineId);
     const hop =
       context.role === 'JUNIOR' ? 'JUNIOR_TO_SENIOR' : 'SENIOR_TO_OFFICE';
     const amount = toMoney(input.amount).toFixed(2);
@@ -246,4 +251,29 @@ export class FieldExpenseService {
     });
     return this.money.getExpense(context, expenseId);
   }
+}
+
+/**
+ * The line a field expense is charged to: the one named, which must be one of
+ * the spender's lines today, or their only line. A Senior or Junior on several
+ * lines (decided 2026-10-03) must say which — the expense comes out of that
+ * line's handover.
+ */
+function spentOn(context: RequestContext, lineId: string | undefined): string {
+  const lines = context.currentLineIds;
+  if (lines.length === 0) {
+    throw new DomainError(
+      'NOT_ON_A_LINE',
+      'You are not assigned to a line today, so there is no round to spend for',
+    );
+  }
+  if (lineId === undefined) {
+    if (lines.length === 1) return lines[0]!;
+    throw new DomainError(
+      'LINE_REQUIRED',
+      'You work more than one line today; choose the line you spent this on',
+      [{ field: 'lineId', issue: 'is required when you work several lines' }],
+    );
+  }
+  return foundInScope(isOwnLine(context, lineId) ? lineId : null, 'line');
 }

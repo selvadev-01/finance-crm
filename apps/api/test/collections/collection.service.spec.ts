@@ -53,14 +53,14 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
       staffProfileId: admin.id,
       organizationId,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const juniorContext: RequestContext = {
       ...adminContext,
       userId: junior.userId,
       staffProfileId: junior.id,
       role: 'JUNIOR',
-      currentLineId: line.id,
+      currentLineIds: [line.id],
     };
     const database = new Database(tx);
     const audit = new AuditWriter(database);
@@ -381,7 +381,7 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
         });
         await expect(
           w.collections.record(
-            { ...w.juniorContext, currentLineId: elsewhere.id },
+            { ...w.juniorContext, currentLineIds: [elsewhere.id] },
             {
               idempotencyKey: randomUUID(),
               accountLoanId: account.id,
@@ -524,6 +524,71 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
   });
 
   describe('US-040 route', () => {
+    it('a Junior on two lines in two sectors: a holiday rests one line, and the other still collects (decided 2026-10-03)', async () => {
+      await withRollback(prisma, async (tx) => {
+        const w = await world(tx);
+        const account = await w.account();
+        const otherSector = await tx.sector.create({
+          data: {
+            organizationId: w.organizationId,
+            code: `S-${randomUUID()}`,
+            name: 'Other sector',
+          },
+        });
+        const other = await tx.line.create({
+          data: {
+            organizationId: w.organizationId,
+            sectorId: otherSector.id,
+            code: `L-${randomUUID()}`,
+            name: 'Line 9',
+          },
+        });
+        const onTwo: RequestContext = {
+          ...w.juniorContext,
+          currentLineIds: [w.line.id, other.id],
+        };
+        const monday = parseCalendarDate('2026-01-05');
+
+        // A holiday for the other line's sector only: this line works.
+        await tx.holiday.create({
+          data: {
+            organizationId: w.organizationId,
+            sectorId: otherSector.id,
+            date: toUtcMidnight(monday),
+            name: 'Pongal',
+          },
+        });
+        const working = await w.routes.route(onTwo, monday);
+        expect(working.day).toEqual({ kind: 'WORKING' });
+        expect(
+          working.lines.map((line) => [line.lineId, line.holiday]).sort(),
+        ).toEqual(
+          [
+            [w.line.id, null],
+            [other.id, 'Pongal'],
+          ].sort(),
+        );
+        expect(
+          working.customers.flatMap((c) =>
+            c.accounts.map((a) => a.accountLoanId),
+          ),
+        ).toEqual([account.id]);
+
+        // The same holiday for this line's sector too: every line rests.
+        await tx.holiday.create({
+          data: {
+            organizationId: w.organizationId,
+            sectorId: w.sector.id,
+            date: toUtcMidnight(monday),
+            name: 'Pongal',
+          },
+        });
+        const resting = await w.routes.route(onTwo, monday);
+        expect(resting.day).toEqual({ kind: 'HOLIDAY', name: 'Pongal' });
+        expect(resting.customers).toEqual([]);
+      });
+    });
+
     it('lists accounts due today grouped by customer, with expected and outstanding and what was collected today', async () => {
       await withRollback(prisma, async (tx) => {
         const w = await world(tx);
@@ -544,8 +609,17 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
           parseCalendarDate('2026-01-05'),
         );
         expect(route.day).toEqual({ kind: 'WORKING' });
-        // The field app names the line it is working (J-01, J-08).
-        expect(route.line).toEqual({ code: w.line.code, name: w.line.name });
+        // The field app names the lines it is working (J-01, J-08), and which
+        // one each customer is on.
+        expect(route.lines).toEqual([
+          {
+            lineId: w.line.id,
+            code: w.line.code,
+            name: w.line.name,
+            holiday: null,
+          },
+        ]);
+        expect(route.customers.every((c) => c.lineId === w.line.id)).toBe(true);
         const group = route.customers.find((c) => c.customerId === both.id)!;
         expect(group.accounts.map((a) => a.expectedAmount).sort()).toEqual([
           '100.00',
@@ -836,7 +910,7 @@ describe('CollectionService (US-041, US-053, US-033)', () => {
             ...w.juniorContext,
             userId: newJunior.userId,
             staffProfileId: newJunior.id,
-            currentLineId: destination.id,
+            currentLineIds: [destination.id],
           },
           {
             idempotencyKey: randomUUID(),

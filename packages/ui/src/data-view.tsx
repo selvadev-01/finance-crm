@@ -124,7 +124,7 @@ export function DataView<Row>({
   const tableRows = table.getRowModel().rows;
 
   return (
-    <div className={className}>
+    <div data-tour="list" className={className}>
       <div className={cn("hidden overflow-x-auto md:block", surface)}>
         <table className="w-full border-collapse text-body">
           <caption className="sr-only">{caption}</caption>
@@ -330,7 +330,10 @@ export function FilterBar({
   const [open, setOpen] = useState(false);
   const panelId = useId();
   return (
-    <div className="flex flex-col gap-3 rounded-surface border border-border bg-surface-raised p-3 shadow-raised md:flex-row md:flex-wrap md:items-end">
+    <div
+      data-tour="filters"
+      className="flex flex-col gap-3 rounded-surface border border-border bg-surface-raised p-3 shadow-raised md:flex-row md:flex-wrap md:items-end"
+    >
       {children ? (
         <div className="flex items-center gap-2 md:hidden">
           <button

@@ -47,6 +47,7 @@ export function PageHeader({
   const above = trail ?? eyebrow;
   return (
     <header
+      data-tour="page-header"
       className={cn(
         "flex flex-wrap items-end justify-between gap-x-6 gap-y-3",
         frame === "ruled" && "border-b border-border pb-5",
@@ -72,10 +73,20 @@ export function PageHeader({
       {actions || summary ? (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           {summary ? (
-            <div className="hidden items-center gap-5 md:flex">{summary}</div>
+            <div
+              data-tour="page-summary"
+              className="hidden items-center gap-5 md:flex"
+            >
+              {summary}
+            </div>
           ) : null}
           {actions ? (
-            <div className="flex flex-wrap items-center gap-2">{actions}</div>
+            <div
+              data-tour="page-actions"
+              className="flex flex-wrap items-center gap-2"
+            >
+              {actions}
+            </div>
           ) : null}
         </div>
       ) : null}

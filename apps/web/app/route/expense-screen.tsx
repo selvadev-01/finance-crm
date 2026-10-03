@@ -66,8 +66,18 @@ const MONEY = /^\d{1,9}(\.\d{1,2})?$/;
  * **Needs signal**, like a correction: someone has to approve it, and an
  * expense waiting unseen on a phone would leave the count short with nobody
  * knowing why.
+ *
+ * A Junior on several lines (decided 2026-10-03) says which line's cash paid
+ * for it: that line's handover is the one it comes off.
  */
-export function ExpenseScreen({ connected }: { connected: boolean }) {
+export function ExpenseScreen({
+  connected,
+  lines,
+}: {
+  connected: boolean;
+  /** The Junior's lines today, from the route. */
+  lines: ReadonlyArray<{ lineId: string; code: string; name: string }>;
+}) {
   const [categories, setCategories] = useState<ExpenseCategory[] | null>(null);
   const [mine, setMine] = useState<Expense[] | null>(null);
   const [position, setPosition] = useState<CashPosition | null>(null);
@@ -77,6 +87,7 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
     defaultValues: { categoryId: "", amount: "", note: "" },
   });
   const amount = useWatch({ control: form.control, name: "amount" }) ?? "";
+  const lineId = useWatch({ control: form.control, name: "lineId" });
   const saving = form.formState.isSubmitting;
   // A second tap must not ask twice.
   const inFlight = useRef(false);
@@ -122,7 +133,7 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
     inFlight.current = false;
     if (!result.ok) {
       return applyWriteFailure(form.setError, result, {
-        fields: ["categoryId", "amount", "note"],
+        fields: ["categoryId", "amount", "note", "lineId"],
         fallback: "Not sent. Try again.",
       });
     }
@@ -205,6 +216,7 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
               onSubmit={submit}
               className={cn(cardClass, "flex flex-col gap-5 p-4")}
             >
+              {lines.length > 1 ? <LineChoice lines={lines} /> : null}
               <CategoryTiles categories={categories} />
               <div className="flex flex-col gap-2">
                 <FormField
@@ -259,7 +271,13 @@ export function ExpenseScreen({ connected }: { connected: boolean }) {
               >
                 <Textarea rows={2} maxLength={500} />
               </FormField>
-              <HandoverPreview position={position} amount={amount} />
+              {lines.length <= 1 || lineId ? (
+                <HandoverPreview
+                  position={position}
+                  amount={amount}
+                  lineId={lineId}
+                />
+              ) : null}
               <FormRootError />
             </Form>
           ) : null}
@@ -361,19 +379,90 @@ function CategoryTiles({ categories }: { categories: ExpenseCategory[] }) {
 }
 
 /**
+ * Which line's cash paid: one radio per line, the form's `lineId`. Shown only
+ * to a Junior on several lines; with one, the API knows the line.
+ */
+function LineChoice({
+  lines,
+}: {
+  lines: ReadonlyArray<{ lineId: string; code: string; name: string }>;
+}) {
+  const { field } = useController<{ lineId?: string }, "lineId">({
+    name: "lineId",
+  });
+  const { errors } = useFormState<{ lineId?: string }>({ name: "lineId" });
+  const error = errors.lineId
+    ? (errors.lineId.message ?? "Choose the line.")
+    : undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      <span id="expense-line" className="text-sm font-medium text-ink">
+        Line
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby="expense-line"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? "expense-line-error" : undefined}
+        className="flex flex-col gap-2"
+      >
+        {lines.map((line, index) => {
+          const selected = line.lineId === field.value;
+          return (
+            <button
+              key={line.lineId}
+              ref={
+                selected || (index === 0 && !field.value)
+                  ? field.ref
+                  : undefined
+              }
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => field.onChange(line.lineId)}
+              className={cn(
+                "flex min-h-12 items-center gap-2 rounded-surface border px-3 py-2 text-left text-sm transition-colors",
+                selected
+                  ? "border-accent bg-accent-subtle font-medium text-accent"
+                  : error
+                    ? "border-critical-border bg-surface-raised text-ink"
+                    : "border-border bg-surface-raised text-ink",
+              )}
+            >
+              <span className="font-mono">{line.code}</span> · {line.name}
+            </button>
+          );
+        })}
+      </div>
+      {error ? (
+        <p id="expense-line-error" className="text-sm text-critical">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * What approval changes: today's cash still to hand over, before and after.
  * Shown only when today's position is known and the amount reads as money.
  */
 function HandoverPreview({
   position,
   amount,
+  lineId,
 }: {
   position: CashPosition | null;
   amount: string;
+  /** The line chosen, for a Junior on several; otherwise every line's. */
+  lineId: string | undefined;
 }) {
   const today = toBusinessDate(new Date());
   const items = (position?.items ?? []).filter(
-    (item) => item.businessDate === today && item.hop === "JUNIOR_TO_SENIOR",
+    (item) =>
+      item.businessDate === today &&
+      item.hop === "JUNIOR_TO_SENIOR" &&
+      (lineId === undefined || item.lineId === lineId),
   );
   const trimmed = amount.trim();
   if (items.length === 0 || !MONEY.test(trimmed)) return null;

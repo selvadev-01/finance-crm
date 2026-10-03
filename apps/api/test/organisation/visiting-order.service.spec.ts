@@ -46,7 +46,7 @@ describe('VisitingOrderService (US-040)', () => {
       staffProfileId: staff.id,
       organizationId: organization.id,
       role,
-      currentLineId,
+      currentLineIds: currentLineId ? [currentLineId] : [],
     });
     /** Codes sort in the order the customers are made: A, B, C. */
     const prefix = `C-${randomUUID()}`;

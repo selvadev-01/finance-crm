@@ -353,7 +353,7 @@ describe('LineWiseReportService (US-084)', () => {
 
       // A Senior with no line today sees no lines, not everyone's.
       const unassigned = await w.lineWise.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         range,
         WEDNESDAY_EVENING,
       );

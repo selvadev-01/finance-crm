@@ -42,7 +42,7 @@ describe('StaffPasswordService (US-003)', () => {
       staffProfileId: actor.id,
       organizationId: organization.id,
       role: actorRole,
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     const service = new StaffPasswordService(

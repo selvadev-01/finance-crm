@@ -328,7 +328,11 @@ export class EventNotices {
     });
   }
 
-  /** M03: the person assigned, and the Seniors of the lines involved. */
+  /**
+   * M03: the person assigned, and the line's Senior today. Being assigned
+   * here takes them off no other line (decided 2026-10-03), so no other
+   * line's Senior has anything to hear.
+   */
   async assignmentMade(event: {
     actorUserId: string;
     staffUserId: string;
@@ -336,15 +340,10 @@ export class EventNotices {
     lineId: string;
     lineName: string;
     effectiveFrom: CalendarDate;
-    previousLineIds: string[];
   }): Promise<void> {
     const tx = this.database.client;
     const today = toBusinessDate(new Date());
-    const seniors = await Promise.all(
-      [event.lineId, ...event.previousLineIds].map((lineId) =>
-        this.recipients.seniorOf(tx, lineId, today),
-      ),
-    );
+    const seniors = [await this.recipients.seniorOf(tx, event.lineId, today)];
     const name = await this.recipients.nameOf(tx, event.staffUserId);
     await this.notifications.raise({
       recipients: [event.staffUserId, ...seniors],

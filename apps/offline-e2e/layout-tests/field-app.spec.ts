@@ -156,11 +156,13 @@ const account = (
 const route = {
   businessDate: TODAY,
   day: { kind: "WORKING" },
-  lineId: "line-7",
-  line: { code: "LN-07", name: "Market Road" },
+  lines: [
+    { lineId: "line-7", code: "LN-07", name: "Market Road", holiday: null },
+  ],
   customers: [
     {
       customerId: "cus-lakshmi",
+      lineId: "line-7",
       customerCode: "CUS-00412",
       name: "Lakshmi Ammal",
       address: "12, Gandhi St, Ward 4",
@@ -169,6 +171,7 @@ const route = {
     },
     {
       customerId: "cus-ravi",
+      lineId: "line-7",
       customerCode: "CUS-00587",
       name: "Ravi Shankar",
       address: "3/7 Market Road",
@@ -180,6 +183,7 @@ const route = {
     },
     {
       customerId: "cus-meena",
+      lineId: "line-7",
       customerCode: "CUS-00874",
       name: "Meena Stores",
       address: "Bazaar Main Rd",
@@ -927,5 +931,107 @@ test.describe("J-11 field expense (ADR-0018) at 360px", () => {
       page.getByText("₹50.00 approved expenses taken off"),
     ).toBeVisible();
     await expect(page.getByText("₹8,400.00", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("the field app's screen tours at 360px", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() =>
+      window.localStorage.removeItem("rasi.tour.language"),
+    );
+  });
+
+  const tourCard = (page: Page) => page.getByTestId("tour").getByRole("dialog");
+
+  async function inside360(page: Page, where: string) {
+    const box = await tourCard(page).boundingBox();
+    expect(box, where).not.toBeNull();
+    expect(box!.x, where).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, where).toBeLessThanOrEqual(PHONE.width);
+    expect(box!.y, where).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height, where).toBeLessThanOrEqual(PHONE.height);
+  }
+
+  test("the route's tour starts only on the button and walks the home screen", async ({
+    page,
+  }) => {
+    await openFieldApp(page);
+    await expect(page.getByTestId("tour")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Tour of this screen" }).click();
+    await expect(tourCard(page)).toHaveAccessibleName("Your day's route");
+    await expect(tourCard(page)).toContainText("Step 1 of 6");
+
+    const titles = [
+      "Is my day safe?",
+      "Everything you do",
+      "Today's route",
+      "The bottom bar",
+      "Tour any screen",
+    ];
+    for (const title of titles) {
+      await tourCard(page)
+        .getByRole("button", { name: "Next", exact: true })
+        .click();
+      await expect(tourCard(page)).toHaveAccessibleName(title);
+      await inside360(page, title);
+    }
+    await tourCard(page).getByRole("button", { name: "Got it" }).click();
+    await expect(page.getByTestId("tour")).toHaveCount(0);
+    await noSidewaysScroll(page, "the route after its tour");
+  });
+
+  // Each view with its first step and how many it has: a step whose part is
+  // missing from the screen would be skipped silently, so the count is held.
+  for (const [view, first, testId, steps] of [
+    ["#collect/cus-lakshmi", "At the customer's door", "collect", 3],
+    ["#customers", "Your line's customers", "customers", 3],
+    // Nothing recorded on this phone yet, so the step about a row is left out.
+    ["#collections", "Today's collections", "collections", 2],
+    ["#handover", "Hand over the cash", "handover", 3],
+    ["#sync", "What's on this phone", "sync", 2],
+    ["#profile", "You and this phone", "profile", 2],
+  ] as const) {
+    test(`${view} has its own tour`, async ({ page }) => {
+      await openFieldApp(page);
+      await page.goto(`/route${view}`);
+      await expect(page.getByTestId(testId)).toBeVisible({ timeout: 30_000 });
+
+      await page.getByRole("button", { name: "Tour of this screen" }).click();
+      await expect(tourCard(page)).toHaveAccessibleName(first);
+      await expect(tourCard(page)).toContainText(`Step 1 of ${steps}`);
+      // Every step, not just the first: a tall part leaves no room beside it.
+      for (let step = 1; step <= 6; step += 1) {
+        await inside360(page, `${view}, step ${step}`);
+        await noSidewaysScroll(page, `${view} on its tour`);
+        const next = tourCard(page).getByRole("button", {
+          name: "Next",
+          exact: true,
+        });
+        if ((await next.count()) === 0) break;
+        await next.click();
+      }
+      await tourCard(page).getByRole("button", { name: "Got it" }).click();
+      await expect(page.getByTestId("tour")).toHaveCount(0);
+    });
+  }
+
+  test("speaks Tanglish when asked, on the Junior's screens too", async ({
+    page,
+  }) => {
+    await openFieldApp(page);
+    await page.goto("/route#collect/cus-lakshmi");
+    await expect(page.getByTestId("collect")).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole("button", { name: "Tour of this screen" }).click();
+    await tourCard(page).getByRole("button", { name: "Tanglish" }).click();
+    await expect(tourCard(page)).toHaveAccessibleName(
+      "Customer veettu vaasal-la",
+    );
+    await tourCard(page)
+      .getByRole("button", { name: "Next", exact: true })
+      .click();
+    await expect(tourCard(page)).toHaveAccessibleName("Evlo kodukkanum");
+    await inside360(page, "Tanglish on collect");
   });
 });

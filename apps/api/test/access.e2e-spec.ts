@@ -359,7 +359,7 @@ describe('server-side scope enforcement (US-004, e2e)', () => {
         staffProfileId: junior.staffProfileId,
         organizationId,
         role: 'JUNIOR',
-        currentLineId: rows.line3,
+        currentLineIds: [rows.line3],
       });
     });
   });

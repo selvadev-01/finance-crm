@@ -35,7 +35,7 @@ describe('SecurityEventsService (ADR-0014)', () => {
       staffProfileId: actor.id,
       organizationId: organization.id,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const service = new SecurityEventsService(new Database(tx));
 

@@ -104,7 +104,7 @@ describe('request context and data scope (US-004)', () => {
           staffProfileId: senior.id,
           organizationId: organization.id,
           role: 'SENIOR',
-          currentLineId: line7.id,
+          currentLineIds: [line7.id],
         });
       });
     });
@@ -133,8 +133,28 @@ describe('request context and data scope (US-004)', () => {
           'req_test',
           parseCalendarDate('2026-09-14'),
         );
-        expect(today?.currentLineId).toBe(line3.id);
-        expect(tomorrow?.currentLineId).toBe(line7.id);
+        expect(today?.currentLineIds).toEqual([line3.id]);
+        expect(tomorrow?.currentLineIds).toEqual([line7.id]);
+      });
+    });
+
+    it('a staff member on several lines at once resolves to all of them', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { line: first, organization } = await createActiveAccount(tx);
+        const { line: second } = await createActiveAccount(tx);
+        const junior = await createStaff(tx, organization.id, 'JUNIOR');
+        await assign(tx, junior.id, second.id, 'JUNIOR', '2026-01-01');
+        await assign(tx, junior.id, first.id, 'JUNIOR', '2026-02-01');
+        // Added "effective tomorrow": not one of today's lines yet.
+        const { line: later } = await createActiveAccount(tx);
+        await assign(tx, junior.id, later.id, 'JUNIOR', '2026-09-14');
+
+        const context = await new RequestContextResolver(
+          new Database(tx),
+        ).resolve(junior.userId, 'req_test', TODAY);
+        expect([...(context?.currentLineIds ?? [])].sort()).toEqual(
+          [first.id, second.id].sort(),
+        );
       });
     });
 
@@ -147,7 +167,7 @@ describe('request context and data scope (US-004)', () => {
         const context = await new RequestContextResolver(
           new Database(tx),
         ).resolve(senior.userId, 'req_test', TODAY);
-        expect(context?.currentLineId).toBeNull();
+        expect(context?.currentLineIds).toEqual([]);
       });
     });
 
@@ -167,7 +187,7 @@ describe('request context and data scope (US-004)', () => {
         const context = await new RequestContextResolver(
           new Database(tx),
         ).resolve(junior.userId, 'req_test', TODAY);
-        expect(context?.currentLineId).toBeNull();
+        expect(context?.currentLineIds).toEqual([]);
       });
     });
 
@@ -263,6 +283,54 @@ describe('request context and data scope (US-004)', () => {
           select: { id: true },
         });
         expect(customers).toEqual([{ id: seven.customer.id }]);
+      });
+    });
+
+    it('a Senior on two lines sees the customers and collections of both, and none of a third', async () => {
+      await withRollback(prisma, async (tx) => {
+        const three = await createActiveAccount(tx);
+        const seven = await createActiveAccount(tx);
+        const nine = await createActiveAccount(tx);
+        const collector = await createUser(tx);
+        const rows = await Promise.all(
+          [three, seven, nine].map((world) =>
+            recordCollection(
+              tx,
+              world.account.id,
+              world.line.id,
+              collector.id,
+              '2026-09-12',
+            ),
+          ),
+        );
+
+        const senior = await createStaff(tx, three.organization.id, 'SENIOR');
+        await assign(tx, senior.id, three.line.id, 'SENIOR', '2026-01-01');
+        await assign(tx, senior.id, seven.line.id, 'SENIOR', '2026-09-01');
+
+        const context = await new RequestContextResolver(
+          new Database(tx),
+        ).resolve(senior.userId, 'req_test', TODAY);
+        if (!context) throw new Error('expected a context');
+
+        const ids = [three, seven, nine].map((world) => world.customer.id);
+        const customers = await tx.customer.findMany({
+          where: inScope(customerScope(context), { id: { in: ids } }),
+          select: { id: true },
+        });
+        expect(customers.map((row) => row.id).sort()).toEqual(
+          [three.customer.id, seven.customer.id].sort(),
+        );
+
+        const visible = await tx.collection.findMany({
+          where: inScope(collectionScope(context), {
+            id: { in: rows.map((row) => row.id) },
+          }),
+          select: { id: true },
+        });
+        expect(visible.map((row) => row.id).sort()).toEqual(
+          [rows[0]!.id, rows[1]!.id].sort(),
+        );
       });
     });
 

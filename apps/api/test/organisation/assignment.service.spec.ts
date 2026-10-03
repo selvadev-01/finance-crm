@@ -51,7 +51,7 @@ describe('AssignmentService (US-012, US-013)', () => {
       staffProfileId: admin.id,
       organizationId,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     const service = new AssignmentService(
@@ -108,7 +108,6 @@ describe('AssignmentService (US-012, US-013)', () => {
           effectiveFrom: '2026-09-13',
           effectiveTo: null,
         });
-        expect(result.linesWithoutSenior).toEqual([]);
         expect(
           await tx.lineAssignment.count({ where: { lineId: three.line.id } }),
         ).toBe(2);
@@ -174,7 +173,7 @@ describe('AssignmentService (US-012, US-013)', () => {
   });
 
   describe('Scenario: mid-term reassignment preserves history (US-013, BR-15)', () => {
-    it('moving Suresh to Line 7 effective tomorrow closes Line 3 today, and his 400 collections stay on Line 3', async () => {
+    it('moving Suresh to Line 7 from tomorrow — Line 7 added, Line 3 ended today — leaves his 400 collections on Line 3', async () => {
       await withRollback(prisma, async (tx) => {
         const { three, seven, context, service, open, organizationId } =
           await world(tx);
@@ -213,13 +212,16 @@ describe('AssignmentService (US-012, US-013)', () => {
           staffProfileId: suresh.id,
           effectiveFrom: '2026-09-14',
         });
+        // Being added to Line 7 takes him off nothing (decided 2026-10-03).
+        expect(result.closed).toEqual([]);
 
-        expect(result.closed).toEqual([
-          expect.objectContaining({
-            id: onThree.id,
-            effectiveTo: '2026-09-13',
-          }),
-        ]);
+        const ended = await service.end(context, onThree.id, {
+          effectiveTo: '2026-09-13',
+        });
+        expect(ended).toMatchObject({
+          id: onThree.id,
+          effectiveTo: '2026-09-13',
+        });
         const after = await lineThreeTotals();
         expect(after._count).toBe(400);
         expect(after._sum.amount?.toString()).toBe(
@@ -245,7 +247,7 @@ describe('AssignmentService (US-012, US-013)', () => {
           staffProfileId: junior.id,
           effectiveFrom: '2026-09-13',
         });
-        expect(result).toMatchObject({ closed: [], linesWithoutSenior: [] });
+        expect(result).toMatchObject({ closed: [] });
         const told = await tx.notification.findMany({
           where: { userId: junior.userId },
         });
@@ -263,29 +265,53 @@ describe('AssignmentService (US-012, US-013)', () => {
     });
   });
 
-  describe('a Senior who already runs another line (decided 2026-09-13: allowed, reported)', () => {
-    it('moving Rajan from Line 5 to Line 3 reports Line 5 as left without a Senior', async () => {
+  describe('staff on several lines (decided 2026-10-03)', () => {
+    it('assigning Rajan to Line 3 keeps him the Senior of Line 5', async () => {
       await withRollback(prisma, async (tx) => {
         const { three, five, context, service, open, organizationId } =
           await world(tx);
         const rajan = await createStaff(tx, organizationId, 'SENIOR');
-        await open(rajan.id, five.id, 'SENIOR', '2026-01-01');
+        const onFive = await open(rajan.id, five.id, 'SENIOR', '2026-01-01');
 
         const result = await service.assignSenior(context, three.line.id, {
           staffProfileId: rajan.id,
           effectiveFrom: '2026-09-13',
         });
 
-        expect(result.linesWithoutSenior).toEqual([five.id]);
+        expect(result.closed).toEqual([]);
+        const current = await tx.lineAssignment.findMany({
+          where: { staffProfileId: rajan.id, effectiveTo: null },
+          select: { id: true, lineId: true },
+        });
+        expect(current).toEqual(
+          expect.arrayContaining([
+            { id: onFive.id, lineId: five.id },
+            { id: result.assignment.id, lineId: three.line.id },
+          ]),
+        );
+        expect(current).toHaveLength(2);
+      });
+    });
+
+    it('a Junior added to a third line keeps the two they already work', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { three, seven, five, context, service, open, organizationId } =
+          await world(tx);
+        const junior = await createStaff(tx, organizationId, 'JUNIOR');
+        await open(junior.id, three.line.id, 'JUNIOR', '2026-01-01');
+        await open(junior.id, five.id, 'JUNIOR', '2026-02-01');
+
+        const result = await service.assignJunior(context, seven.id, {
+          staffProfileId: junior.id,
+          effectiveFrom: '2026-09-13',
+        });
+
+        expect(result.closed).toEqual([]);
         expect(
           await tx.lineAssignment.count({
-            where: {
-              lineId: five.id,
-              assignmentRole: 'SENIOR',
-              effectiveTo: null,
-            },
+            where: { staffProfileId: junior.id, effectiveTo: null },
           }),
-        ).toBe(0);
+        ).toBe(3);
       });
     });
 
@@ -307,7 +333,8 @@ describe('AssignmentService (US-012, US-013)', () => {
           effectiveFrom: '2026-09-13',
         });
 
-        expect(second.linesWithoutSenior).toEqual([]);
+        // Each assignment closed only that line's incumbent.
+        expect(second.closed).toHaveLength(1);
         const current = await tx.lineAssignment.findMany({
           where: {
             lineId: { in: [three.line.id, five.id] },
@@ -322,6 +349,109 @@ describe('AssignmentService (US-012, US-013)', () => {
           ]),
         );
         expect(current).toHaveLength(2);
+      });
+    });
+  });
+
+  describe('taking someone off a line', () => {
+    it('ends only that line, audited, and leaves their other lines open', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { three, five, context, service, open, organizationId } =
+          await world(tx);
+        const junior = await createStaff(tx, organizationId, 'JUNIOR');
+        const onThree = await open(
+          junior.id,
+          three.line.id,
+          'JUNIOR',
+          '2026-01-01',
+        );
+        const onFive = await open(junior.id, five.id, 'JUNIOR', '2026-01-01');
+
+        const ended = await service.end(context, onThree.id, {
+          effectiveTo: '2026-09-30',
+        });
+
+        expect(ended).toMatchObject({
+          id: onThree.id,
+          effectiveFrom: '2026-01-01',
+          effectiveTo: '2026-09-30',
+        });
+        expect(
+          await tx.lineAssignment.findUniqueOrThrow({
+            where: { id: onFive.id },
+          }),
+        ).toMatchObject({ effectiveTo: null });
+        expect(
+          await tx.auditLog.findMany({ where: { entityId: onThree.id } }),
+        ).toEqual([
+          expect.objectContaining({
+            action: 'UPDATE',
+            entityTable: 'line_assignment',
+            actorUserId: context.userId,
+            before: { effectiveTo: null },
+            after: { effectiveTo: '2026-09-30' },
+          }),
+        ]);
+      });
+    });
+
+    it('may end on the day it began, and not before', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { seven, context, service, open, organizationId } =
+          await world(tx);
+        const junior = await createStaff(tx, organizationId, 'JUNIOR');
+        const row = await open(junior.id, seven.id, 'JUNIOR', '2026-09-13');
+
+        await expect(
+          service.end(context, row.id, { effectiveTo: '2026-09-12' }),
+        ).rejects.toMatchObject({
+          code: 'EFFECTIVE_TO_BEFORE_START',
+          status: 422,
+        });
+        await expect(
+          service.end(context, row.id, { effectiveTo: '2026-09-13' }),
+        ).resolves.toMatchObject({ effectiveTo: '2026-09-13' });
+      });
+    });
+
+    it('refuses an assignment that has already ended (409)', async () => {
+      await withRollback(prisma, async (tx) => {
+        const { seven, context, service, open, organizationId } =
+          await world(tx);
+        const junior = await createStaff(tx, organizationId, 'JUNIOR');
+        const row = await open(junior.id, seven.id, 'JUNIOR', '2026-01-01');
+        await service.end(context, row.id, { effectiveTo: '2026-09-13' });
+
+        await expect(
+          service.end(context, row.id, { effectiveTo: '2026-09-20' }),
+        ).rejects.toMatchObject({
+          code: 'ASSIGNMENT_ALREADY_ENDED',
+          status: 409,
+        });
+      });
+    });
+
+    it("answers 404 for another organization's assignment", async () => {
+      await withRollback(prisma, async (tx) => {
+        const { context, service } = await world(tx);
+        const elsewhere = await createActiveAccount(tx);
+        const theirs = await createStaff(
+          tx,
+          elsewhere.organization.id,
+          'JUNIOR',
+        );
+        const row = await tx.lineAssignment.create({
+          data: {
+            staffProfileId: theirs.id,
+            lineId: elsewhere.line.id,
+            assignmentRole: 'JUNIOR',
+            effectiveFrom: new Date('2026-01-01'),
+          },
+        });
+
+        await expect(
+          service.end(context, row.id, { effectiveTo: '2026-09-13' }),
+        ).rejects.toMatchObject({ code: 'ASSIGNMENT_NOT_FOUND', status: 404 });
       });
     });
   });

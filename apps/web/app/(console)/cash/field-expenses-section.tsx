@@ -4,6 +4,7 @@ import {
   booksContract,
   booksMoneyContract,
   type Expense,
+  organisationContract,
 } from "@repo/contracts";
 import {
   Button,
@@ -301,6 +302,10 @@ function RequestFieldExpenseDialog({
   const categories = useApiQuery(booksContract.listExpenseCategories, {
     query: { includeRetired: "false" },
   });
+  // A Senior's lines today: scoped by the API, so these are exactly theirs.
+  const lines = useApiQuery(organisationContract.listLines, {
+    query: { limit: 100 },
+  });
   const form = useZodForm(booksMoneyContract.requestFieldExpense.body, {
     defaultValues: { categoryId: "", amount: "", note: "" },
   });
@@ -308,6 +313,9 @@ function RequestFieldExpenseDialog({
     categories.status === "ready"
       ? categories.data.data.filter((category) => category.isActive)
       : [];
+  // With one line the API knows which; with several (decided 2026-10-03) the
+  // Senior says whose cash paid.
+  const ownLines = lines.status === "ready" ? lines.data.data : [];
   return (
     <DialogForm
       form={form}
@@ -322,7 +330,7 @@ function RequestFieldExpenseDialog({
         });
         if (!result.ok) {
           return applyWriteFailure(form.setError, result, {
-            fields: ["categoryId", "amount", "note"],
+            fields: ["categoryId", "amount", "note", "lineId"],
           });
         }
         toast({
@@ -331,6 +339,20 @@ function RequestFieldExpenseDialog({
         onDone();
       }}
     >
+      {ownLines.length > 1 ? (
+        <FormField name="lineId" label="Line">
+          <Select defaultValue="">
+            <option value="" disabled>
+              Choose the line
+            </option>
+            {ownLines.map((line) => (
+              <option key={line.id} value={line.id}>
+                {line.code} · {line.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      ) : null}
       <FormField name="categoryId" label="Expense type">
         <Select>
           <option value="" disabled>

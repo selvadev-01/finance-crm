@@ -18,6 +18,7 @@ import {
 import { cn } from "@repo/ui";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
 
+import { TourButton } from "../../lib/tour/tour-button";
 import {
   backTarget,
   goBack,
@@ -70,6 +71,7 @@ export function TopAppBar({
           <p className="truncate text-sm text-ink-muted">{subtitle}</p>
         ) : null}
       </div>
+      <TourButton look="field" />
       {actions ? (
         <div className="flex shrink-0 items-center gap-1">{actions}</div>
       ) : null}
@@ -99,6 +101,7 @@ export function SyncChip({
     <button
       type="button"
       onClick={() => openView("#sync")}
+      data-tour="sync-chip"
       aria-label={`${connected ? "Online" : "Offline"}, ${unsynced} not sent`}
       className="flex min-h-12 items-center rounded-pill px-1"
     >
@@ -470,6 +473,7 @@ export function FieldPage({
         {children}
         {footer ? (
           <div
+            data-tour="field-action"
             className={cn(
               "sticky z-10 -mx-4 mt-auto flex flex-col gap-2 border-t border-border bg-surface-raised px-4 pt-3",
               back

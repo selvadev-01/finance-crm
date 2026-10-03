@@ -31,8 +31,11 @@ export const meSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: z.enum(["SUPER_ADMIN", "ADMIN", "SENIOR", "JUNIOR"]),
-  /** The line in effect today, if any. */
-  currentLineId: idSchema.nullable(),
+  /**
+   * Every line assigned in effect today — a Senior or Junior may work several
+   * (decided 2026-10-03). Empty for Admins and for staff on no line.
+   */
+  currentLineIds: z.array(idSchema),
   /** The caller's organization; its sign-in link is `/<slug>/sign-in` (US-006). */
   organization: z.object({
     name: z.string(),
@@ -57,7 +60,7 @@ export const staffStatusSchema = z.enum(["ACTIVE", "SUSPENDED", "INACTIVE"]);
 const roleSchema = staffRoleSchema;
 const statusSchema = staffStatusSchema;
 
-/** The line a staff member works today, if any (date-aware, M02). */
+/** A line a staff member works today (date-aware, M02). */
 export const currentAssignmentSchema = z.object({
   assignmentId: idSchema,
   lineId: idSchema,
@@ -80,7 +83,11 @@ export const staffSummarySchema = z.object({
   role: roleSchema,
   status: statusSchema,
   joinedAt: calendarDateSchema,
-  currentAssignment: currentAssignmentSchema.nullable(),
+  /**
+   * Every line they work today, in line-code order — several for a Senior or
+   * Junior on more than one line (decided 2026-10-03), none when unassigned.
+   */
+  currentAssignments: z.array(currentAssignmentSchema),
 });
 
 /** A staff member with the assignments the caller may see (S-14, US-015). */
@@ -129,8 +136,8 @@ export const updateStaffSchema = z.object({
 
 /** What stands between a staff member and losing their access (US-092). */
 export const staffDutySchema = z.object({
-  /** The line assignment still open or starting later, if any. */
-  openAssignment: currentAssignmentSchema.nullable(),
+  /** Line assignments still open or starting later, in line-code order. */
+  openAssignments: z.array(currentAssignmentSchema),
   /** Collections saved on their phone and not yet received (M08 sync report). */
   unsyncedWork: z
     .object({

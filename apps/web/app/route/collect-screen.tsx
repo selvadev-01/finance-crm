@@ -348,14 +348,19 @@ function AccountForm({
             </FormField>
             <FormRootError />
             {layout === "card" ? (
-              <div className="flex flex-col gap-2">{actions}</div>
+              <div data-tour="field-action" className="flex flex-col gap-2">
+                {actions}
+              </div>
             ) : null}
           </>
         )}
       </div>
 
       {layout === "page" && !account.collectedToday ? (
-        <div className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2 border-t border-border bg-surface-raised px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div
+          data-tour="field-action"
+          className="sticky bottom-0 z-10 -mx-4 mt-auto flex flex-col gap-2 border-t border-border bg-surface-raised px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        >
           {actions}
         </div>
       ) : null}

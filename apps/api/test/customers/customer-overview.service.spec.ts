@@ -42,7 +42,7 @@ describe('CustomerOverviewService (US-022)', () => {
       staffProfileId: admin.id,
       organizationId,
       role: 'ADMIN',
-      currentLineId: null,
+      currentLineIds: [],
     };
     const database = new Database(tx);
     const audit = new AuditWriter(database);
@@ -237,7 +237,7 @@ describe('CustomerOverviewService (US-022)', () => {
           userId: junior.userId,
           staffProfileId: junior.id,
           role: 'JUNIOR',
-          currentLineId: w.line.id,
+          currentLineIds: [w.line.id],
         },
         person.id,
         SATURDAY,
@@ -300,7 +300,7 @@ describe('CustomerOverviewService (US-022)', () => {
             userId: junior.userId,
             staffProfileId: junior.id,
             role: 'JUNIOR',
-            currentLineId: w.line.id,
+            currentLineIds: [w.line.id],
           },
           w.line.id,
           MONDAY,
@@ -345,7 +345,7 @@ describe('CustomerOverviewService (US-022)', () => {
 
         await expect(
           portfolio.get(
-            { ...w.context, role: 'SENIOR', currentLineId: elsewhere.id },
+            { ...w.context, role: 'SENIOR', currentLineIds: [elsewhere.id] },
             w.line.id,
             MONDAY,
           ),

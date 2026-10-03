@@ -22,8 +22,11 @@ import { formatClockTime, initials } from "./sync-marks";
 type Customer = LinePortfolio["customers"][number];
 type Filter = "all" | "due" | "overdue" | "completed";
 
-/** The last portfolio read, kept on the phone for no signal. Cleared at sign-out. */
-const PORTFOLIO_KEY = "portfolio";
+/**
+ * The last portfolio read of each line, kept on the phone for no signal.
+ * Cleared at sign-out with the rest of the device's data.
+ */
+const portfolioKey = (lineId: string) => `portfolio:${lineId}`;
 interface Kept {
   lineId: string;
   fetchedAt: number;
@@ -45,15 +48,22 @@ const FILTERS: ReadonlyArray<readonly [Filter, string]> = [
  *
  * Read from the office and kept on the phone: with no signal the last copy is
  * shown with when it was fetched, as the route is. Tapping a customer opens
- * their portfolio (J-10).
+ * their portfolio (J-10). A Junior on several lines (decided 2026-10-03)
+ * picks the line; each is kept on the phone separately.
  */
 export function CustomersScreen({
-  lineId,
+  lines,
   connected,
 }: {
-  lineId: string | null;
+  /** The Junior's lines today; `code` is null until the route has loaded. */
+  lines: ReadonlyArray<{ lineId: string; code: string | null }>;
   connected: boolean;
 }) {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const lineId =
+    lines.find((line) => line.lineId === chosen)?.lineId ??
+    lines[0]?.lineId ??
+    null;
   const [kept, setKept] = useState<Kept | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -63,9 +73,9 @@ export function CustomersScreen({
   const load = useCallback(async () => {
     if (!lineId) return;
     const db = await fieldDb();
-    const stored = (await db.get("meta", PORTFOLIO_KEY))?.value as
+    const stored = (await db.get("meta", portfolioKey(lineId)))?.value as
       Kept | undefined;
-    if (stored?.lineId === lineId) setKept(stored);
+    setKept(stored?.lineId === lineId ? stored : null);
     try {
       const result = await api(customerContract.getLinePortfolio, {
         params: { lineId },
@@ -75,7 +85,7 @@ export function CustomersScreen({
         return;
       }
       const fresh: Kept = { lineId, fetchedAt: Date.now(), body: result.body };
-      await db.put("meta", { key: PORTFOLIO_KEY, value: fresh });
+      await db.put("meta", { key: portfolioKey(lineId), value: fresh });
       setKept(fresh);
       setProblem(null);
     } catch {
@@ -115,10 +125,29 @@ export function CustomersScreen({
     <FieldPage
       title="Customers"
       subtitle={
-        portfolio ? `${customers.length} on your line` : "Your line’s customers"
+        portfolio ? `${customers.length} on this line` : "Your line’s customers"
       }
       testId="customers"
     >
+      {lines.length > 1 ? (
+        <div
+          role="group"
+          aria-label="Line"
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]"
+        >
+          {lines.map((line, index) => (
+            <button
+              key={line.lineId}
+              type="button"
+              aria-pressed={line.lineId === lineId}
+              onClick={() => setChosen(line.lineId)}
+              className="flex h-11 shrink-0 items-center rounded-pill border border-border-strong bg-surface-raised px-4 font-mono text-sm font-medium text-ink-muted aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent"
+            >
+              {line.code ?? `Line ${index + 1}`}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {!lineId ? (
         <Banner tone="neutral" icon={<UsersThree size={20} weight="regular" />}>
           You have no line today, so there are no customers to show. Ask your

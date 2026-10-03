@@ -8,12 +8,12 @@ Expands PDF Appendix A from feature-level to action-level. Appendix A says a Sen
 
 ## Roles
 
-| Role          | Scope                                              | Nature                                                    |
-| ------------- | -------------------------------------------------- | --------------------------------------------------------- |
-| `SUPER_ADMIN` | Everything                                         | Owner. Only role that may change settings and staff roles |
-| `ADMIN`       | All sectors and lines                              | Operational management. Cannot change settings or roles   |
-| `SENIOR`      | **One line** — their current assignment            | Supervision, verification, cash receipt                   |
-| `JUNIOR`      | **Their assigned customers** on their current line | Collection entry only                                     |
+| Role          | Scope                                               | Nature                                                    |
+| ------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| `SUPER_ADMIN` | Everything                                          | Owner. Only role that may change settings and staff roles |
+| `ADMIN`       | All sectors and lines                               | Operational management. Cannot change settings or roles   |
+| `SENIOR`      | **Their lines** — every current assignment          | Supervision, verification, cash receipt                   |
+| `JUNIOR`      | **Their assigned customers** on their current lines | Collection entry only                                     |
 
 Roles are single-valued: a person is a Senior or a Junior, never both.
 
@@ -23,14 +23,16 @@ Roles are single-valued: a person is a Senior or a Junior, never both.
 
 Scoping is applied before any action check, as a mandatory predicate on every query. "none" for Admins means no line restriction — they are still bounded by their own `organizationId`.
 
-| Role          | Predicate                                                                |
-| ------------- | ------------------------------------------------------------------------ |
-| `SUPER_ADMIN` | none                                                                     |
-| `ADMIN`       | none                                                                     |
-| `SENIOR`      | `lineId = (current assignment of this staff member)`                     |
-| `JUNIOR`      | `lineId = (current assignment)` **and** customer assigned to this Junior |
+| Role          | Predicate                                                                  |
+| ------------- | -------------------------------------------------------------------------- |
+| `SUPER_ADMIN` | none                                                                       |
+| `ADMIN`       | none                                                                       |
+| `SENIOR`      | `lineId IN (current assignments of this staff member)`                     |
+| `JUNIOR`      | `lineId IN (current assignments)` **and** customer assigned to this Junior |
 
-**"Current assignment" means the `line_assignment` in effect today** — `effectiveFrom ≤ today ≤ effectiveTo`, with a null `effectiveTo` open-ended, and today the business date in Asia/Kolkata. (Corrected 2026-09-13 from "`effectiveTo IS NULL`", which switched a Junior moved "effective tomorrow" to the new line a day early.) Not a field on the staff record — the assignment table is the authority (M03).
+**A Senior or Junior may hold several current assignments (decided 2026-10-03)** — one per line, enforced by the database — and "own line" in the matrix below means any of them. Before that date a staff member worked one line at a time.
+
+**"Current assignment" means a `line_assignment` in effect today** — `effectiveFrom ≤ today ≤ effectiveTo`, with a null `effectiveTo` open-ended, and today the business date in Asia/Kolkata. (Corrected 2026-09-13 from "`effectiveTo IS NULL`", which switched a Junior moved "effective tomorrow" to the new line a day early.) Not a field on the staff record — the assignment table is the authority (M03).
 
 > **Open question — "customer assigned to this Junior".** The data model has no customer-to-Junior assignment, and a line may have several current Juniors. **Decided 2026-09-13, for now:** a Junior's customers are every customer on their current line. That is exact while a line has one Junior at a time; if lines share Juniors, add a temporal `customer_assignment` table and change the single predicate that encodes this ([M02 as built](modules/M02-access-control.md#as-built)). **Visiting order did not wait for it** (decided 2026-09-21): it is a place per customer on its line (`customer.routePosition`), set by the line's Senior or an Admin, because a line is walked in one order whoever walks it. If lines come to share Juniors with different routes, the order moves to that table.
 
@@ -49,11 +51,13 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Action          | Super Admin | Admin |  Senior  |    Junior    |
 | --------------- | :---------: | :---: | :------: | :----------: |
 | List / view     |      ✓      |   ✓   | own line | own assigned |
-| Create          |      ✓      |   ✓   |    —     |      —       |
+| Create          |      ✓      |   ✓   | own line |      —       |
 | Update          |      ✓      |   ✓   |    —     |      —       |
 | Change line     |      ✓      |   ✓   |    —     |      —       |
 | Soft delete     |      ✓      |   —   |    —     |      —       |
 | View references |      ✓      |   ✓   | own line | own assigned |
+
+> **A Senior creates customers on their own lines (decided 2026-10-03).** Choosing any other line is refused as `404 LINE_NOT_FOUND`, the same as a line that does not exist. Updating a customer, moving them to another line and opening their account stay with the Admins.
 
 ### Accounts (M05)
 
@@ -130,9 +134,12 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 | Create / update sector  |      ✓      |   ✓   |    —     |    —     |
 | Create / update line    |      ✓      |   ✓   |    —     |    —     |
 | Assign Senior to line   |      ✓      |   ✓   |    —     |    —     |
-| Assign / move Junior    |      ✓      |   ✓   |    —     |    —     |
+| Add Junior to line      |      ✓      |   ✓   |    —     |    —     |
+| Take staff off a line   |      ✓      |   ✓   |    —     |    —     |
 | View assignment history |      ✓      |   ✓   | own line |    —     |
 | Set visiting order      |      ✓      |   ✓   | own line |    —     |
+
+> **Staff may work several lines (decided 2026-10-03).** Assigning a Senior or Junior to a line adds that line; it no longer closes the lines they already work. Leaving a line is its own action — "Take staff off a line" sets the assignment's last day. A line still has one Senior at a time, so assigning a Senior to a line closes that line's incumbent Senior, and only that.
 
 ### Money visibility (M09, M11, M12)
 
@@ -163,12 +170,12 @@ Scoping is applied before any action check, as a mandatory predicate on every qu
 
 ### Notifications (M10)
 
-| Action                 | Super Admin |    Admin    |  Senior  |   Junior    |
-| ---------------------- | :---------: | :---------: | :------: | :---------: |
-| View own notifications |      ✓      |      ✓      |    ✓     |      ✓      |
-| Scope received         |     All     | Operational | Own line | Own entries |
-| Register push device   |      ✓      |      ✓      |    ✓     |      ✓      |
-| Manage preferences     |      ✓      |      ✓      |    ✓     |      ✓      |
+| Action                     | Super Admin |    Admin    |  Senior  |   Junior    |
+| -------------------------- | :---------: | :---------: | :------: | :---------: |
+| View own notifications     |      ✓      |      ✓      |    ✓     |      ✓      |
+| Scope received             |     All     | Operational | Own line | Own entries |
+| Register push device       |      ✓      |      ✓      |    ✓     |      ✓      |
+| Manage preferences         |      ✓      |      ✓      |    ✓     |      ✓      |
 | **View message templates** |      ✓      |      —      |    —     |      —      |
 | **Edit message templates** |      ✓      |      —      |    —     |      —      |
 

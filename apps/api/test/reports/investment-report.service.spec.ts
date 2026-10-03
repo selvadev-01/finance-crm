@@ -523,7 +523,7 @@ describe('InvestmentReportService (US-085)', () => {
 
       // A Senior with no line today sees no lines, not everyone's.
       const unassigned = await w.investment.view(
-        { ...w.senior, currentLineId: null },
+        { ...w.senior, currentLineIds: [] },
         range,
         MONDAY_EVENING,
       );

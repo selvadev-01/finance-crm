@@ -80,6 +80,7 @@ function TabBar({ children }: { children: ReactNode }) {
   return (
     <nav
       aria-label="Console"
+      data-tour="tabbar"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface-raised pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto grid h-20 max-w-3xl auto-cols-fr grid-flow-col">

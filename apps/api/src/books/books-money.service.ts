@@ -115,7 +115,7 @@ export function mayDecideExpense(
     context.role === 'SENIOR' &&
     expense.hop === 'JUNIOR_TO_SENIOR' &&
     expense.lineId !== null &&
-    expense.lineId === context.currentLineId
+    context.currentLineIds.includes(expense.lineId)
   );
 }
 

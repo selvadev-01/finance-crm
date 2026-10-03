@@ -14,12 +14,19 @@ import { OperationsDashboard } from "./operations-dashboard";
  * dashboard is the route, so they only reach the placeholder by typing the
  * address.
  */
-export function DashboardScreen({ date }: { date: string | undefined }) {
+export function DashboardScreen({
+  date,
+  line,
+}: {
+  date: string | undefined;
+  /** A Senior on several lines: which one (decided 2026-10-03). */
+  line?: string | undefined;
+}) {
   const me = useSignedIn();
   if (me.role === "SUPER_ADMIN") {
     return <BusinessOverview initial={date ? { date } : {}} />;
   }
   if (seesBusinessTotals(me.role)) return <OperationsDashboard date={date} />;
-  if (me.role === "SENIOR") return <LineDashboard date={date} />;
+  if (me.role === "SENIOR") return <LineDashboard date={date} lineId={line} />;
   return <DashboardPlaceholder />;
 }

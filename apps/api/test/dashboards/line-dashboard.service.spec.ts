@@ -342,7 +342,7 @@ describe('LineDashboardService (US-083)', () => {
   it('a Senior with no line today gets the empty state, not an error; so does an Admin who names no line', async () => {
     await withRollback(prisma, async (tx) => {
       const { w, dashboard } = await monday(tx);
-      const unassigned: RequestContext = { ...w.senior, currentLineId: null };
+      const unassigned: RequestContext = { ...w.senior, currentLineIds: [] };
       await expect(
         dashboard.view(unassigned, {}, MONDAY_EVENING),
       ).resolves.toEqual({

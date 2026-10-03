@@ -10,20 +10,22 @@ export const metadata: Metadata = { title: "Dashboard · Rasi" };
 /**
  * The console landing. Super Admin: the business overview (S-07, US-080);
  * Admin: the operational dashboard (S-20, US-082); Senior: their line (S-19,
- * US-083) — each for `?date=` or today.
+ * US-083) — each for `?date=` or today, and a Senior on several lines for
+ * `?line=` or their first.
  */
 export default async function DashboardPage({
   searchParams,
 }: PageProps<"/dashboard">) {
-  const { date } = readListParams(await searchParams, ["date"]);
+  const { date, line } = readListParams(await searchParams, ["date", "line"]);
   // A date that is not a real day is ignored rather than failing the page.
   return (
     <>
       <DashboardScreen
         date={date !== undefined && isCalendarDate(date) ? date : undefined}
+        line={line || undefined}
       />
       {/* Asks a device that has never decided whether to receive pushes. */}
-      <PushPrompt />
+      <PushPrompt app="console" />
     </>
   );
 }

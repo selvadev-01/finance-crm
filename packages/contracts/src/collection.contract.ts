@@ -99,22 +99,37 @@ export const routeAccountSchema = z.object({
 
 export const routeSchema = z.object({
   businessDate: calendarDateSchema,
-  /** US-040 and S-01: three different empty days, never one message. */
+  /**
+   * US-040 and S-01: three different empty days, never one message. `HOLIDAY`
+   * when the whole business rests or every one of the Junior's lines does.
+   */
   day: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("WORKING") }),
     z.object({ kind: z.literal("SUNDAY") }),
     z.object({ kind: z.literal("HOLIDAY"), name: z.string() }),
   ]),
-  /** `null` when the Junior has no line today. */
-  lineId: idSchema.nullable(),
   /**
-   * The same line as the Junior reads it — "LN-07 · Market Road" in the field
-   * app's header and profile. `null` exactly when `lineId` is.
+   * Every line the Junior works today, in code order — several when they are
+   * on more than one (decided 2026-10-03), none when they have no line. Read
+   * as "LN-07 · Market Road" in the field app's header and profile.
    */
-  line: z.object({ code: z.string(), name: z.string() }).nullable(),
+  lines: z.array(
+    z.object({
+      lineId: idSchema,
+      code: z.string(),
+      name: z.string(),
+      /**
+       * A holiday declared for this line's sector today: its customers are
+       * left off the route while the Junior's other lines still collect.
+       */
+      holiday: z.string().nullable(),
+    }),
+  ),
   customers: z.array(
     z.object({
       customerId: idSchema,
+      /** Which of `lines` the customer is on. */
+      lineId: idSchema,
       customerCode: z.string(),
       name: z.string(),
       address: z.string(),

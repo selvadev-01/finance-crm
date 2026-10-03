@@ -47,11 +47,15 @@ export function CashOverview({
   const manages = canManageOrganisation(me.role);
   const today = toBusinessDate(new Date());
   const { filters, setFilter } = useListState(CASH_FILTERS, initial);
+  // A Senior may work several lines (decided 2026-10-03): they choose among
+  // them as an Admin chooses among all, starting on their first.
+  const seniorLines = me.role === "SENIOR" ? me.currentLineIds : [];
+  const choosesLine = manages || seniorLines.length > 1;
   const lineId = manages
     ? filters.line
-    : me.role === "SENIOR"
-      ? (me.currentLineId ?? "")
-      : "";
+    : seniorLines.includes(filters.line)
+      ? filters.line
+      : (seniorLines[0] ?? "");
   const date = filters.date || today;
   const [office, setOffice] = useState<string | null>(null);
 
@@ -152,7 +156,7 @@ export function CashOverview({
       <Section title="Day close">
         <FilterBar
           summary={[
-            manages ? (lineId ? "One line" : "Choose a line") : null,
+            choosesLine ? (lineId ? "One line" : "Choose a line") : null,
             date ? formatBusinessDate(date) : "Choose a date",
           ]
             .filter(Boolean)
@@ -168,7 +172,7 @@ export function CashOverview({
             ) : null
           }
         >
-          {manages ? (
+          {choosesLine ? (
             <LineFilter
               value={lineId}
               onChange={(value) => setFilter("line", value)}
@@ -183,7 +187,7 @@ export function CashOverview({
             />
           </FilterField>
         </FilterBar>
-        {me.role === "SENIOR" && !me.currentLineId ? (
+        {me.role === "SENIOR" && seniorLines.length === 0 ? (
           <p className="text-body text-ink-muted">
             You are not assigned to a line today.
           </p>
@@ -193,7 +197,7 @@ export function CashOverview({
       {/* ADR-0018: field expenses to decide; a Senior also records their own. */}
       {manages || me.role === "SENIOR" ? (
         <FieldExpensesSection
-          canRequest={me.role === "SENIOR" && me.currentLineId !== null}
+          canRequest={me.role === "SENIOR" && seniorLines.length > 0}
           onChanged={() => {
             if (me.role === "SENIOR") position.reload();
           }}

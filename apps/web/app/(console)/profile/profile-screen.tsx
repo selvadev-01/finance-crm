@@ -52,7 +52,7 @@ export function ProfileScreen() {
   >(null);
 
   const record = staff.status === "ready" ? staff.data : null;
-  const assignment = record?.currentAssignment ?? null;
+  const assignments = record?.currentAssignments ?? [];
 
   return (
     <>
@@ -77,14 +77,21 @@ export function ProfileScreen() {
                 {record ? formatMobile(record.phone) : null}
               </Description>
               <Description term="Role">{ROLE_LABEL[me.role]}</Description>
-              <Description term="Line today">
-                {assignment ? (
-                  <Link
-                    href={`/lines/${assignment.lineId}`}
-                    className="hover:text-accent hover:underline"
-                  >
-                    {assignment.lineCode} · {assignment.lineName}
-                  </Link>
+              <Description
+                term={assignments.length > 1 ? "Lines today" : "Line today"}
+              >
+                {assignments.length > 0 ? (
+                  <span className="flex flex-col gap-1">
+                    {assignments.map((assignment) => (
+                      <Link
+                        key={assignment.assignmentId}
+                        href={`/lines/${assignment.lineId}`}
+                        className="hover:text-accent hover:underline"
+                      >
+                        {assignment.lineCode} · {assignment.lineName}
+                      </Link>
+                    ))}
+                  </span>
                 ) : null}
               </Description>
               <Description term="Joined">

@@ -27,7 +27,7 @@ const junior = {
   role: "JUNIOR" as const,
   status: "ACTIVE" as const,
   joinedAt: "2026-01-01",
-  currentAssignment: null,
+  currentAssignments: [],
 };
 
 const answers: ApiAnswers = {

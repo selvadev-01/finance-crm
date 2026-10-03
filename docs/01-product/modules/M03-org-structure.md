@@ -29,7 +29,7 @@
 **Constraints:**
 
 - Partial unique on `(lineId)` where `assignmentRole = 'SENIOR' AND effectiveTo IS NULL` — one current Senior per line
-- Partial unique on `(staffProfileId)` where `effectiveTo IS NULL` — one line at a time per person
+- Partial unique on `(staffProfileId, lineId)` where `effectiveTo IS NULL` — a person may work several lines, once each (decided 2026-10-03; was one line at a time)
 - `effectiveTo IS NULL OR effectiveTo >= effectiveFrom`
 
 ---
@@ -127,7 +127,9 @@ Two Admins creating at the same moment can read the same highest code and pick t
 
 Codes stay immutable; only names change. The decision was the permanence: a code can never be edited, so a typo at the dialog would outlive everyone who saw it made.
 
-**Assignments.** `effectiveFrom` is required. The outgoing rows — the staff member's own open assignment, and for a Senior assignment the line's open Senior — are closed with `effectiveTo = effectiveFrom − 1 day` and the new row opened, in one transaction, with nothing deleted. So "effective today" closes the incumbent yesterday (US-012), and "effective tomorrow" closes the old line today (US-013). Collections are never touched; a test moves a Junior with 400 collections and proves Line 3's count and total unchanged.
+**Assignments.** `effectiveFrom` is required. **A Senior or Junior may work several lines at once (decided 2026-10-03)**, so assigning someone adds the line and closes none of their others. For a Senior assignment the line's open Senior is closed with `effectiveTo = effectiveFrom − 1 day` and the new row opened, in one transaction, with nothing deleted — "effective today" closes the incumbent yesterday (US-012).
+
+**Taking someone off a line** is its own route, `POST /api/line-assignments/:assignmentId/end` (`assignment.end`, Admin and above), with the last day, inclusive. It may be dated back, never before the assignment began; the row is locked, so a concurrent end waits and then finds it closed. A move between lines is therefore two acts — add the new line "effective tomorrow", end the old one today (US-013). Collections are never touched; a test moves a Junior with 400 collections that way and proves Line 3's count and total unchanged.
 
 | Refusal                             | Status | When                                                                            |
 | ----------------------------------- | ------ | ------------------------------------------------------------------------------- |
@@ -138,9 +140,11 @@ Codes stay immutable; only names change. The decision was the permanence: a code
 | `EFFECTIVE_BEFORE_JOINING`          | `422`  | `effectiveFrom` before `joinedAt` (the risk below)                              |
 | `EFFECTIVE_NOT_AFTER_CURRENT`       | `422`  | A row being closed starts on or after `effectiveFrom`; checked before any write |
 | `ALREADY_ASSIGNED`                  | `409`  | Already on this line                                                            |
+| `ASSIGNMENT_ALREADY_ENDED`          | `409`  | Ending an assignment that already has a last day                                |
+| `EFFECTIVE_TO_BEFORE_START`         | `422`  | Ending an assignment before the day it began                                    |
 | `ASSIGNMENT_CONFLICT`               | `409`  | A concurrent change tripped a partial unique index                              |
 
-**A Senior who already runs another line may be moved — decided 2026-09-13.** Their old line is left without a Senior and returned in `linesWithoutSenior`, and recorded on the audit entry. The alternative, refusing, would make swapping two Seniors impossible without a gap. This relaxes "a line always has a Senior" to "assigning a Senior never leaves the _target_ line without one".
+**A Senior who already runs another line keeps it (decided 2026-10-03).** This replaced the 2026-09-13 rule, under which their old line was closed and reported in `linesWithoutSenior`. A line is left without a Senior only when an Admin takes its Senior off it; the line list already flags "No Senior" (US-014). Assigning a Senior still never leaves the _target_ line without one.
 
 **"Current" is date-aware** (M02): a row opened "effective tomorrow" does not change anyone's scope until tomorrow.
 

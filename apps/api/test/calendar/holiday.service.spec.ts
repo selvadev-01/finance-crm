@@ -662,7 +662,7 @@ describe('HolidayService (US-093, US-034)', () => {
           'Own sector',
           'Hills',
         ]);
-        expect(await names({ ...w.senior, currentLineId: null })).toEqual([]);
+        expect(await names({ ...w.senior, currentLineIds: [] })).toEqual([]);
 
         const hillsHoliday = await tx.holiday.findFirstOrThrow({
           where: { sectorId: hills.id },

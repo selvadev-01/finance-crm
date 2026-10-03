@@ -72,15 +72,14 @@ export function RouteScreen({
 }) {
   const chrome = use(FieldChrome);
   const customers = local?.route.customers ?? [];
+  const lines = local?.route.lines ?? [];
 
   return (
     <FieldPage
       title="Collection route"
       subtitle={
-        local?.route.line ? (
-          <span className="font-mono">
-            {local.route.line.code} · {local.route.line.name}
-          </span>
+        lines.length > 0 ? (
+          <span className="font-mono">{linesLabel(lines)}</span>
         ) : (
           formatBusinessDate(businessDate)
         )
@@ -138,9 +137,11 @@ export function RouteScreen({
           icon={<CalendarBlank size={28} weight="regular" />}
           title="No collections due today"
         >
-          {local.route.lineId === null
+          {lines.length === 0
             ? "You have no line today. Ask your Senior or an Admin."
-            : "Nobody on your line has a payment due today."}
+            : lines.length === 1
+              ? "Nobody on your line has a payment due today."
+              : "Nobody on your lines has a payment due today."}
         </DayMessage>
       ) : (
         <WorkingDay
@@ -221,6 +222,14 @@ function WorkingDay({
   );
   // The next door: the first customer still to visit, in the Senior's order.
   const next = left[0] ?? null;
+  // On several lines, each card says which one the customer is on, and a
+  // line resting for its sector's holiday is named rather than silently empty.
+  const lines = local.route.lines;
+  const lineCode = (customer: Customer) =>
+    lines.length > 1
+      ? lines.find((line) => line.lineId === customer.lineId)?.code
+      : undefined;
+  const resting = lines.filter((line) => line.holiday !== null);
 
   return (
     <div className="flex flex-col gap-3.5" data-testid="route">
@@ -303,6 +312,27 @@ function WorkingDay({
         unsynced={unsynced}
         nextCustomerId={next?.customerId ?? null}
       />
+
+      {resting.map((line) => (
+        <p
+          key={line.lineId}
+          className={cn(
+            cardClass,
+            "flex items-start gap-3 p-4 text-base text-ink-muted",
+          )}
+        >
+          <CalendarBlank
+            aria-hidden
+            size={22}
+            weight="regular"
+            className="mt-0.5 shrink-0"
+          />
+          <span>
+            <span className="font-mono">{line.code}</span> {line.name} rests
+            today for {line.holiday}. Its customers are not on today’s route.
+          </span>
+        </p>
+      ))}
 
       {unsynced > 0 ? (
         <a
@@ -415,7 +445,11 @@ function WorkingDay({
         <ul className="flex flex-col gap-3">
           {visibleLeft.map((customer) => (
             <li key={customer.customerId}>
-              <CustomerCard customer={customer} local={local} />
+              <CustomerCard
+                customer={customer}
+                local={local}
+                lineCode={lineCode(customer)}
+              />
             </li>
           ))}
         </ul>
@@ -453,7 +487,11 @@ function WorkingDay({
           <ul className="flex flex-col gap-3">
             {visibleDone.map((customer) => (
               <li key={customer.customerId}>
-                <CustomerCard customer={customer} local={local} />
+                <CustomerCard
+                  customer={customer}
+                  local={local}
+                  lineCode={lineCode(customer)}
+                />
               </li>
             ))}
           </ul>
@@ -656,6 +694,15 @@ function FieldMenu({
   );
 }
 
+/**
+ * "LN-07 · Market Road" for one line; the codes alone for several, which is
+ * all the header has room for.
+ */
+export function linesLabel(lines: RouteView["lines"]): string {
+  if (lines.length === 1) return `${lines[0]!.code} · ${lines[0]!.name}`;
+  return lines.map((line) => line.code).join(" · ");
+}
+
 /** "Good morning", by the phone's own clock. */
 function greeting(now: Date): string {
   const hour = now.getHours();
@@ -719,10 +766,20 @@ function DayMessage({
 function CustomerCard({
   customer,
   local,
+  lineCode,
 }: {
   customer: Customer;
   local: LocalRoute;
+  /** The customer's line, shown only when the Junior works several. */
+  lineCode?: string | undefined;
 }) {
+  const address = lineCode ? (
+    <>
+      <span className="font-mono">{lineCode}</span> · {customer.address}
+    </>
+  ) : (
+    customer.address
+  );
   const grouped = customer.accounts.length > 1;
   const states = customer.accounts.map(
     (account) => local.rowState[account.accountLoanId] ?? "PENDING",
@@ -749,9 +806,7 @@ function CustomerCard({
             <Avatar name={customer.name} done={done} />
             <span className="flex min-w-0 flex-1 flex-col">
               <CustomerName name={customer.name} done={done} />
-              <span className="truncate text-sm text-ink-muted">
-                {customer.address}
-              </span>
+              <span className="truncate text-sm text-ink-muted">{address}</span>
             </span>
             <span className="shrink-0 rounded-pill border border-border bg-surface-sunken px-2.5 py-0.5 text-xs font-medium text-ink-muted">
               {customer.accounts.length} accounts
@@ -785,9 +840,7 @@ function CustomerCard({
             avatar={<Avatar name={customer.name} done={done} />}
           >
             <CustomerName name={customer.name} done={done} />
-            <span className="truncate text-sm text-ink-muted">
-              {customer.address}
-            </span>
+            <span className="truncate text-sm text-ink-muted">{address}</span>
           </AccountRow>
         ))
       )}

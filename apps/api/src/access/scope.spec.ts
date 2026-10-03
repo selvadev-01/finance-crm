@@ -20,7 +20,7 @@ const context = (
   staffProfileId: 'staff-1',
   organizationId: 'org-1',
   role,
-  currentLineId,
+  currentLineIds: currentLineId ? [currentLineId] : [],
 });
 
 const NO_ROWS = { id: { in: [] } };
@@ -37,11 +37,24 @@ describe('scope predicates (M02)', () => {
     );
 
     it('a Senior sees their current line', () => {
-      expect(customerScope(context('SENIOR'))).toEqual({ lineId: 'line-3' });
+      expect(customerScope(context('SENIOR'))).toEqual({
+        lineId: { in: ['line-3'] },
+      });
+    });
+
+    it('a Senior on several lines sees every one of them', () => {
+      expect(
+        customerScope({
+          ...context('SENIOR'),
+          currentLineIds: ['line-3', 'line-7'],
+        }),
+      ).toEqual({ lineId: { in: ['line-3', 'line-7'] } });
     });
 
     it('a Junior sees their current line — decision A, pending per-Junior assignment', () => {
-      expect(customerScope(context('JUNIOR'))).toEqual({ lineId: 'line-3' });
+      expect(customerScope(context('JUNIOR'))).toEqual({
+        lineId: { in: ['line-3'] },
+      });
     });
 
     it.each(['SENIOR', 'JUNIOR'] as const)(
@@ -60,12 +73,14 @@ describe('scope predicates (M02)', () => {
 
   describe('collections', () => {
     it('a Senior sees collections attributed to their current line', () => {
-      expect(collectionScope(context('SENIOR'))).toEqual({ lineId: 'line-3' });
+      expect(collectionScope(context('SENIOR'))).toEqual({
+        lineId: { in: ['line-3'] },
+      });
     });
 
     it('a Junior sees only their own entries on their current line', () => {
       expect(collectionScope(context('JUNIOR'))).toEqual({
-        lineId: 'line-3',
+        lineId: { in: ['line-3'] },
         collectedByUserId: 'user-1',
       });
     });
@@ -99,9 +114,9 @@ describe('scope predicates (M02)', () => {
     it.each(['SENIOR', 'JUNIOR'] as const)(
       'a %s sees only their current line and its sector',
       (role) => {
-        expect(lineScope(context(role))).toEqual({ id: 'line-3' });
+        expect(lineScope(context(role))).toEqual({ id: { in: ['line-3'] } });
         expect(sectorScope(context(role))).toEqual({
-          lines: { some: { id: 'line-3' } },
+          lines: { some: { id: { in: ['line-3'] } } },
         });
       },
     );

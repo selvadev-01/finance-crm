@@ -53,21 +53,20 @@ export class RequestContextResolver {
         organizationId: true,
         role: true,
         mustChangePassword: true,
-        // The current assignment is the one IN EFFECT today (decided
-        // 2026-09-13), not merely the one with no end date: a move made
+        // The current assignments are those IN EFFECT today (decided
+        // 2026-09-13), not merely those with no end date: a line added
         // "effective tomorrow" (US-013) opens its row today, and the staff
-        // member's scope must not switch until tomorrow. Assignments are
-        // closed the day before their successor starts, so at most one
-        // matches; the latest start wins if hand-edited rows ever overlap.
+        // member's scope must not widen until tomorrow. A Senior or Junior
+        // may hold several at once (decided 2026-10-03).
         assignments: {
           where: {
             effectiveFrom: { lte: onToday },
             OR: [{ effectiveTo: null }, { effectiveTo: { gte: onToday } }],
           },
-          // `id` breaks a same-day tie, matching StaffDirectoryService.
-          orderBy: [{ effectiveFrom: 'desc' }, { id: 'desc' }],
+          // Code order, so "their first line" — a dashboard's default — is
+          // the same on every request.
+          orderBy: { line: { code: 'asc' } },
           select: { lineId: true },
-          take: 1,
         },
       },
     });
@@ -80,7 +79,9 @@ export class RequestContextResolver {
         staffProfileId: staff.id,
         organizationId: staff.organizationId,
         role: staff.role,
-        currentLineId: staff.assignments[0]?.lineId ?? null,
+        currentLineIds: [
+          ...new Set(staff.assignments.map((row) => row.lineId)),
+        ],
       },
       mustChangePassword: staff.mustChangePassword,
     };

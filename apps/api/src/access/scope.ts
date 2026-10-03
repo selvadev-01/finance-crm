@@ -7,12 +7,15 @@ import type { RequestContext } from '../platform/context/request-context.js';
 /**
  * Data scoping — the row half of the RBAC matrix (M02).
  *
- * | Role          | Rows                                                  |
- * | ------------- | ----------------------------------------------------- |
- * | `SUPER_ADMIN` | everything in their organization                      |
- * | `ADMIN`       | everything in their organization                      |
- * | `SENIOR`      | `lineId = current assignment`                         |
- * | `JUNIOR`      | `lineId = current assignment` (see `juniorCustomers`) |
+ * | Role          | Rows                                                      |
+ * | ------------- | --------------------------------------------------------- |
+ * | `SUPER_ADMIN` | everything in their organization                          |
+ * | `ADMIN`       | everything in their organization                          |
+ * | `SENIOR`      | `lineId IN current assignments`                           |
+ * | `JUNIOR`      | `lineId IN current assignments` (see `juniorCustomers`)   |
+ *
+ * A Senior or Junior may work several lines at once (decided 2026-10-03), so
+ * "own line" means any line they are assigned to today.
  *
  * Admins are bounded by `organizationId`, so "all" never means rows belonging
  * to another business in the same database.
@@ -36,20 +39,35 @@ function seesEverything(context: RequestContext): boolean {
   return context.role === 'SUPER_ADMIN' || context.role === 'ADMIN';
 }
 
-/** Sectors in the organization, or the sector of the caller's current line. */
+/** No current line: the caller matches nothing (see the module comment). */
+function offLine(context: RequestContext): boolean {
+  return context.currentLineIds.length === 0;
+}
+
+/** "Own line" as a filter — any of the caller's current lines. */
+function ownLines(context: RequestContext): { in: string[] } {
+  return { in: [...context.currentLineIds] };
+}
+
+/** Sectors in the organization, or the sectors of the caller's current lines. */
 export function sectorScope(context: RequestContext): Prisma.SectorWhereInput {
   if (seesEverything(context))
     return { organizationId: context.organizationId };
-  if (context.currentLineId === null) return NO_ROWS;
-  return { lines: { some: { id: context.currentLineId } } };
+  if (offLine(context)) return NO_ROWS;
+  return { lines: { some: { id: ownLines(context) } } };
 }
 
-/** Lines in the organization, or the caller's current line — "own line". */
+/** Lines in the organization, or the caller's current lines — "own line". */
 export function lineScope(context: RequestContext): Prisma.LineWhereInput {
   if (seesEverything(context))
     return { organizationId: context.organizationId };
-  if (context.currentLineId === null) return NO_ROWS;
-  return { id: context.currentLineId };
+  if (offLine(context)) return NO_ROWS;
+  return { id: ownLines(context) };
+}
+
+/** Whether `lineId` is one of the caller's current lines. Admins hold none. */
+export function isOwnLine(context: RequestContext, lineId: string): boolean {
+  return context.currentLineIds.includes(lineId);
 }
 
 /**
@@ -67,9 +85,10 @@ export function assignmentInEffectOn(
 }
 
 /**
- * Staff in the organization, or — for a Senior — the staff working their
- * current line on `today` ("List staff: own line"). Soft-deleted staff are
- * never rows. A Junior has no `staff.list`, but would match only their line.
+ * Staff in the organization, or — for a Senior — the staff working any of
+ * their current lines on `today` ("List staff: own line"). Soft-deleted staff
+ * are never rows. A Junior has no `staff.list`, but would match only their
+ * lines.
  */
 export function staffScope(
   context: RequestContext,
@@ -78,13 +97,13 @@ export function staffScope(
   if (seesEverything(context)) {
     return { organizationId: context.organizationId, deletedAt: null };
   }
-  if (context.currentLineId === null) return NO_ROWS;
+  if (offLine(context)) return NO_ROWS;
   return {
     organizationId: context.organizationId,
     deletedAt: null,
     assignments: {
       some: {
-        lineId: context.currentLineId,
+        lineId: ownLines(context),
         ...assignmentInEffectOn(today),
       },
     },
@@ -93,7 +112,7 @@ export function staffScope(
 
 /**
  * Assignment rows the caller may see: all of their organization's for Admins,
- * only their own line's for a Senior ("View assignment history: own line").
+ * only their own lines' for a Senior ("View assignment history: own line").
  */
 export function assignmentScope(
   context: RequestContext,
@@ -101,39 +120,39 @@ export function assignmentScope(
   if (seesEverything(context)) {
     return { line: { organizationId: context.organizationId } };
   }
-  if (context.currentLineId === null) return NO_ROWS;
-  return { lineId: context.currentLineId };
+  if (offLine(context)) return NO_ROWS;
+  return { lineId: ownLines(context) };
 }
 
 /**
  * Holidays the caller observes (US-093, "View holidays: own line"): all of the
  * organization's for Admins; for a Senior or Junior, the business-wide ones
- * and those of their current line's sector.
+ * and those of their current lines' sectors.
  */
 export function holidayScope(
   context: RequestContext,
 ): Prisma.HolidayWhereInput {
   if (seesEverything(context))
     return { organizationId: context.organizationId };
-  if (context.currentLineId === null) return NO_ROWS;
+  if (offLine(context)) return NO_ROWS;
   return {
     organizationId: context.organizationId,
     OR: [
       { sectorId: null },
-      { sector: { lines: { some: { id: context.currentLineId } } } },
+      { sector: { lines: { some: { id: ownLines(context) } } } },
     ],
   };
 }
 
-/** Customers on the caller's current line, or all in the organization for Admins. */
+/** Customers on the caller's current lines, or all in the organization for Admins. */
 export function customerScope(
   context: RequestContext,
 ): Prisma.CustomerWhereInput {
   if (seesEverything(context))
     return { organizationId: context.organizationId };
-  if (context.currentLineId === null) return NO_ROWS;
-  if (context.role === 'JUNIOR') return juniorCustomers(context.currentLineId);
-  return { lineId: context.currentLineId };
+  if (offLine(context)) return NO_ROWS;
+  if (context.role === 'JUNIOR') return juniorCustomers(context);
+  return { lineId: ownLines(context) };
 }
 
 /**
@@ -170,12 +189,12 @@ export function collectableAccountScope(
 ): Prisma.AccountLoanWhereInput {
   if (seesEverything(context))
     return { organizationId: context.organizationId };
-  if (context.currentLineId === null) return NO_ROWS;
+  if (offLine(context)) return NO_ROWS;
   return {
     customer: {
       linePeriods: {
         some: {
-          lineId: context.currentLineId,
+          lineId: ownLines(context),
           effectiveFrom: { lte: businessDate },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: businessDate } }],
         },
@@ -187,19 +206,19 @@ export function collectableAccountScope(
 /**
  * The single definition of "customers assigned to this Junior".
  *
- * **Decided 2026-09-13: every customer on the Junior's current line.** The
+ * **Decided 2026-09-13: every customer on the Junior's current lines.** The
  * data model has no customer-to-Junior assignment, and a line is not known to
  * have more than one Junior at a time. If per-Junior assignment is added (a
  * temporal `customer_assignment` table), this function changes and nothing
  * that calls it does. Recorded as an open question in the RBAC matrix.
  */
-function juniorCustomers(lineId: string): Prisma.CustomerWhereInput {
-  return { lineId };
+function juniorCustomers(context: RequestContext): Prisma.CustomerWhereInput {
+  return { lineId: ownLines(context) };
 }
 
 /**
  * Collections by their frozen `lineId`. A Junior sees only their own entries
- * (`collectedByUserId`) on their current line — "own entries" in the matrix.
+ * (`collectedByUserId`) on their current lines — "own entries" in the matrix.
  */
 export function collectionScope(
   context: RequestContext,
@@ -207,14 +226,14 @@ export function collectionScope(
   if (seesEverything(context)) {
     return { line: { organizationId: context.organizationId } };
   }
-  if (context.currentLineId === null) return NO_ROWS;
+  if (offLine(context)) return NO_ROWS;
   if (context.role === 'JUNIOR') {
     return {
-      lineId: context.currentLineId,
+      lineId: ownLines(context),
       collectedByUserId: context.userId,
     };
   }
-  return { lineId: context.currentLineId };
+  return { lineId: ownLines(context) };
 }
 
 /**
@@ -259,8 +278,8 @@ export function bankAccountScope(
 
 /**
  * Expenses (ADR-0018): every one of the organization's for Admins; for a
- * Senior, the field expenses spent on their current line; for a Junior, their
- * own. Office and bank expenses are never a Senior's or Junior's to see.
+ * Senior, the field expenses spent on their current lines; for a Junior,
+ * their own. Office and bank expenses are never a Senior's or Junior's to see.
  */
 export function expenseScope(
   context: RequestContext,
@@ -272,10 +291,10 @@ export function expenseScope(
       organizationId: context.organizationId,
       spenderUserId: context.userId,
     };
-  if (context.currentLineId === null) return NO_ROWS;
+  if (offLine(context)) return NO_ROWS;
   return {
     organizationId: context.organizationId,
-    lineId: context.currentLineId,
+    lineId: ownLines(context),
   };
 }
 

@@ -64,14 +64,15 @@ const assignmentRequest = z.object({
 
 const assignmentResult = z.object({
   assignment: assignmentSchema,
-  /** Assignments closed by this change, with their new `effectiveTo`. */
-  closed: z.array(assignmentSchema),
   /**
-   * Lines left with no Senior because their Senior moved here (decided
-   * 2026-09-13: the move is allowed, and reported).
+   * Assignments closed by this change, with their new `effectiveTo` — only
+   * ever the line's outgoing Senior. Staff may work several lines (decided
+   * 2026-10-03), so being assigned here closes none of their other lines.
    */
-  linesWithoutSenior: z.array(idSchema),
+  closed: z.array(assignmentSchema),
 });
+
+const assignmentParams = z.object({ assignmentId: idSchema });
 
 const errors = {
   400: errorSchema,
@@ -200,7 +201,8 @@ export const organisationContract = {
   assignSenior: route({
     method: "POST",
     path: "/api/lines/:lineId/senior-assignment",
-    summary: "Assign a Senior, closing the incumbent (US-012)",
+    summary:
+      "Assign a Senior, closing the line's incumbent; their other lines stay (US-012)",
     pathParams: lineParams,
     body: assignmentRequest,
     responses: {
@@ -235,11 +237,28 @@ export const organisationContract = {
   assignJunior: route({
     method: "POST",
     path: "/api/lines/:lineId/junior-assignment",
-    summary: "Assign or move a Junior to this line (US-013)",
+    summary: "Add a Junior to this line; their other lines stay (US-013)",
     pathParams: lineParams,
     body: assignmentRequest,
     responses: {
       201: assignmentResult,
+      ...errors,
+      409: errorSchema,
+      422: errorSchema,
+    },
+  }),
+
+  endAssignment: route({
+    method: "POST",
+    path: "/api/line-assignments/:assignmentId/end",
+    summary: "Take a Senior or Junior off one line (US-013)",
+    pathParams: assignmentParams,
+    body: z.object({
+      /** Their last day on the line, inclusive. Explicit, like a start (M03). */
+      effectiveTo: calendarDateSchema,
+    }),
+    responses: {
+      200: assignmentSchema,
       ...errors,
       409: errorSchema,
       422: errorSchema,

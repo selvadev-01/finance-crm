@@ -51,7 +51,7 @@ const junior = {
   role: "JUNIOR" as const,
   status: "ACTIVE" as const,
   joinedAt: "2026-01-01",
-  currentAssignment: assignment,
+  currentAssignments: [assignment],
 };
 
 const owner = {
@@ -63,14 +63,15 @@ const owner = {
   phone: "+919800000000",
   staffCode: "OWNER-01",
   role: "SUPER_ADMIN" as const,
-  currentAssignment: null,
+  currentAssignments: [],
 };
 
 const detail = (row: typeof junior | typeof owner) => ({
   ...row,
-  assignments: row.currentAssignment
-    ? [{ ...row.currentAssignment, upcoming: false }]
-    : [],
+  assignments: row.currentAssignments.map((current) => ({
+    ...current,
+    upcoming: false,
+  })),
 });
 
 const answers: ApiAnswers = {
@@ -203,7 +204,7 @@ test.describe("adding a staff member (US-092)", () => {
             email: "anbu@example.com",
             phone: "+919811112222",
             staffCode: "ST-0008",
-            currentAssignment: null,
+            currentAssignments: [],
             assignments: [],
           },
           temporaryPassword: "tmp-Pass-2026",

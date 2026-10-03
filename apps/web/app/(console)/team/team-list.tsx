@@ -142,15 +142,36 @@ export function TeamList({
               }),
               valueColumn<StaffSummary>({
                 id: "line",
-                header: "Line today",
-                value: (person) => person.currentAssignment?.lineName ?? "—",
+                header: "Lines today",
+                value: (person) =>
+                  person.currentAssignments
+                    .map((assignment) => assignment.lineName)
+                    .join(", ") || "—",
                 cell: (person) => {
-                  const assignment = person.currentAssignment;
-                  if (!assignment) return "—";
+                  const assignments = person.currentAssignments;
+                  if (assignments.length === 0) return "—";
+                  // One line reads as before; several as their codes, which
+                  // fit a table cell where the names would not.
+                  if (assignments.length === 1) {
+                    return (
+                      <span className="inline-flex items-center gap-2">
+                        <CodeChip>{assignments[0]!.lineCode}</CodeChip>
+                        {assignments[0]!.lineName}
+                      </span>
+                    );
+                  }
                   return (
-                    <span className="inline-flex items-center gap-2">
-                      <CodeChip>{assignment.lineCode}</CodeChip>
-                      {assignment.lineName}
+                    <span
+                      className="inline-flex flex-wrap items-center gap-1.5"
+                      title={assignments
+                        .map((assignment) => assignment.lineName)
+                        .join(", ")}
+                    >
+                      {assignments.map((assignment) => (
+                        <CodeChip key={assignment.assignmentId}>
+                          {assignment.lineCode}
+                        </CodeChip>
+                      ))}
                     </span>
                   );
                 },

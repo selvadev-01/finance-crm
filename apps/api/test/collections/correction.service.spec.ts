@@ -62,7 +62,7 @@ describe('CorrectionService (US-044, BR-14)', () => {
         staffProfileId: staff.id,
         organizationId,
         role,
-        currentLineId,
+        currentLineIds: currentLineId ? [currentLineId] : [],
       };
     };
     const admin = await context('ADMIN', null);

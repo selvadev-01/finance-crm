@@ -162,6 +162,15 @@ export class OrganisationController {
     return this.assignments.assignJunior(context, params.lineId, body);
   }
 
+  @RequirePermission('assignment.end')
+  @ContractRoute(api.endAssignment)
+  endAssignment(
+    @CurrentContext() context: RequestContext,
+    @ContractInput() { params, body }: In<'endAssignment'>,
+  ): Out<'endAssignment'> {
+    return this.assignments.end(context, params.assignmentId, body);
+  }
+
   @RequirePermission('line.setVisitingOrder')
   @ContractRoute(api.getVisitingOrder)
   getVisitingOrder(
